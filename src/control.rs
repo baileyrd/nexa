@@ -96,6 +96,12 @@ impl RuntimeControls {
             self.animation_time_seconds += elapsed_seconds.max(0.0);
         }
     }
+    pub fn advance_looping(&mut self, elapsed_seconds: f32, duration_seconds: f32) {
+        self.advance(elapsed_seconds);
+        if self.animation_playing && duration_seconds > 0.0 {
+            self.animation_time_seconds %= duration_seconds;
+        }
+    }
     pub fn nudge_gaze_target(&mut self, offset: Vec3) {
         self.gaze_target += offset;
     }
@@ -169,6 +175,17 @@ mod tests {
         controls.advance(0.5);
         controls.advance(-9.0);
         assert_eq!(controls.animation_time_seconds, 0.5);
+    }
+
+    #[test]
+    fn looping_playback_wraps_at_the_clip_duration() {
+        let mut controls = RuntimeControls {
+            animation_playing: true,
+            animation_time_seconds: 0.9,
+            ..Default::default()
+        };
+        controls.advance_looping(0.3, 1.0);
+        assert!((controls.animation_time_seconds - 0.2).abs() < 0.000_01);
     }
 
     #[test]

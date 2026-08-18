@@ -85,13 +85,14 @@ pub struct MorphTargetReport {
     pub target_index: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AnimationReport {
     pub name: String,
     pub channel_count: usize,
+    pub duration_seconds: f32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AssetReport {
     pub source: PathBuf,
     pub node_count: usize,
@@ -118,7 +119,7 @@ impl AssetReport {
 /// Import only metadata. This is intentionally suitable for CI/headless usage.
 pub fn inspect(path: impl AsRef<Path>) -> Result<AssetReport, AssetError> {
     let path = path.as_ref().to_path_buf();
-    let (document, _buffers, _images) =
+    let (document, buffers, _images) =
         gltf::import(&path).map_err(|source| AssetError::Import {
             path: path.clone(),
             source,
@@ -170,6 +171,15 @@ pub fn inspect(path: impl AsRef<Path>) -> Result<AssetReport, AssetError> {
                 .map(str::to_owned)
                 .unwrap_or_else(|| format!("animation_{index}")),
             channel_count: animation.channels().count(),
+            duration_seconds: animation
+                .channels()
+                .filter_map(|channel| {
+                    channel
+                        .reader(|buffer| Some(&buffers[buffer.index()]))
+                        .read_inputs()
+                        .and_then(Iterator::last)
+                })
+                .fold(0.0, f32::max),
         })
         .collect();
     Ok(AssetReport {

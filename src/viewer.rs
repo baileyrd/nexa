@@ -112,7 +112,12 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
             }
             Event::AboutToWait => {
                 let now = Instant::now();
-                controls.advance((now - last_update).as_secs_f32());
+                let duration = report
+                    .animations
+                    .get(controls.selected_animation)
+                    .map(|animation| animation.duration_seconds)
+                    .unwrap_or(0.0);
+                controls.advance_looping((now - last_update).as_secs_f32(), duration);
                 last_update = now;
                 window.set_title(&title(&report, &controls));
                 window.request_redraw();
@@ -140,9 +145,10 @@ fn title(report: &AssetReport, c: &RuntimeControls) -> String {
             .get(c.selected_animation)
             .map(|animation| {
                 format!(
-                    "{} @ {:.2}s{}",
+                    "{} @ {:.2}/{:.2}s{}",
                     animation.name,
                     c.animation_time_seconds,
+                    animation.duration_seconds,
                     if c.animation_playing {
                         " (playing)"
                     } else {
