@@ -34,4 +34,6 @@ cargo run --bin nexa-3d-viewer -- path\to\Nexa.glb
 
 `nexa-3d-validate` is the recommended CI and build-automation gate. It emits a machine-readable acceptance report and never initializes wgpu, a window, audio, or OS input. Library users may instead call `nexa_3d_runtime::headless::validate_glb`.
 
+The repository CI always runs formatting, `cargo check --all-targets`, and headless unit tests. Add a versioned Nexa GLB plus its runtime manifest to CI only after the first asset is accepted; then invoke `nexa-3d-validate` as an additional required job.
+
 `assets/nexa_v001.runtime.example.json` is the required semantic sidecar template. It maps approved NEXA-3D-001 expression, viseme, gesture, and gaze-rig names to the actual exported Blender/GLB identifiers. Passing it as the optional second argument verifies the mappings before the window opens.
