@@ -9,6 +9,7 @@ pub mod gaze;
 pub mod headless;
 pub mod manifest;
 pub mod runtime;
+pub mod skin;
 pub mod viseme;
 
 #[cfg(feature = "viewer")]
