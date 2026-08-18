@@ -1,54 +1,92 @@
-# NEXA-3D-RUNTIME-001
+# Nexa
 
-Minimal Rust validation/runtime viewer for the canonical Nexa GLB. It is deliberately a **validation harness**, not the production renderer. Its asset contract and `NexaAvatarAdapter` can be consumed by any renderer that implements the backend-neutral `AvatarRenderer` trait.
+Nexa is a local-first, adaptive AI training tutor platform. It combines structured tutor intelligence, pedagogy, student modeling, governed knowledge retrieval, curriculum, assessment, interactive labs, speech, and an expressive renderer-independent avatar.
 
-## Run
+Nexa is not an avatar attached to a chatbot. The avatar is the human-facing embodiment of a larger learning system designed to develop demonstrable competency.
 
-```powershell
-cargo run --bin nexa-3d-viewer -- path\to\Nexa.glb path\to\nexa.runtime.json
-```
+## Architectural rule
 
-The window draws imported GLB rest-pose geometry with depth testing, authored scene-node transforms, PBR base-color/emissive factors, and source-over material alpha; it automatically frames the bounds and overlays the joint hierarchy in cyan. The terminal reports GLB skeleton, morph-target, and animation validation; the window title reports current inspection state. Playing a clip drives every exported morph target from its `weights` channel, mixed with the manual morph slider, and deforms the mesh on the GPU from a joint matrix palette rebuilt each frame. Texture maps remain a future rendering increment.
+Tutor intelligence produces semantic communicative intent. The behavior and avatar layers decide how that intent is physically expressed.
 
-Controls: `1` skeleton/node inspection, `J` select the next named GLB node, `2` morph inspection, `M` select the next exported morph target, `Z/X` decrease/increase morph weight, `3` animation inspection, `N` select the next animation, `Space` play/pause, `[` / `]` scrub, arrow keys orbit, mouse wheel zoom, `G` toggle eye/head gaze, `W/A/S/D` move gaze target horizontally/depth, `Q/E` move it vertically, `V` trigger a viseme hook, `R` reset. `Esc` closes.
-
-## Layout
+The LLM does not select animation clips, manipulate bones, set blendshape weights, or issue renderer commands.
 
 ```text
-src/
-  asset.rs       GLB inspection and deterministic validation report
-  avatar.rs      NEXA-3D-001-facing semantic adapter and renderer port
-  control.rs     renderer-neutral debug, gaze, viseme, and timeline state
-  headless.rs    CI-safe validation runner (no GPU/window)
-  viewer.rs      minimal wgpu/winit surface and debug input mapping
-docs/
-  NEXA-3D-001.md                    3D character, rig, facial animation, rendering architecture
-  NEXA-3D-ART-001.md                modeling, topology, rigging, asset production
-  NEXA-3D-REF-001.md                canonical reference and turnaround spec (visual authority)
-  NEXA-3D-BLENDER-GLB-001.md        Blender-to-GLB production and export pipeline
-  NEXA-3D-RUNTIME-001.md            this viewer's architecture and contracts
-  NEXA-3D-FIRST-MODEL-ACCEPTANCE-001.md   first-asset acceptance checklist
-  reference/
-    images/                         approved NEXA-3D-REF-002 and REF-003 sheets
-    NEXA-3D-SOURCE-CONVERSATION.md  provenance: the design conversation these specs came from
+Student interaction
+        |
+Session orchestrator
+        |
+Tutor + pedagogy + knowledge + student state
+        |
+Structured tutor response and BehaviorIntent
+        |
+Nexa Behavior Protocol
+        |
+Speech, canvas, tools, and avatar adapters
 ```
 
-The approved turnaround, expression, viseme, hand, and gesture sheets in
-`docs/reference/images/` are the project's visual authority. Nothing in this repository
-reinterprets or supersedes them.
+## Repository layout
 
-## Commands
+| Path | Purpose |
+|---|---|
+| `apps/` | Desktop, authoring, CLI, and viewer composition roots |
+| `crates/` | Reusable domain and subsystem implementations |
+| `tools/` | Content, assessment, lab, and asset compilers and validators |
+| `content/` | Courses, knowledge, assessments, and labs |
+| `assets/` | Avatars, scenes, and speech assets |
+| `docs/` | Architecture, specifications, ADRs, governance, and provenance |
+| `src/` | Existing 3D validation runtime pending controlled workspace migration |
+
+A directory containing only `.gitkeep` reserves a planned boundary; it does not indicate that the capability is implemented.
+
+## Start here
+
+- [Reconstructed baseline policy](docs/BASELINE.md)
+- [Canonical specification registry](docs/SPECIFICATION-REGISTRY.md)
+- [Tutor system architecture](docs/Nexa%20Tutor%20System%20%E2%80%94%20Architecture%20v0.1.md)
+- [Character and behavior specification](docs/Nexa%20Character%20&%20Behavior%20Specification%20v1.0.md)
+- [Implementation roadmap](docs/architecture/IMPLEMENTATION-ROADMAP.md)
+- [Architecture decisions](docs/adr/)
+- [Contributing](CONTRIBUTING.md)
+
+## Current implementation
+
+The first implemented slice is `nexa-3d-runtime`: a renderer-independent GLB validation library, headless acceptance tool, and minimal `wgpu`/`winit` debug viewer.
+
+It currently validates and exercises:
+
+- renderable GLB scene geometry
+- skeleton hierarchy and GPU skinning
+- morph targets and animation timelines
+- gaze and viseme control hooks
+- semantic runtime manifests
+- headless CI-safe asset acceptance
+
+The runtime remains at the repository root temporarily. ADR-0001 requires its later split into `crates/nexa-3d` and `apps/nexa-3d-viewer` only after the migration can preserve tests and behavior.
+
+## Run the implemented 3D slice
 
 ```powershell
 cargo test
 cargo run --bin nexa-3d-validate -- path\to\Nexa.glb path\to\nexa.runtime.json
-cargo run --bin nexa-3d-viewer -- path\to\Nexa.glb
+cargo run --bin nexa-3d-viewer -- path\to\Nexa.glb path\to\nexa.runtime.json
 ```
 
-`nexa-3d-validate` is the recommended CI and build-automation gate. It emits a machine-readable acceptance report and never initializes wgpu, a window, audio, or OS input. It rejects assets missing a skeleton, morph targets, or renderable scene geometry. Library users may instead call `nexa_3d_runtime::headless::validate_glb`.
+The viewer supports skeleton/node inspection, morph inspection, animation playback and scrubbing, orbit/zoom, gaze targeting, and viseme hooks. See [NEXA-3D-RUNTIME-001](docs/specifications/11-avatar-3d/NEXA-3D-RUNTIME-001.md) for its contracts.
 
-The repository CI always runs formatting, `cargo check --all-targets`, and headless unit tests. Add a versioned Nexa GLB plus its runtime manifest to CI only after the first asset is accepted; then invoke `nexa-3d-validate` as an additional required job.
+## Development status
 
-`assets/nexa_v001.runtime.example.json` is the required semantic sidecar template. It maps approved NEXA-3D-001 expression, viseme, gesture, and gaze-rig names to the actual exported Blender/GLB identifiers. Passing it as the optional second argument verifies the mappings before the window opens.
+The reconstructed specifications are the working design baseline, not a claim that every subsystem is implemented. Development proceeds in governed phases:
 
-The `runtime::apply_debug_controls` bridge converts viewer gaze and queued viseme input into `AvatarRenderer` commands. This keeps facial/IK implementation renderer-independent while providing a unit-tested hook for the first production renderer.
+1. baseline governance
+2. shared domain, event, and behavior contracts
+3. embodiment migration
+4. learning core
+5. knowledge and tutor intelligence
+6. complete session orchestration
+7. authoring, packaging, and operations
+
+See the roadmap for phase gates and acceptance outcomes.
+
+## License
+
+The current Rust package declares MIT or Apache-2.0 licensing. Repository-wide licensing and third-party asset provenance will be formalized before distribution.

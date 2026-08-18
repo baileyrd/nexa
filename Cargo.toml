@@ -5,6 +5,21 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Renderer-independent validation and debug viewer for the Nexa tutor asset."
 
+[workspace]
+members = ["."]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+rust-version = "1.85"
+
+[workspace.metadata.nexa]
+architecture = "docs/Nexa Tutor System — Architecture v0.1.md"
+baseline = "docs/BASELINE.md"
+specification-registry = "docs/SPECIFICATION-REGISTRY.md"
+roadmap = "docs/architecture/IMPLEMENTATION-ROADMAP.md"
+
 [lib]
 name = "nexa_3d_runtime"
 path = "src/lib.rs"
