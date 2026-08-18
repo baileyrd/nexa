@@ -272,6 +272,11 @@ impl<'a> Viewer<'a> {
                             offset: 12,
                             shader_location: 1,
                         },
+                        wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Float32x4,
+                            offset: 24,
+                            shader_location: 2,
+                        },
                     ],
                 }],
             },

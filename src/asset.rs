@@ -22,6 +22,7 @@ pub enum AssetError {
 pub struct StaticVertex {
     pub position: [f32; 3],
     pub normal: [f32; 3],
+    pub color: [f32; 4],
 }
 
 #[derive(Debug, Default)]
@@ -233,6 +234,10 @@ fn append_node(
     if let Some(mesh) = node.mesh() {
         let normal_transform = world_transform.inverse().transpose();
         for primitive in mesh.primitives() {
+            let color = primitive
+                .material()
+                .pbr_metallic_roughness()
+                .base_color_factor();
             let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
             let positions = reader.read_positions().ok_or(AssetError::MissingPosition {
                 mesh: mesh.index(),
@@ -253,6 +258,7 @@ fn append_node(
                                     .transform_vector3(glam::Vec3::from(normal))
                                     .normalize_or_zero()
                                     .to_array(),
+                                color,
                             }
                         }))
                 }
@@ -262,6 +268,7 @@ fn append_node(
                             .transform_point3(glam::Vec3::from(position))
                             .to_array(),
                         normal: [0.0, 1.0, 0.0],
+                        color,
                     }
                 })),
             }
@@ -293,10 +300,12 @@ mod tests {
                 StaticVertex {
                     position: [-2.0, 0.0, 3.0],
                     normal: [0.0; 3],
+                    color: [1.0; 4],
                 },
                 StaticVertex {
                     position: [4.0, 5.0, -1.0],
                     normal: [0.0; 3],
+                    color: [1.0; 4],
                 },
             ],
             indices: vec![],
