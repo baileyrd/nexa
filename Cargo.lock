@@ -1070,6 +1070,9 @@ dependencies = [
  "glam",
  "gltf",
  "naga",
+ "nexa-avatar",
+ "nexa-domain",
+ "nexa-nbp",
  "pollster",
  "serde",
  "serde_json",
@@ -1077,6 +1080,17 @@ dependencies = [
  "thiserror 2.0.20",
  "wgpu",
  "winit",
+]
+
+[[package]]
+name = "nexa-avatar"
+version = "0.1.0"
+dependencies = [
+ "nexa-domain",
+ "nexa-nbp",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
 ]
 
 [[package]]

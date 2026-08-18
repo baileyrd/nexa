@@ -1,0 +1,146 @@
+use nexa_avatar::{
+    required_capabilities, AvatarCapabilities, AvatarCapability, AvatarPort, AvatarRequest,
+    FakeAvatarAdapter,
+};
+use nexa_domain::{
+    BehaviorId, EndpointId, MessageId, ProtocolVersion, SemanticKey, Sequence, SessionId, Timestamp,
+};
+use nexa_nbp::{
+    BehaviorCancel, BehaviorCommand, BehaviorState, CancellationMode, Emotion, EmotionPreset,
+    Interruptibility, NbpMessage, Payload, Priority, RuntimeStatus,
+};
+use std::collections::BTreeMap;
+use std::str::FromStr;
+
+fn behavior_id() -> BehaviorId {
+    BehaviorId::from_str("018f1f64-4f09-7cc0-98c2-7b3e8f249001").unwrap()
+}
+
+fn message_id() -> MessageId {
+    MessageId::from_str("018f1f64-4f09-7cc0-98c2-7b3e8f249002").unwrap()
+}
+
+fn command() -> BehaviorCommand {
+    BehaviorCommand {
+        behavior_id: behavior_id(),
+        state: BehaviorState::Attentive,
+        priority: Priority::default(),
+        interruptibility: Interruptibility::Immediate,
+        emotion: Some(Emotion {
+            preset: EmotionPreset::Focused,
+            confidence: None,
+            intensity: None,
+        }),
+        gaze: None,
+        gesture: None,
+        speech: None,
+    }
+}
+
+fn fake(capabilities: impl IntoIterator<Item = AvatarCapability>) -> FakeAvatarAdapter {
+    FakeAvatarAdapter::new(
+        SemanticKey::new("headless-avatar").unwrap(),
+        AvatarCapabilities::new(capabilities),
+    )
+}
+
+#[test]
+fn behavior_command_converts_to_avatar_request() {
+    let message = NbpMessage::new(
+        ProtocolVersion::new(1, 0),
+        message_id(),
+        Timestamp::from_str("2026-08-18T12:00:00Z").unwrap(),
+        SessionId::from_str("018f1f64-4f09-7cc0-98c2-7b3e8f249003").unwrap(),
+        Sequence::new(1),
+        EndpointId::new("tutor").unwrap(),
+        Some(EndpointId::new("avatar").unwrap()),
+        None,
+        Payload::BehaviorCommand(command()),
+        BTreeMap::new(),
+    )
+    .unwrap();
+    let request = AvatarRequest::try_from(&message).unwrap();
+    assert_eq!(request.message_id(), message_id());
+    assert!(matches!(request, AvatarRequest::Submit { .. }));
+}
+
+#[test]
+fn cancellation_propagates_to_the_adapter_and_acknowledgement() {
+    let mut adapter = fake([AvatarCapability::Cancellation]);
+    let cancellation = BehaviorCancel {
+        behavior_id: behavior_id(),
+        reason: "new turn".into(),
+        transition: CancellationMode::Graceful,
+    };
+    let report = adapter.handle(AvatarRequest::Cancel {
+        message_id: message_id(),
+        cancellation: cancellation.clone(),
+    });
+    assert_eq!(report.acknowledgement.status, RuntimeStatus::Cancelled);
+    assert_eq!(
+        adapter.requests(),
+        &[AvatarRequest::Cancel {
+            message_id: message_id(),
+            cancellation
+        }]
+    );
+}
+
+#[test]
+fn acknowledgement_and_state_map_without_renderer_values() {
+    let mut adapter = fake([AvatarCapability::BehaviorState, AvatarCapability::Emotion]);
+    let report = adapter.submit(message_id(), command());
+    assert_eq!(report.acknowledgement.status, RuntimeStatus::Accepted);
+    assert_eq!(report.state.unwrap().state, BehaviorState::Attentive);
+    assert!(report.error.is_none());
+}
+
+#[test]
+fn unsupported_capability_is_explicitly_degraded_with_recoverable_error() {
+    let mut adapter = fake([AvatarCapability::BehaviorState]);
+    let report = adapter.submit(message_id(), command());
+    assert_eq!(report.acknowledgement.status, RuntimeStatus::Degraded);
+    let error = report.error.unwrap();
+    assert!(error.recoverable);
+    assert_eq!(error.code.as_str(), "avatar.capability.unsupported");
+}
+
+#[test]
+fn fake_adapter_is_deterministic_and_records_semantic_inputs() {
+    let mut first = fake([AvatarCapability::BehaviorState, AvatarCapability::Emotion]);
+    let mut second = first.clone();
+    let first_report = first.submit(message_id(), command());
+    let second_report = second.submit(message_id(), command());
+    assert_eq!(first_report, second_report);
+    assert_eq!(first.requests(), second.requests());
+}
+
+#[test]
+fn avatar_requests_and_reports_round_trip_as_json() {
+    let request = AvatarRequest::Submit {
+        message_id: message_id(),
+        command: command(),
+    };
+    let encoded = serde_json::to_string(&request).unwrap();
+    assert_eq!(
+        serde_json::from_str::<AvatarRequest>(&encoded).unwrap(),
+        request
+    );
+
+    let mut adapter = fake([AvatarCapability::BehaviorState, AvatarCapability::Emotion]);
+    let report = adapter.handle(request);
+    let encoded = serde_json::to_string(&report).unwrap();
+    assert_eq!(
+        serde_json::from_str::<nexa_avatar::AvatarReport>(&encoded).unwrap(),
+        report
+    );
+}
+
+#[test]
+fn required_capabilities_are_derived_only_from_semantic_fields() {
+    let capabilities = required_capabilities(&command());
+    assert_eq!(
+        capabilities.iter().collect::<Vec<_>>(),
+        vec![AvatarCapability::BehaviorState, AvatarCapability::Emotion]
+    );
+}

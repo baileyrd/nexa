@@ -9,6 +9,7 @@ expected={
  "nexa-domain": {"chrono", "serde", "thiserror", "uuid"},
  "nexa-events": {"nexa-domain", "serde", "serde_json", "thiserror"},
  "nexa-nbp": {"nexa-domain", "serde", "serde_json", "thiserror"},
+ "nexa-avatar": {"nexa-domain", "nexa-nbp", "serde", "thiserror"},
 }
 # Ignore dev-only dependencies while enforcing all normal dependency edges.
 for package, allowed in expected.items():
@@ -18,3 +19,10 @@ for package, allowed in expected.items():
         raise SystemExit(f"{package} has forbidden normal dependencies: {sorted(unexpected)}")
 print("contract dependency DAG passed")
 ' <<<"$metadata"
+
+# Renderer, platform, provider, and executor crates must never enter the avatar contract.
+if rg -n --glob 'Cargo.toml' --glob '*.rs' \
+  '\b(wgpu|winit|gltf|tokio|async-std|rodio|cpal|nexa-3d-runtime)\b' crates/nexa-avatar; then
+  echo "nexa-avatar references a forbidden renderer/platform/provider/runtime dependency" >&2
+  exit 1
+fi
