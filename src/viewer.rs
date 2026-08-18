@@ -23,8 +23,11 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
             .build(&event_loop)?,
     ));
     let geometry = load_static_geometry(&report.source)?;
-    let mut viewer = pollster::block_on(Viewer::new(window, &geometry))?;
     let mut controls = RuntimeControls::default();
+    if let Some(bounds) = geometry.bounds() {
+        controls.camera.frame_bounds(bounds);
+    }
+    let mut viewer = pollster::block_on(Viewer::new(window, &geometry))?;
     let mut last_update = Instant::now();
     event_loop.run(move |event, target| {
         target.set_control_flow(ControlFlow::Poll);

@@ -28,6 +28,38 @@ pub struct StaticGeometry {
     pub indices: Vec<u32>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Bounds {
+    pub minimum: glam::Vec3,
+    pub maximum: glam::Vec3,
+}
+
+impl Bounds {
+    pub fn center(self) -> glam::Vec3 {
+        (self.minimum + self.maximum) * 0.5
+    }
+    pub fn extent(self) -> glam::Vec3 {
+        self.maximum - self.minimum
+    }
+}
+
+impl StaticGeometry {
+    pub fn bounds(&self) -> Option<Bounds> {
+        let first = self.vertices.first()?;
+        let (minimum, maximum) = self.vertices.iter().skip(1).fold(
+            (
+                glam::Vec3::from(first.position),
+                glam::Vec3::from(first.position),
+            ),
+            |(minimum, maximum), vertex| {
+                let position = glam::Vec3::from(vertex.position);
+                (minimum.min(position), maximum.max(position))
+            },
+        );
+        Some(Bounds { minimum, maximum })
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SkinReport {
     pub name: String,
@@ -239,4 +271,29 @@ fn append_node(
         append_node(geometry, buffers, child, world_transform)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bounds_cover_every_static_vertex() {
+        let geometry = StaticGeometry {
+            vertices: vec![
+                StaticVertex {
+                    position: [-2.0, 0.0, 3.0],
+                    normal: [0.0; 3],
+                },
+                StaticVertex {
+                    position: [4.0, 5.0, -1.0],
+                    normal: [0.0; 3],
+                },
+            ],
+            indices: vec![],
+        };
+        let bounds = geometry.bounds().unwrap();
+        assert_eq!(bounds.center(), glam::Vec3::new(1.0, 2.5, 1.0));
+        assert_eq!(bounds.extent(), glam::Vec3::new(6.0, 5.0, 4.0));
+    }
 }

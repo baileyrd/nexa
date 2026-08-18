@@ -1,3 +1,4 @@
+use crate::asset::Bounds;
 use glam::Vec3;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -24,6 +25,10 @@ impl OrbitCamera {
     }
     pub fn zoom(&mut self, delta_m: f32) {
         self.distance_m = (self.distance_m + delta_m).clamp(0.35, 10.0);
+    }
+    pub fn frame_bounds(&mut self, bounds: Bounds) {
+        self.target = bounds.center();
+        self.distance_m = (bounds.extent().length() * 1.35).clamp(0.75, 10.0);
     }
 }
 
@@ -115,6 +120,17 @@ mod tests {
         assert_eq!(camera.distance_m, 0.35);
         camera.zoom(100.0);
         assert_eq!(camera.distance_m, 10.0);
+    }
+
+    #[test]
+    fn framing_uses_asset_center_and_reasonable_distance() {
+        let mut camera = OrbitCamera::default();
+        camera.frame_bounds(Bounds {
+            minimum: Vec3::ZERO,
+            maximum: Vec3::new(2.0, 4.0, 2.0),
+        });
+        assert_eq!(camera.target, Vec3::new(1.0, 2.0, 1.0));
+        assert!(camera.distance_m > 5.0);
     }
 
     #[test]
