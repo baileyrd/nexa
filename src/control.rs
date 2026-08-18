@@ -48,6 +48,7 @@ pub struct RuntimeControls {
     pub selected_morph: usize,
     pub morph_weight: f32,
     pub selected_animation: usize,
+    pub selected_node: usize,
     pub animation_playing: bool,
     pub animation_time_seconds: f32,
     pub gaze_enabled: bool,
@@ -62,6 +63,7 @@ impl Default for RuntimeControls {
             selected_morph: 0,
             morph_weight: 0.0,
             selected_animation: 0,
+            selected_node: 0,
             animation_playing: false,
             animation_time_seconds: 0.0,
             gaze_enabled: true,
@@ -89,6 +91,11 @@ impl RuntimeControls {
         if available_count > 0 {
             self.selected_animation = (self.selected_animation + 1) % available_count;
             self.animation_time_seconds = 0.0;
+        }
+    }
+    pub fn select_next_node(&mut self, available_count: usize) {
+        if available_count > 0 {
+            self.selected_node = (self.selected_node + 1) % available_count;
         }
     }
     pub fn advance(&mut self, elapsed_seconds: f32) {
@@ -186,6 +193,18 @@ mod tests {
         };
         controls.advance_looping(0.3, 1.0);
         assert!((controls.animation_time_seconds - 0.2).abs() < 0.000_01);
+    }
+
+    #[test]
+    fn node_selection_wraps_and_ignores_empty_assets() {
+        let mut controls = RuntimeControls {
+            selected_node: 1,
+            ..Default::default()
+        };
+        controls.select_next_node(2);
+        assert_eq!(controls.selected_node, 0);
+        controls.select_next_node(0);
+        assert_eq!(controls.selected_node, 0);
     }
 
     #[test]

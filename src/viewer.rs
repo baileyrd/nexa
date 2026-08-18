@@ -75,6 +75,7 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
                 match key {
                     KeyCode::Escape => target.exit(),
                     KeyCode::Digit1 => controls.panel = InspectorPanel::Skeleton,
+                    KeyCode::KeyJ => controls.select_next_node(report.nodes.len()),
                     KeyCode::Digit2 => controls.panel = InspectorPanel::MorphTargets,
                     KeyCode::KeyM => controls.select_next_morph(report.morph_target_count),
                     KeyCode::KeyZ => controls.adjust_morph_weight(-0.1),
@@ -147,10 +148,18 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
 fn title(report: &AssetReport, c: &RuntimeControls) -> String {
     let inspector_detail = match c.panel {
         InspectorPanel::Skeleton => report
-            .skins
-            .first()
-            .map(|skin| format!("{} ({} joints)", skin.name, skin.joint_count))
-            .unwrap_or_else(|| "no skeleton".to_owned()),
+            .nodes
+            .get(c.selected_node)
+            .map(|node| {
+                format!(
+                    "{} #{}{}{}",
+                    node.name,
+                    node.index,
+                    if node.is_joint { " (joint)" } else { "" },
+                    if node.has_mesh { " (mesh)" } else { "" }
+                )
+            })
+            .unwrap_or_else(|| "no nodes".to_owned()),
         InspectorPanel::MorphTargets => report
             .morph_targets
             .get(c.selected_morph)

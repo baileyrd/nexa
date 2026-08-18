@@ -94,6 +94,14 @@ pub struct AnimationReport {
     pub duration_seconds: f32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NodeReport {
+    pub index: usize,
+    pub name: String,
+    pub has_mesh: bool,
+    pub is_joint: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AssetReport {
     pub source: PathBuf,
@@ -102,6 +110,7 @@ pub struct AssetReport {
     pub primitive_count: usize,
     pub morph_target_count: usize,
     pub morph_targets: Vec<MorphTargetReport>,
+    pub nodes: Vec<NodeReport>,
     pub skins: Vec<SkinReport>,
     pub animations: Vec<AnimationReport>,
 }
@@ -149,6 +158,22 @@ pub fn inspect(path: impl AsRef<Path>) -> Result<AssetReport, AssetError> {
             }
         }
     }
+    let joint_indices: HashSet<usize> = document
+        .skins()
+        .flat_map(|skin| skin.joints().map(|joint| joint.index()))
+        .collect();
+    let nodes = document
+        .nodes()
+        .map(|node| NodeReport {
+            index: node.index(),
+            name: node
+                .name()
+                .map(str::to_owned)
+                .unwrap_or_else(|| format!("node_{}", node.index())),
+            has_mesh: node.mesh().is_some(),
+            is_joint: joint_indices.contains(&node.index()),
+        })
+        .collect();
     let skins = document
         .skins()
         .map(|skin| SkinReport {
@@ -191,6 +216,7 @@ pub fn inspect(path: impl AsRef<Path>) -> Result<AssetReport, AssetError> {
         primitive_count,
         morph_target_count: morph_targets.len(),
         morph_targets,
+        nodes,
         skins,
         animations,
     })
