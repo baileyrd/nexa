@@ -7,6 +7,8 @@ use std::collections::BTreeMap;
 
 use glam::{Quat, Vec3};
 
+use crate::asset::AssetError;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Interpolation {
     Linear,
@@ -50,6 +52,59 @@ impl Default for NodeTransform {
 pub struct Pose {
     pub nodes: BTreeMap<usize, NodeTransform>,
     pub morph_weights: BTreeMap<usize, f32>,
+}
+
+/// Reads the selected GLB animation into the renderer-neutral sampler model.
+///
+/// glTF cubic-spline channels and multi-target weight channels deliberately do
+/// not enter this first adapter: they need tangent and target-index preservation
+/// rather than a lossy linear approximation. Callers can still inspect those
+/// exported channels through [`crate::asset::inspect`].
+pub fn load_supported_channels(
+    path: impl AsRef<std::path::Path>,
+    animation_index: usize,
+) -> Result<Vec<Channel>, AssetError> {
+    let path = path.as_ref().to_path_buf();
+    let (document, buffers, _images) =
+        gltf::import(&path).map_err(|source| AssetError::Import { path, source })?;
+    let Some(animation) = document.animations().nth(animation_index) else {
+        return Ok(Vec::new());
+    };
+    let mut channels = Vec::new();
+    for source in animation.channels() {
+        let interpolation = match source.sampler().interpolation() {
+            gltf::animation::Interpolation::Linear => Interpolation::Linear,
+            gltf::animation::Interpolation::Step => Interpolation::Step,
+            gltf::animation::Interpolation::CubicSpline => continue,
+        };
+        let reader = source.reader(|buffer| Some(&buffers[buffer.index()]));
+        let Some(times_seconds) = reader.read_inputs().map(Iterator::collect) else {
+            continue;
+        };
+        let Some(outputs) = reader.read_outputs() else {
+            continue;
+        };
+        let values = match outputs {
+            gltf::animation::util::ReadOutputs::Translations(values) => values
+                .map(|value| ChannelValues::Translation(Vec3::from(value)))
+                .collect(),
+            gltf::animation::util::ReadOutputs::Rotations(values) => values
+                .into_f32()
+                .map(|value| ChannelValues::Rotation(Quat::from_array(value).normalize()))
+                .collect(),
+            gltf::animation::util::ReadOutputs::Scales(values) => values
+                .map(|value| ChannelValues::Scale(Vec3::from(value)))
+                .collect(),
+            gltf::animation::util::ReadOutputs::MorphTargetWeights(_) => continue,
+        };
+        channels.push(Channel {
+            node_index: source.target().node().index(),
+            interpolation,
+            times_seconds,
+            values,
+        });
+    }
+    Ok(channels)
 }
 
 impl Channel {
