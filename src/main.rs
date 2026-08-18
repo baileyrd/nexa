@@ -16,14 +16,19 @@ fn main() -> anyhow::Result<()> {
         manifest.validate(&report)?;
         println!("Runtime manifest accepted: {}", manifest.asset_version);
     }
-    #[cfg(feature = "viewer")]
-    nexa_3d_runtime::viewer::run(report)?;
-    #[cfg(not(feature = "viewer"))]
-    {
-        let _ = report;
-        return Err(anyhow::anyhow!(
-            "build with the `viewer` feature to open a window"
-        ));
-    }
-    Ok(())
+    present(report)
+}
+
+#[cfg(feature = "viewer")]
+fn present(report: nexa_3d_runtime::asset::AssetReport) -> anyhow::Result<()> {
+    nexa_3d_runtime::viewer::run(report)
+}
+
+/// The inspection and manifest gates are the point of a headless build; opening
+/// a window is not available there.
+#[cfg(not(feature = "viewer"))]
+fn present(_report: nexa_3d_runtime::asset::AssetReport) -> anyhow::Result<()> {
+    Err(anyhow::anyhow!(
+        "build with the `viewer` feature to open a window"
+    ))
 }
