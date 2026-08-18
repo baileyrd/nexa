@@ -1,7 +1,7 @@
 # NEXA-3D-RUNTIME-001 — Nexa 3D Runtime Validation Viewer
 
 **Status:** implementation scaffold  
-**Depends on:** NEXA-3D-001, NEXA-3D-ART-001, NEXA-3D-REF-003  
+**Depends on:** [NEXA-3D-001](NEXA-3D-001.md), [NEXA-3D-ART-001](NEXA-3D-ART-001.md), [NEXA-3D-REF-001](NEXA-3D-REF-001.md) and its NEXA-3D-REF-003 sheet  
 **Visual authority:** approved canonical Nexa turnaround, face/expression, viseme, hand, and gesture sheets. This specification does not reinterpret or supersede them.
 
 ## Purpose

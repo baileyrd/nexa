@@ -21,8 +21,21 @@ src/
   control.rs     renderer-neutral debug, gaze, viseme, and timeline state
   headless.rs    CI-safe validation runner (no GPU/window)
   viewer.rs      minimal wgpu/winit surface and debug input mapping
-docs/            architecture, Blender export contract, acceptance checklist
+docs/
+  NEXA-3D-001.md                    3D character, rig, facial animation, rendering architecture
+  NEXA-3D-ART-001.md                modeling, topology, rigging, asset production
+  NEXA-3D-REF-001.md                canonical reference and turnaround spec (visual authority)
+  NEXA-3D-BLENDER-GLB-001.md        Blender-to-GLB production and export pipeline
+  NEXA-3D-RUNTIME-001.md            this viewer's architecture and contracts
+  NEXA-3D-FIRST-MODEL-ACCEPTANCE-001.md   first-asset acceptance checklist
+  reference/
+    images/                         approved NEXA-3D-REF-002 and REF-003 sheets
+    NEXA-3D-SOURCE-CONVERSATION.md  provenance: the design conversation these specs came from
 ```
+
+The approved turnaround, expression, viseme, hand, and gesture sheets in
+`docs/reference/images/` are the project's visual authority. Nothing in this repository
+reinterprets or supersedes them.
 
 ## Commands
 
