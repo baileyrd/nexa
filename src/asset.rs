@@ -20,6 +20,8 @@ pub enum AssetError {
     MissingGeometry,
     #[error("mesh primitive {mesh}:{primitive} has no POSITION attribute")]
     MissingPosition { mesh: usize, primitive: usize },
+    #[error("invalid glTF animation data: {detail}")]
+    InvalidAnimationData { detail: String },
 }
 
 #[repr(C)]
