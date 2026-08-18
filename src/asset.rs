@@ -26,6 +26,7 @@ pub struct StaticVertex {
     pub position: [f32; 3],
     pub normal: [f32; 3],
     pub color: [f32; 4],
+    pub emission: [f32; 3],
 }
 
 #[derive(Debug, Default)]
@@ -271,11 +272,13 @@ fn append_skeleton_lines(
                 position: parent.to_array(),
                 normal: [0.0, 1.0, 0.0],
                 color,
+                emission: [0.0; 3],
             });
             vertices.push(StaticVertex {
                 position: position.to_array(),
                 normal: [0.0, 1.0, 0.0],
                 color,
+                emission: [0.0; 3],
             });
         }
     }
@@ -310,6 +313,7 @@ fn append_node(
                 .material()
                 .pbr_metallic_roughness()
                 .base_color_factor();
+            let emission = primitive.material().emissive_factor();
             let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
             let positions: Vec<_> = reader
                 .read_positions()
@@ -358,6 +362,7 @@ fn append_node(
                                 .normalize_or_zero()
                                 .to_array(),
                             color,
+                            emission,
                         }
                     },
                 )),
@@ -368,6 +373,7 @@ fn append_node(
                             .to_array(),
                         normal: [0.0, 1.0, 0.0],
                         color,
+                        emission,
                     }
                 })),
             }
@@ -400,11 +406,13 @@ mod tests {
                     position: [-2.0, 0.0, 3.0],
                     normal: [0.0; 3],
                     color: [1.0; 4],
+                    emission: [0.0; 3],
                 },
                 StaticVertex {
                     position: [4.0, 5.0, -1.0],
                     normal: [0.0; 3],
                     color: [1.0; 4],
+                    emission: [0.0; 3],
                 },
             ],
             indices: vec![],

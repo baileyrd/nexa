@@ -205,6 +205,11 @@ fn create_skeleton_pipeline(
                         offset: 24,
                         shader_location: 2,
                     },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x3,
+                        offset: 40,
+                        shader_location: 3,
+                    },
                 ],
             }],
         },
@@ -344,6 +349,11 @@ impl<'a> Viewer<'a> {
                             format: wgpu::VertexFormat::Float32x4,
                             offset: 24,
                             shader_location: 2,
+                        },
+                        wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Float32x3,
+                            offset: 40,
+                            shader_location: 3,
                         },
                     ],
                 }],
