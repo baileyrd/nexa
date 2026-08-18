@@ -15,7 +15,7 @@
 ## B. Geometry, rig, and deformation — human plus automated inspection
 
 - [ ] `cargo run --bin nexa-3d-validate -- Nexa_vNNN.glb nexa_vNNN.runtime.json` exits successfully and emits an accepted report with at least one skin and one morph target.
-- [ ] Exactly one documented canonical runtime armature drives each skinned Nexa mesh.
+- [ ] Exactly one documented canonical runtime armature drives each skinned Nexa mesh; manifest armature, head, eyes, and jaw names resolve to exported GLB nodes.
 - [ ] Skin weights are normalized; no vertex uses more than four runtime influences.
 - [ ] Neutral A-pose/rest pose has no unintended twist, collapse, clipping, or ground penetration.
 - [ ] Head, jaw, eyes, hands/fingers, and glasses-adjacent regions deform correctly through approved actions.

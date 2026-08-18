@@ -53,6 +53,24 @@ impl NexaRuntimeManifest {
         if self.asset_version.trim().is_empty() {
             return Err(ManifestError::Invalid("asset_version is required".into()));
         }
+        if self.canonical_forward != "-Z" {
+            return Err(ManifestError::Invalid(
+                "canonical_forward must be the glTF forward axis `-Z`".into(),
+            ));
+        }
+        for (role, node_name) in [
+            ("armature", &self.rig.armature),
+            ("head", &self.rig.head),
+            ("left_eye", &self.rig.left_eye),
+            ("right_eye", &self.rig.right_eye),
+            ("jaw", &self.rig.jaw),
+        ] {
+            if !report.nodes.iter().any(|node| node.name == *node_name) {
+                return Err(ManifestError::Invalid(format!(
+                    "rig role `{role}` refers to missing GLB node `{node_name}`"
+                )));
+            }
+        }
         for required in [
             "Neutral",
             "Focused",
@@ -149,5 +167,45 @@ mod tests {
                 animations: vec![]
             })
             .is_err());
+    }
+
+    #[test]
+    fn missing_rig_node_is_rejected_without_gpu() {
+        let manifest = NexaRuntimeManifest {
+            schema_version: 1,
+            asset_version: "v001".into(),
+            canonical_forward: "-Z".into(),
+            rig: RigMap {
+                armature: "Nexa_Rig".into(),
+                head: "Head".into(),
+                left_eye: "Eye.L".into(),
+                right_eye: "Eye.R".into(),
+                jaw: "Jaw".into(),
+            },
+            expressions: BTreeMap::new(),
+            visemes: BTreeMap::new(),
+            gestures: BTreeMap::new(),
+        };
+        let report = AssetReport {
+            source: Default::default(),
+            node_count: 1,
+            mesh_count: 0,
+            primitive_count: 0,
+            morph_target_count: 0,
+            morph_targets: vec![],
+            nodes: vec![crate::asset::NodeReport {
+                index: 0,
+                name: "Nexa_Rig".into(),
+                has_mesh: false,
+                is_joint: true,
+            }],
+            skins: vec![],
+            animations: vec![],
+        };
+        assert!(manifest
+            .validate(&report)
+            .unwrap_err()
+            .to_string()
+            .contains("head"));
     }
 }
