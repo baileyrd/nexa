@@ -74,7 +74,7 @@ The test suite generates a minimal skinned/morph-enabled glTF fixture at runtime
 1. Current: GLB metadata import, headless checks, `wgpu` device/surface, debug input state.
 2. Add GPU buffer/material upload and static mesh draw. ✓
 3. Add skinning, joint visualization, and named node selection.
-4. Add morph weights, animation sampler evaluation, and timeline UI. (Morph preview and clip-duration looping are available; sampler pose evaluation remains pending.)
+4. Add morph weights, animation sampler evaluation, and timeline UI. (Morph preview, clip-duration looping, and a renderer-neutral linear/step pose sampler are available; GLB-channel adaptation and GPU skinning remain pending.)
 5. Add gaze/IK and viseme mixing through the semantic adapter.
 6. Add image regression tests using a deterministic offscreen backend where available.
 
