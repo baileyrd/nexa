@@ -76,6 +76,12 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
                     KeyCode::BracketRight => controls.scrub(0.1),
                     KeyCode::KeyG => controls.gaze_enabled = !controls.gaze_enabled,
                     KeyCode::KeyV => controls.trigger_viseme("A"),
+                    KeyCode::KeyA => controls.nudge_gaze_target(glam::Vec3::new(-0.05, 0.0, 0.0)),
+                    KeyCode::KeyD => controls.nudge_gaze_target(glam::Vec3::new(0.05, 0.0, 0.0)),
+                    KeyCode::KeyW => controls.nudge_gaze_target(glam::Vec3::new(0.0, 0.0, -0.05)),
+                    KeyCode::KeyS => controls.nudge_gaze_target(glam::Vec3::new(0.0, 0.0, 0.05)),
+                    KeyCode::KeyQ => controls.nudge_gaze_target(glam::Vec3::new(0.0, 0.05, 0.0)),
+                    KeyCode::KeyE => controls.nudge_gaze_target(glam::Vec3::new(0.0, -0.05, 0.0)),
                     KeyCode::ArrowLeft => controls.camera.orbit(-0.08, 0.0),
                     KeyCode::ArrowRight => controls.camera.orbit(0.08, 0.0),
                     KeyCode::ArrowUp => controls.camera.orbit(0.0, 0.08),
@@ -137,6 +143,17 @@ fn title(report: &AssetReport, c: &RuntimeControls) -> String {
                 )
             })
             .unwrap_or_else(|| "no animations".to_owned()),
+        InspectorPanel::Gaze => format!(
+            "{} target [{:.2}, {:.2}, {:.2}]",
+            if c.gaze_enabled {
+                "enabled"
+            } else {
+                "disabled"
+            },
+            c.gaze_target.x,
+            c.gaze_target.y,
+            c.gaze_target.z
+        ),
         _ => format!("t={:.1}s", c.animation_time_seconds),
     };
     format!(

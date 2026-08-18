@@ -67,6 +67,8 @@ The control state itself is renderer-independent and directly unit-testable. A G
 
 `headless::validate_glb(path)` is the CI-safe required gate. It does not instantiate a GPU surface, window, event loop, audio system, or OS input. It must validate at least one skeleton, one morph target, and nonempty renderable scene geometry. Project CI should invoke this function plus the manifest checks described in the acceptance checklist.
 
+The test suite generates a minimal skinned/morph-enabled glTF fixture at runtime and runs this exact headless path. This is a pipeline-contract test only; the approved Nexa asset remains the visual acceptance authority.
+
 ## Rendering increment plan
 
 1. Current: GLB metadata import, headless checks, `wgpu` device/surface, debug input state.

@@ -91,6 +91,9 @@ impl RuntimeControls {
             self.animation_time_seconds += elapsed_seconds.max(0.0);
         }
     }
+    pub fn nudge_gaze_target(&mut self, offset: Vec3) {
+        self.gaze_target += offset;
+    }
 }
 
 #[cfg(test)]
@@ -152,5 +155,16 @@ mod tests {
         controls.advance(0.5);
         controls.advance(-9.0);
         assert_eq!(controls.animation_time_seconds, 0.5);
+    }
+
+    #[test]
+    fn gaze_target_can_be_nudged_without_changing_camera() {
+        let mut controls = RuntimeControls::default();
+        let original_camera = controls.camera;
+        controls.nudge_gaze_target(Vec3::new(0.1, -0.2, 0.3));
+        assert!(controls
+            .gaze_target
+            .abs_diff_eq(Vec3::new(0.1, 1.35, -0.7), 0.000_01));
+        assert_eq!(controls.camera, original_camera);
     }
 }
