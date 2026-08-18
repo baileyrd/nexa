@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -215,6 +218,74 @@ pub fn load_static_geometry(path: impl AsRef<Path>) -> Result<StaticGeometry, As
         }
     }
     Ok(geometry)
+}
+
+/// Load rest-pose joint connections as line-list vertices for debug rendering.
+pub fn load_skeleton_debug_geometry(
+    path: impl AsRef<Path>,
+) -> Result<Vec<StaticVertex>, AssetError> {
+    let path = path.as_ref().to_path_buf();
+    let (document, _buffers, _images) =
+        gltf::import(&path).map_err(|source| AssetError::Import {
+            path: path.clone(),
+            source,
+        })?;
+    let joints: HashSet<usize> = document
+        .skins()
+        .flat_map(|skin| skin.joints().map(|joint| joint.index()))
+        .collect();
+    let mut vertices = Vec::new();
+    if let Some(scene) = document
+        .default_scene()
+        .or_else(|| document.scenes().next())
+    {
+        for node in scene.nodes() {
+            append_skeleton_lines(&mut vertices, &joints, node, glam::Mat4::IDENTITY, None);
+        }
+    }
+    Ok(vertices)
+}
+
+fn append_skeleton_lines(
+    vertices: &mut Vec<StaticVertex>,
+    joints: &HashSet<usize>,
+    node: gltf::Node<'_>,
+    parent_transform: glam::Mat4,
+    closest_parent_joint: Option<glam::Vec3>,
+) {
+    let matrix = node.transform().matrix();
+    let world_transform = parent_transform
+        * glam::Mat4::from_cols(
+            glam::Vec4::from_array(matrix[0]),
+            glam::Vec4::from_array(matrix[1]),
+            glam::Vec4::from_array(matrix[2]),
+            glam::Vec4::from_array(matrix[3]),
+        );
+    let position = world_transform.transform_point3(glam::Vec3::ZERO);
+    let is_joint = joints.contains(&node.index());
+    if is_joint {
+        if let Some(parent) = closest_parent_joint {
+            let color = [0.08, 0.85, 1.0, 1.0];
+            vertices.push(StaticVertex {
+                position: parent.to_array(),
+                normal: [0.0, 1.0, 0.0],
+                color,
+            });
+            vertices.push(StaticVertex {
+                position: position.to_array(),
+                normal: [0.0, 1.0, 0.0],
+                color,
+            });
+        }
+    }
+    let parent_joint = if is_joint {
+        Some(position)
+    } else {
+        closest_parent_joint
+    };
+    for child in node.children() {
+        append_skeleton_lines(vertices, joints, child, world_transform, parent_joint);
+    }
 }
 
 fn append_node(

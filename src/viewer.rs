@@ -1,5 +1,5 @@
 use crate::{
-    asset::{load_static_geometry, AssetReport, StaticVertex},
+    asset::{load_skeleton_debug_geometry, load_static_geometry, AssetReport, StaticVertex},
     control::{InspectorPanel, RuntimeControls},
 };
 use anyhow::Context;
@@ -23,11 +23,12 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
             .build(&event_loop)?,
     ));
     let geometry = load_static_geometry(&report.source)?;
+    let skeleton = load_skeleton_debug_geometry(&report.source)?;
     let mut controls = RuntimeControls::default();
     if let Some(bounds) = geometry.bounds() {
         controls.camera.frame_bounds(bounds);
     }
-    let mut viewer = pollster::block_on(Viewer::new(window, &geometry))?;
+    let mut viewer = pollster::block_on(Viewer::new(window, &geometry, &skeleton))?;
     let mut last_update = Instant::now();
     event_loop.run(move |event, target| {
         target.set_control_flow(ControlFlow::Poll);
@@ -96,7 +97,9 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
                 event: WindowEvent::RedrawRequested,
                 ..
             } => {
-                if let Err(e) = viewer.render(&controls.camera) {
+                if let Err(e) =
+                    viewer.render(&controls.camera, controls.panel == InspectorPanel::Skeleton)
+                {
                     if !matches!(e, SurfaceError::Outdated | SurfaceError::Lost) {
                         eprintln!("render error: {e:?}");
                     }
@@ -166,15 +169,71 @@ fn title(report: &AssetReport, c: &RuntimeControls) -> String {
     )
 }
 
+fn create_skeleton_pipeline(
+    device: &wgpu::Device,
+    layout: &wgpu::PipelineLayout,
+    shader: &wgpu::ShaderModule,
+    format: wgpu::TextureFormat,
+) -> wgpu::RenderPipeline {
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("Nexa skeleton debug pipeline"),
+        layout: Some(layout),
+        vertex: wgpu::VertexState {
+            module: shader,
+            entry_point: "vs_main",
+            buffers: &[wgpu::VertexBufferLayout {
+                array_stride: std::mem::size_of::<StaticVertex>() as u64,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &[
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x3,
+                        offset: 0,
+                        shader_location: 0,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x3,
+                        offset: 12,
+                        shader_location: 1,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x4,
+                        offset: 24,
+                        shader_location: 2,
+                    },
+                ],
+            }],
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: shader,
+            entry_point: "fs_main",
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: Some(wgpu::BlendState::REPLACE),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::LineList,
+            ..Default::default()
+        },
+        depth_stencil: None,
+        multisample: Default::default(),
+        multiview: None,
+    })
+}
+
 struct Viewer<'a> {
     surface: wgpu::Surface<'a>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     pipeline: wgpu::RenderPipeline,
+    skeleton_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     index_count: u32,
+    skeleton_vertex_buffer: Option<wgpu::Buffer>,
+    skeleton_vertex_count: u32,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
 }
@@ -182,6 +241,7 @@ impl<'a> Viewer<'a> {
     async fn new(
         window: &'a winit::window::Window,
         geometry: &crate::asset::StaticGeometry,
+        skeleton: &[StaticVertex],
     ) -> anyhow::Result<Self> {
         let instance = wgpu::Instance::default();
         let surface = instance.create_surface(window)?;
@@ -298,6 +358,8 @@ impl<'a> Viewer<'a> {
             multisample: Default::default(),
             multiview: None,
         });
+        let skeleton_pipeline =
+            create_skeleton_pipeline(&device, &pipeline_layout, &shader, format);
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Nexa vertices"),
             contents: bytemuck::cast_slice(&geometry.vertices),
@@ -308,15 +370,25 @@ impl<'a> Viewer<'a> {
             contents: bytemuck::cast_slice(&geometry.indices),
             usage: wgpu::BufferUsages::INDEX,
         });
+        let skeleton_vertex_buffer = (!skeleton.is_empty()).then(|| {
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Nexa skeleton debug vertices"),
+                contents: bytemuck::cast_slice(skeleton),
+                usage: wgpu::BufferUsages::VERTEX,
+            })
+        });
         Ok(Self {
             surface,
             device,
             queue,
             config,
             pipeline,
+            skeleton_pipeline,
             vertex_buffer,
             index_buffer,
             index_count: geometry.indices.len() as u32,
+            skeleton_vertex_buffer,
+            skeleton_vertex_count: skeleton.len() as u32,
             camera_buffer,
             camera_bind_group,
         })
@@ -326,7 +398,11 @@ impl<'a> Viewer<'a> {
         self.config.height = height.max(1);
         self.surface.configure(&self.device, &self.config);
     }
-    fn render(&mut self, camera: &crate::control::OrbitCamera) -> Result<(), SurfaceError> {
+    fn render(
+        &mut self,
+        camera: &crate::control::OrbitCamera,
+        show_skeleton: bool,
+    ) -> Result<(), SurfaceError> {
         let aspect = self.config.width as f32 / self.config.height as f32;
         let eye = camera.target
             + glam::Vec3::new(
@@ -370,6 +446,13 @@ impl<'a> Viewer<'a> {
             _pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             _pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             _pass.draw_indexed(0..self.index_count, 0, 0..1);
+            if show_skeleton {
+                if let Some(skeleton) = &self.skeleton_vertex_buffer {
+                    _pass.set_pipeline(&self.skeleton_pipeline);
+                    _pass.set_vertex_buffer(0, skeleton.slice(..));
+                    _pass.draw(0..self.skeleton_vertex_count, 0..1);
+                }
+            }
         }
         self.queue.submit(Some(encoder.finish()));
         frame.present();

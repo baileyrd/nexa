@@ -8,7 +8,7 @@ Minimal Rust validation/runtime viewer for the canonical Nexa GLB. It is deliber
 cargo run --bin nexa-3d-viewer -- path\to\Nexa.glb path\to\nexa.runtime.json
 ```
 
-The window draws imported GLB rest-pose geometry, including authored scene-node transforms and PBR base-color factors, and automatically frames its bounds. The terminal reports GLB skeleton, morph-target, and animation validation; the window title reports current inspection state. Texture maps, skinning, and morph evaluation remain future rendering increments.
+The window draws imported GLB rest-pose geometry, including authored scene-node transforms and PBR base-color factors, automatically frames its bounds, and overlays the joint hierarchy in cyan. The terminal reports GLB skeleton, morph-target, and animation validation; the window title reports current inspection state. Texture maps, skinning, and morph evaluation remain future rendering increments.
 
 Controls: `1` skeleton report, `2` morph inspection, `M` select the next exported morph target, `3` animation inspection, `N` select the next animation, `Space` play/pause, `[` / `]` scrub, arrow keys orbit, mouse wheel zoom, `G` toggle eye/head gaze, `W/A/S/D` move gaze target horizontally/depth, `Q/E` move it vertically, `V` trigger a viseme hook, `R` reset. `Esc` closes.
 
