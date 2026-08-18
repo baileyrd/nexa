@@ -31,12 +31,34 @@ pub enum MessageType {
     BehaviorCommand,
     #[serde(rename = "behavior.cancel")]
     BehaviorCancel,
+    #[serde(rename = "runtime.capabilities")]
+    RuntimeCapabilities,
     #[serde(rename = "runtime.ack")]
     RuntimeAck,
     #[serde(rename = "runtime.state")]
     RuntimeState,
     #[serde(rename = "runtime.error")]
     RuntimeError,
+}
+
+/// Renderer-neutral facilities negotiated on the NBP wire.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AvatarCapability {
+    BehaviorState,
+    Emotion,
+    Gaze,
+    Gesture,
+    Speech,
+    Visemes,
+    Cancellation,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct RuntimeCapabilities {
+    pub avatar_id: SemanticKey,
+    /// Sorted and de-duplicated by the producer for stable negotiation.
+    pub supported: Vec<AvatarCapability>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -208,6 +230,7 @@ pub struct RuntimeAck {
 }
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RuntimeState {
+    pub message_id: MessageId,
     pub avatar_id: SemanticKey,
     pub state: BehaviorState,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -215,6 +238,7 @@ pub struct RuntimeState {
 }
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RuntimeError {
+    pub message_id: MessageId,
     pub code: SemanticKey,
     pub severity: ErrorSeverity,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -227,6 +251,7 @@ pub struct RuntimeError {
 pub enum Payload {
     BehaviorCommand(BehaviorCommand),
     BehaviorCancel(BehaviorCancel),
+    RuntimeCapabilities(RuntimeCapabilities),
     RuntimeAck(RuntimeAck),
     RuntimeState(RuntimeState),
     RuntimeError(RuntimeError),
@@ -236,6 +261,7 @@ impl Payload {
         match self {
             Self::BehaviorCommand(_) => MessageType::BehaviorCommand,
             Self::BehaviorCancel(_) => MessageType::BehaviorCancel,
+            Self::RuntimeCapabilities(_) => MessageType::RuntimeCapabilities,
             Self::RuntimeAck(_) => MessageType::RuntimeAck,
             Self::RuntimeState(_) => MessageType::RuntimeState,
             Self::RuntimeError(_) => MessageType::RuntimeError,
@@ -349,6 +375,7 @@ impl Serialize for NbpMessage {
             payload: match &self.payload {
                 Payload::BehaviorCommand(v) => serde_json::to_value(v),
                 Payload::BehaviorCancel(v) => serde_json::to_value(v),
+                Payload::RuntimeCapabilities(v) => serde_json::to_value(v),
                 Payload::RuntimeAck(v) => serde_json::to_value(v),
                 Payload::RuntimeState(v) => serde_json::to_value(v),
                 Payload::RuntimeError(v) => serde_json::to_value(v),
@@ -368,6 +395,9 @@ impl<'de> Deserialize<'de> for NbpMessage {
             }
             MessageType::BehaviorCancel => {
                 serde_json::from_value(w.payload).map(Payload::BehaviorCancel)
+            }
+            MessageType::RuntimeCapabilities => {
+                serde_json::from_value(w.payload).map(Payload::RuntimeCapabilities)
             }
             MessageType::RuntimeAck => serde_json::from_value(w.payload).map(Payload::RuntimeAck),
             MessageType::RuntimeState => {

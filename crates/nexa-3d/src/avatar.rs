@@ -158,7 +158,7 @@ impl<R: AvatarRenderer> AvatarPort for NexaAvatarAdapter<R> {
             self.apply_gesture(name, gesture.intensity.get() as f32);
         }
 
-        AvatarReport::accepted(
+        AvatarReport::completed(
             message_id,
             SemanticKey::new("nexa-3d-runtime").expect("static semantic key is valid"),
             &command,
@@ -255,7 +255,7 @@ mod tests {
             MessageId::from_str("018f1f64-4f09-7cc0-98c2-7b3e8f249002").unwrap(),
             command,
         );
-        assert_eq!(report.acknowledgement.status, RuntimeStatus::Accepted);
+        assert_eq!(report.terminal_status(), RuntimeStatus::Completed);
         let recorder = adapter.into_inner();
         assert_eq!(recorder.expression.unwrap().canonical_name, "Focused");
         assert_eq!(recorder.gesture.unwrap().canonical_name, "Point");
@@ -289,7 +289,7 @@ mod tests {
 
         let mut unresolved = NexaAvatarAdapter::new(Recorder::default());
         let report = unresolved.submit(message_id, command.clone());
-        assert_eq!(report.acknowledgement.status, RuntimeStatus::Degraded);
+        assert_eq!(report.terminal_status(), RuntimeStatus::Degraded);
         assert_eq!(
             report.error.unwrap().code.as_str(),
             "avatar.gaze.target_unresolved"
@@ -302,7 +302,7 @@ mod tests {
         let mut resolved = NexaAvatarAdapter::new(Recorder::default());
         resolved.register_canvas_target(target_id, expected);
         let report = resolved.submit(message_id, command);
-        assert_eq!(report.acknowledgement.status, RuntimeStatus::Accepted);
+        assert_eq!(report.terminal_status(), RuntimeStatus::Completed);
         assert_eq!(resolved.into_inner().gaze.unwrap().eye_target, expected);
     }
 
@@ -322,7 +322,7 @@ mod tests {
                 transition: CancellationMode::Immediate,
             },
         );
-        assert_eq!(report.acknowledgement.status, RuntimeStatus::Cancelled);
+        assert_eq!(report.terminal_status(), RuntimeStatus::Cancelled);
         assert_eq!(adapter.into_inner().cancelled, Some(behavior_id));
     }
 }

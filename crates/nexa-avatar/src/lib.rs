@@ -1,27 +1,15 @@
 //! Renderer-neutral ports between NBP semantics and avatar runtime adapters.
 #![forbid(unsafe_code)]
 
-use nexa_domain::{BehaviorId, MessageId, SemanticKey};
+use nexa_domain::{BehaviorId, EndpointId, MessageId, SemanticKey, Sequence};
+pub use nexa_nbp::AvatarCapability;
 use nexa_nbp::{
-    BehaviorCancel, BehaviorCommand, ErrorSeverity, NbpMessage, Payload, RuntimeAck, RuntimeError,
-    RuntimeState, RuntimeStatus,
+    BehaviorCancel, BehaviorCommand, ErrorSeverity, NbpMessage, Payload, RuntimeAck,
+    RuntimeCapabilities, RuntimeError, RuntimeState, RuntimeStatus,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use thiserror::Error;
-
-/// Semantic facilities which an avatar adapter can advertise.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AvatarCapability {
-    BehaviorState,
-    Emotion,
-    Gaze,
-    Gesture,
-    Speech,
-    Visemes,
-    Cancellation,
-}
 
 /// A deterministic, renderer-independent capability declaration.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
@@ -35,13 +23,17 @@ impl AvatarCapabilities {
             supported: supported.into_iter().collect(),
         }
     }
-
     pub fn supports(&self, capability: AvatarCapability) -> bool {
         self.supported.contains(&capability)
     }
-
     pub fn iter(&self) -> impl Iterator<Item = AvatarCapability> + '_ {
         self.supported.iter().copied()
+    }
+    pub fn as_nbp(&self, avatar_id: SemanticKey) -> RuntimeCapabilities {
+        RuntimeCapabilities {
+            avatar_id,
+            supported: self.iter().collect(),
+        }
     }
 }
 
@@ -86,6 +78,9 @@ impl TryFrom<&NbpMessage> for AvatarRequest {
                 message_id: message.message_id,
                 cancellation: cancellation.clone(),
             }),
+            Payload::RuntimeCapabilities(_) => Err(Self::Error::OutputPayload {
+                actual: "runtime.capabilities",
+            }),
             Payload::RuntimeAck(_) => Err(Self::Error::OutputPayload {
                 actual: "runtime.ack",
             }),
@@ -99,71 +94,178 @@ impl TryFrom<&NbpMessage> for AvatarRequest {
     }
 }
 
-/// Renderer-neutral response emitted synchronously by the initial port.
+/// Renderer-neutral lifecycle result emitted synchronously by the core port.
+/// `Accepted` means ownership was taken; it never implies completion.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AvatarReport {
-    pub acknowledgement: RuntimeAck,
+    pub message_id: MessageId,
+    pub behavior_id: BehaviorId,
+    pub lifecycle: Vec<RuntimeStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub state: Option<RuntimeState>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<RuntimeError>,
 }
-
 impl AvatarReport {
-    pub fn accepted(
+    fn with_statuses(
         message_id: MessageId,
-        avatar_id: SemanticKey,
-        command: &BehaviorCommand,
+        behavior_id: BehaviorId,
+        lifecycle: Vec<RuntimeStatus>,
     ) -> Self {
         Self {
-            acknowledgement: RuntimeAck {
-                message_id,
-                behavior_id: Some(command.behavior_id),
-                status: RuntimeStatus::Accepted,
-            },
-            state: Some(RuntimeState {
-                avatar_id,
-                state: command.state,
-                behavior_id: Some(command.behavior_id),
-            }),
-            error: None,
-        }
-    }
-
-    pub fn cancelled(message_id: MessageId, behavior_id: BehaviorId) -> Self {
-        Self {
-            acknowledgement: RuntimeAck {
-                message_id,
-                behavior_id: Some(behavior_id),
-                status: RuntimeStatus::Cancelled,
-            },
+            message_id,
+            behavior_id,
+            lifecycle,
             state: None,
             error: None,
         }
     }
-
+    pub fn completed(
+        message_id: MessageId,
+        avatar_id: SemanticKey,
+        command: &BehaviorCommand,
+    ) -> Self {
+        let mut value = Self::with_statuses(
+            message_id,
+            command.behavior_id,
+            vec![
+                RuntimeStatus::Accepted,
+                RuntimeStatus::Started,
+                RuntimeStatus::Completed,
+            ],
+        );
+        value.state = Some(RuntimeState {
+            message_id,
+            avatar_id,
+            state: command.state,
+            behavior_id: Some(command.behavior_id),
+        });
+        value
+    }
+    pub fn cancelled(message_id: MessageId, behavior_id: BehaviorId) -> Self {
+        Self::with_statuses(message_id, behavior_id, vec![RuntimeStatus::Cancelled])
+    }
     pub fn degraded(
         message_id: MessageId,
         behavior_id: BehaviorId,
         code: SemanticKey,
         message: String,
     ) -> Self {
-        Self {
-            acknowledgement: RuntimeAck {
-                message_id,
-                behavior_id: Some(behavior_id),
-                status: RuntimeStatus::Degraded,
-            },
-            state: None,
-            error: Some(RuntimeError {
-                code,
-                severity: ErrorSeverity::Warning,
-                behavior_id: Some(behavior_id),
-                message,
-                recoverable: true,
-            }),
-        }
+        let mut value = Self::with_statuses(message_id, behavior_id, vec![RuntimeStatus::Degraded]);
+        value.error = Some(RuntimeError {
+            message_id,
+            code,
+            severity: ErrorSeverity::Warning,
+            behavior_id: Some(behavior_id),
+            message,
+            recoverable: true,
+        });
+        value
     }
+    pub fn rejected(
+        message_id: MessageId,
+        behavior_id: BehaviorId,
+        code: SemanticKey,
+        message: String,
+    ) -> Self {
+        let mut value = Self::with_statuses(message_id, behavior_id, vec![RuntimeStatus::Rejected]);
+        value.error = Some(RuntimeError {
+            message_id,
+            code,
+            severity: ErrorSeverity::Error,
+            behavior_id: Some(behavior_id),
+            message,
+            recoverable: false,
+        });
+        value
+    }
+    pub fn failed(
+        message_id: MessageId,
+        behavior_id: BehaviorId,
+        code: SemanticKey,
+        message: String,
+    ) -> Self {
+        let mut value = Self::with_statuses(
+            message_id,
+            behavior_id,
+            vec![
+                RuntimeStatus::Accepted,
+                RuntimeStatus::Started,
+                RuntimeStatus::Failed,
+            ],
+        );
+        value.error = Some(RuntimeError {
+            message_id,
+            code,
+            severity: ErrorSeverity::Error,
+            behavior_id: Some(behavior_id),
+            message,
+            recoverable: false,
+        });
+        value
+    }
+    pub fn terminal_status(&self) -> RuntimeStatus {
+        *self.lifecycle.last().expect("reports have a lifecycle")
+    }
+
+    /// Converts each semantic lifecycle fact to a governed NBP output. IDs and the first
+    /// output sequence are supplied by the composition root; the core never invents identity.
+    pub fn to_nbp_messages(
+        &self,
+        input: &NbpMessage,
+        source: EndpointId,
+        first_sequence: Sequence,
+        message_ids: impl IntoIterator<Item = MessageId>,
+    ) -> Result<Vec<NbpMessage>, OutputConversionError> {
+        let mut ids = message_ids.into_iter();
+        let mut payloads: Vec<Payload> = self
+            .lifecycle
+            .iter()
+            .map(|status| {
+                Payload::RuntimeAck(RuntimeAck {
+                    message_id: self.message_id,
+                    behavior_id: Some(self.behavior_id),
+                    status: *status,
+                })
+            })
+            .collect();
+        if let Some(state) = &self.state {
+            payloads.push(Payload::RuntimeState(state.clone()));
+        }
+        if let Some(error) = &self.error {
+            payloads.push(Payload::RuntimeError(error.clone()));
+        }
+        payloads
+            .into_iter()
+            .enumerate()
+            .map(|(index, payload)| {
+                let message_id = ids
+                    .next()
+                    .ok_or(OutputConversionError::InsufficientMessageIds)?;
+                NbpMessage::new(
+                    input.nbp_version,
+                    message_id,
+                    input.timestamp,
+                    input.session_id,
+                    Sequence::new(first_sequence.get() + index as u64),
+                    source.clone(),
+                    Some(input.source.clone()),
+                    input.correlation_id,
+                    payload,
+                    Default::default(),
+                )
+                .map_err(OutputConversionError::Protocol)
+            })
+            .collect()
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum OutputConversionError {
+    #[error("not enough message identities supplied for avatar outputs")]
+    InsufficientMessageIds,
+    #[error(transparent)]
+    Protocol(#[from] nexa_nbp::NbpError),
 }
 
 /// Inbound command port owned here and implemented by renderer/runtime adapters.
@@ -192,6 +294,15 @@ pub struct FakeAvatarAdapter {
     avatar_id: SemanticKey,
     capabilities: AvatarCapabilities,
     requests: Vec<AvatarRequest>,
+    submit_outcome: FakeSubmitOutcome,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum FakeSubmitOutcome {
+    #[default]
+    Complete,
+    Reject,
+    Fail,
 }
 
 impl FakeAvatarAdapter {
@@ -200,7 +311,13 @@ impl FakeAvatarAdapter {
             avatar_id,
             capabilities,
             requests: Vec::new(),
+            submit_outcome: FakeSubmitOutcome::Complete,
         }
+    }
+
+    pub fn with_submit_outcome(mut self, outcome: FakeSubmitOutcome) -> Self {
+        self.submit_outcome = outcome;
+        self
     }
 
     pub fn requests(&self) -> &[AvatarRequest] {
@@ -228,7 +345,23 @@ impl AvatarPort for FakeAvatarAdapter {
                 format!("{capability:?} is unsupported; semantic command was degraded"),
             )
         } else {
-            AvatarReport::accepted(message_id, self.avatar_id.clone(), &command)
+            match self.submit_outcome {
+                FakeSubmitOutcome::Complete => {
+                    AvatarReport::completed(message_id, self.avatar_id.clone(), &command)
+                }
+                FakeSubmitOutcome::Reject => AvatarReport::rejected(
+                    message_id,
+                    command.behavior_id,
+                    SemanticKey::new("avatar.fake.rejected").expect("static key is valid"),
+                    "deterministic fake rejection".into(),
+                ),
+                FakeSubmitOutcome::Fail => AvatarReport::failed(
+                    message_id,
+                    command.behavior_id,
+                    SemanticKey::new("avatar.fake.failed").expect("static key is valid"),
+                    "deterministic fake failure".into(),
+                ),
+            }
         }
     }
 

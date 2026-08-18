@@ -18,7 +18,7 @@ This matrix defines the normative surface of the first implementation increment.
 | NBP §§7–30,74 | behavior command/cancel | `nexa-nbp` behavior types | tagged payload | priority/ranges; MVP vocabulary | May contain learner text | Fake/headless adapter, implemented |
 | NBP §§35–40,74 | ack/state/error | `nexa-nbp::Payload` | tagged payload | typed statuses/severity | Operational | Orchestrator, implemented |
 | AVTR §§19–20,83–86; 3D §§3,104,212 | avatar command/cancel port and adapter direction | `nexa-avatar::AvatarPort`, root `avatar::NexaAvatarAdapter` | renderer-neutral request/report | semantic input only; no renderer types | May contain learner speech text | Fake and existing 3D adapters, implemented |
-| AVTR §§12,87,172; 3D §§17,165 | capability discovery and graceful degradation | `nexa-avatar::AvatarCapabilities`, `AvatarReport` | ordered semantic capability set; NBP status/error | unsupported optional facilities report recoverable degradation | Operational | Deterministic fake adapter, implemented locally; wire negotiation unresolved |
+| AVTR §§12,87,172; 3D §§17,165 | capability discovery and graceful degradation | `nexa-avatar::AvatarCapabilities`, `AvatarReport` | ordered semantic capability set; NBP status/error | unsupported optional facilities report recoverable degradation | Operational | Deterministic fake adapter, implemented locally; wire negotiation completed by ADR-0009 / Phase 2 |
 | NBP §§61–66 | JSON/version/extensions | `nexa-nbp` + ADR-0004/0006 | JSON/extensions object | namespaced object values | Payload-dependent | All peers, implemented |
 
 ## Deferred or unresolved
@@ -26,5 +26,5 @@ This matrix defines the normative surface of the first implementation increment.
 - NEXA-DOM-001's remaining aggregate and identifier inventory has no first-increment consumer and is intentionally not transcribed.
 - NEXA-EVT-001's command envelope, durable store/replay context, privacy retention, async backpressure, and full event payload catalog require owners and adapters.
 - NEXA-NBP-001 alternates between graceful handling of future states and strongly typed enum validation. ADR-0004 rejects unknown required states for safety; a future minor-version capability design may introduce an explicit extension state.
-- NBP update merge/race rules, arbitration, canvas messages, capability negotiation on the wire, and the complete asynchronous acceptance flow are next-increment work. Local avatar capability degradation is implemented by `nexa-avatar`.
+- NBP update merge/race rules, arbitration, and canvas messages remain deferred. Phase 2 implements synchronous capability negotiation and acceptance; asynchronous transport scheduling remains deferred by ADR-0009.
 - Formal JSON Schemas and automated backward-compatibility comparison are required before the contracts are promoted from Baseline Draft; Phase 1 uses reviewed golden fixtures.

@@ -17,6 +17,7 @@ glam.workspace = true
 gltf.workspace = true
 nexa-avatar = { path = "../nexa-avatar" }
 nexa-domain = { path = "../nexa-domain" }
+nexa-events = { path = "../nexa-events" }
 nexa-nbp = { path = "../nexa-nbp" }
 serde.workspace = true
 serde_json.workspace = true

@@ -7,6 +7,7 @@ pub mod behavior;
 pub mod control;
 pub mod gaze;
 pub mod headless;
+pub mod integration;
 pub mod manifest;
 pub mod runtime;
 pub mod skin;

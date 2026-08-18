@@ -93,3 +93,19 @@ See the roadmap for phase gates and acceptance outcomes.
 ## License
 
 The current Rust package declares MIT or Apache-2.0 licensing. Repository-wide licensing and third-party asset provenance will be formalized before distribution.
+
+## Phase 2 embodiment acceptance
+
+The headless composition now accepts a complete NBP command, evaluates renderer-neutral capabilities, dispatches through `AvatarPort`, and returns correlated NBP acknowledgements/state/errors plus typed lifecycle events. A successful synchronous fake execution emits `accepted`, `started`, then `completed`; acceptance never implies completion. Optional unsupported facilities and unresolved semantic canvas targets degrade explicitly, cancellation is terminal, and rejection/failure remain distinct.
+
+```rust
+let report = adapter.handle(nexa_avatar::AvatarRequest::try_from(&nbp_message)?);
+let outputs = report.to_nbp_messages(
+    &nbp_message,
+    "nexa.avatar".parse()?,
+    nexa_domain::Sequence::new(1),
+    caller_supplied_message_ids,
+)?;
+```
+
+The caller supplies output identities and sequences. The core is synchronous and contains no renderer, GPU, window, audio provider, network, persistence, or async-runtime dependency. See [ADR-0009](docs/adr/0009-embodiment-acceptance-and-lifecycle.md) and the [Phase 2 traceability matrix](docs/architecture/PHASE-2-TRACEABILITY.md).

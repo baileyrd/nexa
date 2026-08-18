@@ -76,7 +76,7 @@ fn cancellation_propagates_to_the_adapter_and_acknowledgement() {
         message_id: message_id(),
         cancellation: cancellation.clone(),
     });
-    assert_eq!(report.acknowledgement.status, RuntimeStatus::Cancelled);
+    assert_eq!(report.terminal_status(), RuntimeStatus::Cancelled);
     assert_eq!(
         adapter.requests(),
         &[AvatarRequest::Cancel {
@@ -90,7 +90,7 @@ fn cancellation_propagates_to_the_adapter_and_acknowledgement() {
 fn acknowledgement_and_state_map_without_renderer_values() {
     let mut adapter = fake([AvatarCapability::BehaviorState, AvatarCapability::Emotion]);
     let report = adapter.submit(message_id(), command());
-    assert_eq!(report.acknowledgement.status, RuntimeStatus::Accepted);
+    assert_eq!(report.terminal_status(), RuntimeStatus::Completed);
     assert_eq!(report.state.unwrap().state, BehaviorState::Attentive);
     assert!(report.error.is_none());
 }
@@ -99,7 +99,7 @@ fn acknowledgement_and_state_map_without_renderer_values() {
 fn unsupported_capability_is_explicitly_degraded_with_recoverable_error() {
     let mut adapter = fake([AvatarCapability::BehaviorState]);
     let report = adapter.submit(message_id(), command());
-    assert_eq!(report.acknowledgement.status, RuntimeStatus::Degraded);
+    assert_eq!(report.terminal_status(), RuntimeStatus::Degraded);
     let error = report.error.unwrap();
     assert!(error.recoverable);
     assert_eq!(error.code.as_str(), "avatar.capability.unsupported");
@@ -109,7 +109,7 @@ fn unsupported_capability_is_explicitly_degraded_with_recoverable_error() {
 fn mandatory_behavior_state_is_checked_with_optional_capabilities() {
     let mut adapter = fake([AvatarCapability::Emotion]);
     let report = adapter.submit(message_id(), command());
-    assert_eq!(report.acknowledgement.status, RuntimeStatus::Degraded);
+    assert_eq!(report.terminal_status(), RuntimeStatus::Degraded);
     assert!(report.error.unwrap().message.contains("BehaviorState"));
 }
 

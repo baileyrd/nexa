@@ -2,8 +2,8 @@
 #![forbid(unsafe_code)]
 
 use nexa_domain::{
-    CorrelationId, EndpointId, EventId, ProtocolVersion, Sequence, SessionId, SubjectId, Timestamp,
-    TraceId,
+    BehaviorId, CorrelationId, EndpointId, EventId, MessageId, ProtocolVersion, SemanticKey,
+    Sequence, SessionId, SubjectId, Timestamp, TraceId,
 };
 use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
@@ -40,10 +40,16 @@ pub enum EventKind {
     SpeechPlaybackCompleted,
     #[serde(rename = "avatar.state.changed")]
     AvatarStateChanged,
+    #[serde(rename = "avatar.behavior.accepted")]
+    AvatarBehaviorAccepted,
     #[serde(rename = "avatar.behavior.started")]
     AvatarBehaviorStarted,
     #[serde(rename = "avatar.behavior.completed")]
     AvatarBehaviorCompleted,
+    #[serde(rename = "avatar.behavior.cancelled")]
+    AvatarBehaviorCancelled,
+    #[serde(rename = "avatar.behavior.degraded")]
+    AvatarBehaviorDegraded,
     #[serde(rename = "avatar.behavior.failed")]
     AvatarBehaviorFailed,
 }
@@ -201,9 +207,41 @@ pub struct SpeechSynthesisCompleted {
 impl DomainEvent for SpeechSynthesisCompleted {
     const KIND: EventKind = EventKind::SpeechSynthesisCompleted;
 }
+macro_rules! avatar_lifecycle {
+    ($name:ident, $kind:ident) => {
+        #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+        pub struct $name {
+            pub message_id: MessageId,
+            pub behavior_id: BehaviorId,
+        }
+        impl DomainEvent for $name {
+            const KIND: EventKind = EventKind::$kind;
+        }
+    };
+}
+avatar_lifecycle!(AvatarBehaviorAccepted, AvatarBehaviorAccepted);
+avatar_lifecycle!(AvatarBehaviorStarted, AvatarBehaviorStarted);
+avatar_lifecycle!(AvatarBehaviorCompleted, AvatarBehaviorCompleted);
+avatar_lifecycle!(AvatarBehaviorCancelled, AvatarBehaviorCancelled);
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct AvatarBehaviorLifecycle {
-    pub behavior_id: nexa_domain::BehaviorId,
+pub struct AvatarBehaviorDegraded {
+    pub message_id: MessageId,
+    pub behavior_id: BehaviorId,
+    pub reason: SemanticKey,
+}
+impl DomainEvent for AvatarBehaviorDegraded {
+    const KIND: EventKind = EventKind::AvatarBehaviorDegraded;
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct AvatarBehaviorFailed {
+    pub message_id: MessageId,
+    pub behavior_id: BehaviorId,
+    pub reason: SemanticKey,
+}
+impl DomainEvent for AvatarBehaviorFailed {
+    const KIND: EventKind = EventKind::AvatarBehaviorFailed;
 }
 
 /// A subscriber callback failure. Other subscribers are still called.

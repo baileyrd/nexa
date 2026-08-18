@@ -105,3 +105,16 @@ fn extension_keys_follow_the_wire_grammar() {
         );
     }
 }
+
+#[test]
+fn capability_report_is_sorted_renderer_neutral_nbp_output() {
+    let mut message = fixture();
+    message.payload = Payload::RuntimeCapabilities(RuntimeCapabilities {
+        avatar_id: "nexa-avatar-primary".parse().unwrap(),
+        supported: vec![AvatarCapability::BehaviorState, AvatarCapability::Gaze],
+    });
+    let json = serde_json::to_string(&message).unwrap();
+    assert!(json.contains("runtime.capabilities"));
+    assert_eq!(serde_json::from_str::<NbpMessage>(&json).unwrap(), message);
+    assert_eq!(message.message_type(), MessageType::RuntimeCapabilities);
+}
