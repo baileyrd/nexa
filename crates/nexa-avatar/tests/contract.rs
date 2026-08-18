@@ -1,6 +1,6 @@
 use nexa_avatar::{
-    required_capabilities, AvatarCapabilities, AvatarCapability, AvatarPort, AvatarRequest,
-    FakeAvatarAdapter,
+    missing_required_capabilities, required_capabilities, AvatarCapabilities, AvatarCapability,
+    AvatarPort, AvatarRequest, FakeAvatarAdapter,
 };
 use nexa_domain::{
     BehaviorId, EndpointId, MessageId, ProtocolVersion, SemanticKey, Sequence, SessionId, Timestamp,
@@ -106,6 +106,14 @@ fn unsupported_capability_is_explicitly_degraded_with_recoverable_error() {
 }
 
 #[test]
+fn mandatory_behavior_state_is_checked_with_optional_capabilities() {
+    let mut adapter = fake([AvatarCapability::Emotion]);
+    let report = adapter.submit(message_id(), command());
+    assert_eq!(report.acknowledgement.status, RuntimeStatus::Degraded);
+    assert!(report.error.unwrap().message.contains("BehaviorState"));
+}
+
+#[test]
 fn fake_adapter_is_deterministic_and_records_semantic_inputs() {
     let mut first = fake([AvatarCapability::BehaviorState, AvatarCapability::Emotion]);
     let mut second = first.clone();
@@ -142,5 +150,46 @@ fn required_capabilities_are_derived_only_from_semantic_fields() {
     assert_eq!(
         capabilities.iter().collect::<Vec<_>>(),
         vec![AvatarCapability::BehaviorState, AvatarCapability::Emotion]
+    );
+}
+
+#[test]
+fn visemes_are_required_only_when_speech_requests_emission() {
+    use nexa_nbp::{Speech, SpeechStyle};
+
+    let mut without_visemes = command();
+    without_visemes.emotion = None;
+    without_visemes.speech = Some(Speech {
+        text: "Hello".into(),
+        style: SpeechStyle::Instructional,
+        allow_interruption: true,
+        emit_visemes: false,
+    });
+    assert_eq!(
+        required_capabilities(&without_visemes)
+            .iter()
+            .collect::<Vec<_>>(),
+        [AvatarCapability::BehaviorState, AvatarCapability::Speech]
+    );
+
+    let mut with_visemes = without_visemes.clone();
+    with_visemes.speech.as_mut().unwrap().emit_visemes = true;
+    assert_eq!(
+        required_capabilities(&with_visemes)
+            .iter()
+            .collect::<Vec<_>>(),
+        [
+            AvatarCapability::BehaviorState,
+            AvatarCapability::Speech,
+            AvatarCapability::Visemes,
+        ]
+    );
+    let missing = missing_required_capabilities(
+        &with_visemes,
+        &AvatarCapabilities::new([AvatarCapability::BehaviorState, AvatarCapability::Speech]),
+    );
+    assert_eq!(
+        missing.iter().collect::<Vec<_>>(),
+        [AvatarCapability::Visemes]
     );
 }

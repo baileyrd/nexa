@@ -206,19 +206,6 @@ impl FakeAvatarAdapter {
     pub fn requests(&self) -> &[AvatarRequest] {
         &self.requests
     }
-
-    fn missing_capability(&self, command: &BehaviorCommand) -> Option<AvatarCapability> {
-        [
-            (command.emotion.is_some(), AvatarCapability::Emotion),
-            (command.gaze.is_some(), AvatarCapability::Gaze),
-            (command.gesture.is_some(), AvatarCapability::Gesture),
-            (command.speech.is_some(), AvatarCapability::Speech),
-        ]
-        .into_iter()
-        .find_map(|(needed, capability)| {
-            (needed && !self.capabilities.supports(capability)).then_some(capability)
-        })
-    }
 }
 
 impl AvatarPort for FakeAvatarAdapter {
@@ -227,12 +214,13 @@ impl AvatarPort for FakeAvatarAdapter {
     }
 
     fn submit(&mut self, message_id: MessageId, command: BehaviorCommand) -> AvatarReport {
-        let missing = self.missing_capability(&command);
+        let missing = missing_required_capabilities(&command, &self.capabilities);
+        let first_missing = missing.iter().next();
         self.requests.push(AvatarRequest::Submit {
             message_id,
             command: command.clone(),
         });
-        if let Some(capability) = missing {
+        if let Some(capability) = first_missing {
             AvatarReport::degraded(
                 message_id,
                 command.behavior_id,
@@ -280,5 +268,27 @@ pub fn required_capabilities(command: &BehaviorCommand) -> AvatarCapabilities {
             .then_some(AvatarCapability::Gesture),
     );
     values.extend(command.speech.is_some().then_some(AvatarCapability::Speech));
+    values.extend(
+        command
+            .speech
+            .as_ref()
+            .is_some_and(|speech| speech.emit_visemes)
+            .then_some(AvatarCapability::Visemes),
+    );
     AvatarCapabilities::new(values)
+}
+
+/// Returns every command requirement not advertised by an adapter.
+///
+/// Keeping this comparison beside [`required_capabilities`] ensures adapters do
+/// not accidentally validate only optional portions of a behavior command.
+pub fn missing_required_capabilities(
+    command: &BehaviorCommand,
+    available: &AvatarCapabilities,
+) -> AvatarCapabilities {
+    AvatarCapabilities::new(
+        required_capabilities(command)
+            .iter()
+            .filter(|capability| !available.supports(*capability)),
+    )
 }

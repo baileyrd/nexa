@@ -41,6 +41,8 @@ mod tests {
         events: Vec<&'static str>,
     }
     impl AvatarRenderer for Recorder {
+        fn set_behavior_state(&mut self, _: nexa_nbp::BehaviorState) {}
+        fn cancel_behavior(&mut self, _: &nexa_nbp::BehaviorCancel) {}
         fn set_expression(&mut self, _: ExpressionCommand) {
             self.events.push("expression");
         }
