@@ -10,7 +10,7 @@ cargo run --bin nexa-3d-viewer -- path\to\Nexa.glb path\to\nexa.runtime.json
 
 The window draws imported GLB rest-pose geometry, including authored scene-node transforms, with a deliberately neutral debug material. The terminal reports GLB skeleton, morph-target, and animation validation; the window title reports current inspection state. Skinning/morph evaluation is the next rendering increment.
 
-Controls: `1` skeleton report, `2` morph inspection, `M` select the next exported morph target, `3` animation inspection, `N` select the next animation, `Space` play/pause, `[` / `]` scrub, arrow keys orbit, `G` toggle eye/head gaze, `V` trigger a viseme hook, `R` reset. `Esc` closes.
+Controls: `1` skeleton report, `2` morph inspection, `M` select the next exported morph target, `3` animation inspection, `N` select the next animation, `Space` play/pause, `[` / `]` scrub, arrow keys orbit, mouse wheel zoom, `G` toggle eye/head gaze, `V` trigger a viseme hook, `R` reset. `Esc` closes.
 
 ## Layout
 

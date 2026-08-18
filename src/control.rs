@@ -22,6 +22,9 @@ impl OrbitCamera {
         self.yaw_radians += yaw;
         self.pitch_radians = (self.pitch_radians + pitch).clamp(-1.45, 1.45);
     }
+    pub fn zoom(&mut self, delta_m: f32) {
+        self.distance_m = (self.distance_m + delta_m).clamp(0.35, 10.0);
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,6 +106,15 @@ mod tests {
         let mut camera = OrbitCamera::default();
         camera.orbit(0.0, 99.0);
         assert_eq!(camera.pitch_radians, 1.45);
+    }
+
+    #[test]
+    fn zoom_stays_within_inspection_limits() {
+        let mut camera = OrbitCamera::default();
+        camera.zoom(-100.0);
+        assert_eq!(camera.distance_m, 0.35);
+        camera.zoom(100.0);
+        assert_eq!(camera.distance_m, 10.0);
     }
 
     #[test]

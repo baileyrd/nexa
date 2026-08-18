@@ -6,7 +6,7 @@ use anyhow::Context;
 use std::time::Instant;
 use wgpu::SurfaceError;
 use winit::{
-    event::{ElementState, Event, KeyEvent, WindowEvent},
+    event::{ElementState, Event, KeyEvent, MouseScrollDelta, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     keyboard::{KeyCode, PhysicalKey},
     window::WindowBuilder,
@@ -37,6 +37,17 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
                 event: WindowEvent::Resized(size),
                 ..
             } => viewer.resize(size.width, size.height),
+            Event::WindowEvent {
+                event: WindowEvent::MouseWheel { delta, .. },
+                ..
+            } => {
+                let zoom_delta = match delta {
+                    MouseScrollDelta::LineDelta(_, vertical) => -vertical * 0.15,
+                    MouseScrollDelta::PixelDelta(position) => -(position.y as f32) * 0.002,
+                };
+                controls.camera.zoom(zoom_delta);
+                window.set_title(&title(&report, &controls));
+            }
             Event::WindowEvent {
                 event:
                     WindowEvent::KeyboardInput {
