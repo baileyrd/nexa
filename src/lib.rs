@@ -5,6 +5,7 @@ pub mod asset;
 pub mod avatar;
 pub mod behavior;
 pub mod control;
+pub mod gaze;
 pub mod headless;
 pub mod manifest;
 pub mod runtime;

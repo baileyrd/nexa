@@ -61,7 +61,7 @@ Canonical content namespaces:
 
 The control state itself is renderer-independent and directly unit-testable. A GUI inspector can replace the title-bar implementation without changing the contract.
 
-`runtime::apply_debug_controls` is the control-to-renderer bridge. Every frame it converts enabled gaze to a `GazeCommand`; queued visemes are emitted exactly once as `VisemeCommand`s. The active renderer decides how to apply eye/head limits, blendshape weights, and animation mixing.
+`runtime::apply_debug_controls` is the control-to-renderer bridge. Every frame it converts enabled gaze to a `GazeCommand`; queued visemes are emitted exactly once as `VisemeCommand`s. `gaze::solve` provides the portable bounded head/eye yaw-pitch split; the active renderer maps that result onto its named head and eye joints.
 
 ## Headless contract
 
