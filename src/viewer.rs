@@ -1,5 +1,5 @@
 use crate::{
-    animation::load_supported_channels,
+    animation::{load_animation_clip, AnimationClip},
     asset::{
         load_animated_skeleton_debug_geometry, load_skeleton_debug_geometry, load_static_geometry,
         AssetReport, StaticVertex,
@@ -28,9 +28,10 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
     ));
     let geometry = load_static_geometry(&report.source)?;
     let skeleton = load_skeleton_debug_geometry(&report.source)?;
-    let animation_channels: Vec<_> = (0..report.animations.len())
-        .map(|index| load_supported_channels(&report.source, index))
+    let animation_clips: Vec<AnimationClip> = (0..report.animations.len())
+        .map(|index| load_animation_clip(&report.source, index))
         .collect::<Result<_, _>>()?;
+    let mut morph_weights = vec![0.0_f32; report.morph_target_count];
     let mut controls = RuntimeControls::default();
     if let Some(bounds) = geometry.bounds() {
         controls.camera.frame_bounds(bounds);
@@ -110,8 +111,7 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
                 if let Err(e) = viewer.render(
                     &controls.camera,
                     controls.panel == InspectorPanel::Skeleton,
-                    controls.selected_morph,
-                    controls.morph_weight,
+                    &morph_weights,
                 ) {
                     if !matches!(e, SurfaceError::Outdated | SurfaceError::Lost) {
                         eprintln!("render error: {e:?}");
@@ -127,14 +127,24 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
                     .unwrap_or(0.0);
                 controls.advance_looping((now - last_update).as_secs_f32(), duration);
                 last_update = now;
-                if let Some(channels) = animation_channels.get(controls.selected_animation) {
-                    if let Ok(posed_skeleton) = load_animated_skeleton_debug_geometry(
-                        &report.source,
-                        channels,
-                        controls.animation_time_seconds,
-                    ) {
-                        viewer.update_skeleton(&posed_skeleton);
+                morph_weights = match animation_clips.get(controls.selected_animation) {
+                    Some(clip) => {
+                        if let Ok(posed_skeleton) = load_animated_skeleton_debug_geometry(
+                            &report.source,
+                            &clip.transforms,
+                            controls.animation_time_seconds,
+                        ) {
+                            viewer.update_skeleton(&posed_skeleton);
+                        }
+                        clip.sample_pose(controls.animation_time_seconds)
+                            .morph_slot_weights(report.morph_target_count)
                     }
+                    None => vec![0.0; report.morph_target_count],
+                };
+                // The manual morph slider stays authoritative for its own target so
+                // an unanimated target can still be posed by hand.
+                if let Some(manual) = morph_weights.get_mut(controls.selected_morph) {
+                    *manual = manual.max(controls.morph_weight);
                 }
                 window.set_title(&title(&report, &controls));
                 window.request_redraw();
@@ -302,7 +312,7 @@ struct Viewer<'a> {
     vertex_buffer: wgpu::Buffer,
     base_vertices: Vec<StaticVertex>,
     morph_position_deltas: Vec<Vec<[f32; 3]>>,
-    active_morph: Option<(usize, u32)>,
+    active_morph_weights: Vec<f32>,
     index_buffer: wgpu::Buffer,
     index_count: u32,
     skeleton_vertex_buffer: Option<wgpu::Buffer>,
@@ -473,7 +483,7 @@ impl<'a> Viewer<'a> {
             vertex_buffer,
             base_vertices: geometry.vertices.clone(),
             morph_position_deltas: geometry.morph_position_deltas.clone(),
-            active_morph: None,
+            active_morph_weights: Vec::new(),
             index_buffer,
             index_count: geometry.indices.len() as u32,
             skeleton_vertex_buffer,
@@ -501,10 +511,9 @@ impl<'a> Viewer<'a> {
         &mut self,
         camera: &crate::control::OrbitCamera,
         show_skeleton: bool,
-        selected_morph: usize,
-        morph_weight: f32,
+        morph_weights: &[f32],
     ) -> Result<(), SurfaceError> {
-        self.update_morph(selected_morph, morph_weight);
+        self.update_morph(morph_weights);
         let aspect = self.config.width as f32 / self.config.height as f32;
         let eye = camera.target
             + glam::Vec3::new(
@@ -567,21 +576,28 @@ impl<'a> Viewer<'a> {
         frame.present();
         Ok(())
     }
-    fn update_morph(&mut self, selected_morph: usize, weight: f32) {
-        let state = (selected_morph, weight.to_bits());
-        if self.active_morph == Some(state) {
+    /// Rebuilds the vertex buffer from every non-zero morph target weight, so an
+    /// animated `weights` channel and the manual slider both reach the GPU.
+    fn update_morph(&mut self, weights: &[f32]) {
+        if self.active_morph_weights == weights {
             return;
         }
         let mut vertices = self.base_vertices.clone();
-        if let Some(deltas) = self.morph_position_deltas.get(selected_morph) {
+        for (slot, weight) in weights.iter().enumerate() {
+            if *weight == 0.0 {
+                continue;
+            }
+            let Some(deltas) = self.morph_position_deltas.get(slot) else {
+                continue;
+            };
             for (vertex, delta) in vertices.iter_mut().zip(deltas) {
                 vertex.position = (glam::Vec3::from(vertex.position)
-                    + glam::Vec3::from(*delta) * weight)
+                    + glam::Vec3::from(*delta) * *weight)
                     .to_array();
             }
         }
         self.queue
             .write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
-        self.active_morph = Some(state);
+        self.active_morph_weights = weights.to_vec();
     }
 }

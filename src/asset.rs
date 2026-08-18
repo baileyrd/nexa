@@ -390,7 +390,7 @@ fn animated_local_transform(
                 Some(ChannelValues::Translation(value)) => translation = value,
                 Some(ChannelValues::Rotation(value)) => rotation = value,
                 Some(ChannelValues::Scale(value)) => scale = value,
-                Some(ChannelValues::MorphWeight(_)) | None => {}
+                None => {}
             }
         }
     }
@@ -502,7 +502,7 @@ fn append_node(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::load_supported_channels;
+    use crate::animation::load_animation_clip;
 
     #[test]
     fn bounds_cover_every_static_vertex() {
@@ -574,7 +574,7 @@ mod tests {
         )
         .unwrap();
 
-        let channels = load_supported_channels(&gltf_path, 0).unwrap();
+        let channels = load_animation_clip(&gltf_path, 0).unwrap().transforms;
         let lines = load_animated_skeleton_debug_geometry(&gltf_path, &channels, 0.5).unwrap();
         assert_eq!(lines.len(), 2);
         assert_eq!(lines[0].position, [1.0, 0.0, 0.0]);
