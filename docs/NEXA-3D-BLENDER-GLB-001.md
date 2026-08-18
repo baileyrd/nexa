@@ -1,7 +1,7 @@
 # NEXA-3D-BLENDER-GLB-001 — Blender-to-GLB Production and Export Pipeline
 
 **Status:** production baseline  
-**Visual authority:** [NEXA-3D-REF-001](NEXA-3D-REF-001.md) and its approved NEXA-3D-REF-002 / REF-003 sheets. No export or optimization stage may redesign Nexa’s face, hair silhouette, glasses, clothing language, proportion, expression goals, hands, or gestures.
+**Visual authority:** [NEXA-3D-REF-001](specifications/11-avatar-3d/NEXA-3D-REF-001%20%E2%80%94%20Canonical%203D%20Character%20Reference%20%26%20Turnaround%20Specification%20v1.0.md) and its approved NEXA-3D-REF-002 / REF-003 sheets. No export or optimization stage may redesign Nexa’s face, hair silhouette, glasses, clothing language, proportion, expression goals, hands, or gestures.
 
 ## Source layout
 
