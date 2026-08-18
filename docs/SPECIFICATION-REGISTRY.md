@@ -24,6 +24,8 @@ This registry is the navigation and governance authority for Nexa system specifi
 | ADR-0004 | [JSON wire compatibility](adr/0004-json-wire-compatibility.md) | Accepted | Serialization and compatibility policy |
 | ADR-0005 | [Event envelope semantics](adr/0005-event-envelope-semantics.md) | Accepted | Identity, ordering, correlation, delivery, and replay |
 | ADR-0006 | [NBP versioning and extensions](adr/0006-nbp-versioning-and-extensions.md) | Accepted | Protocol evolution and extension governance |
+| ADR-0007 | [Avatar port ownership and adapter direction](adr/0007-avatar-port-ownership-and-adapter-direction.md) | Accepted | Renderer-neutral port ownership and adapter boundaries |
+| ADR-0008 | [Controlled 3D workspace migration and ownership](adr/0008-controlled-3d-workspace-migration.md) | Accepted | 3D library, viewer, and validator ownership after migration |
 
 ## Subsystem specifications
 
@@ -44,7 +46,7 @@ This registry is the navigation and governance authority for Nexa system specifi
 | 11 | NEXA-3D-001 | 3D character architecture | Baseline Draft | `nexa-3d` |
 | 11 | NEXA-3D-ART-001 | 3D production pipeline | Baseline Draft | Assets/tooling |
 | 11 | NEXA-3D-REF-001 | Canonical 3D reference | Baseline Draft | Assets |
-| 11 | NEXA-3D-RUNTIME-001 | 3D validation runtime | Implemented slice | Current root package |
+| 11 | NEXA-3D-RUNTIME-001 | 3D validation runtime | Implemented slice | `crates/nexa-3d`; `apps/nexa-3d-viewer`; `tools/nexa-3d-validate` |
 | 12 | NEXA-ORCH-001 | Session orchestration | Baseline Draft | `nexa-orchestrator` |
 
 Directories 13 through 27 reserve future specification namespaces. A reserved directory is not an approved subsystem contract.

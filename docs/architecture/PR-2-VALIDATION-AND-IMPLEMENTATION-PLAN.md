@@ -4,6 +4,11 @@
 **Reviewed head:** `5b425af` (`Declare the transitional Nexa workspace`)  
 **Scope:** validation and planning only; no runtime migration or contract implementation
 
+> **Historical plan:** This document records the state and recommendations at PR #2. The 3D
+> ownership migration described below was subsequently completed; its current ownership and
+> compatibility authority is [ADR-0008](../adr/0008-controlled-3d-workspace-migration.md), and the
+> live phase status is maintained in the [implementation roadmap](IMPLEMENTATION-ROADMAP.md).
+
 ## Validation result
 
 The draft PR head passes every requested workspace gate without a source fix:
@@ -221,10 +226,9 @@ The registry is not yet sufficient as a compile-ready contract. The specificatio
 4. **ADR-0005: Event delivery, backpressure, persistence, and replay** — async runtime, queueing, guarantees, idempotency, retention, redaction, dead letters, and shutdown.
 5. **ADR-0006: NBP lifecycle, arbitration, cancellation, and capability negotiation** — state machine, update semantics, channel ownership, unsupported capability degradation, and protocol errors.
 6. **ADR-0007: Semantic vocabulary and extension governance** — expressions, gestures, gaze targets, speech styles, visemes, namespace ownership, and unknown-value behavior.
-7. **ADR-0008: Contract conformance and version release gates** — normative profiles, fixture/schema testing, semver relationships, MSRV, and promotion from Baseline Draft.
-8. **ADR-0009: Controlled 3D package migration and compatibility policy** — package/library/binary names, feature boundaries, `git mv` sequencing, assets/tests, and deprecation strategy.
-9. **ADR-0010: Avatar port and 3D adapter boundary** — responsibility split among `nexa-avatar`, `nexa-nbp`, `nexa-events`, `nexa-3d`, and the viewer composition root.
-10. **ADR-0011: 3D acceptance evidence and platform matrix** — headless versus GPU gates, canonical GLB/reference ownership, image regression tolerances, and supported backends.
+7. **Contract conformance and version release gates (unassigned)** — normative profiles, fixture/schema testing, semver relationships, MSRV, and promotion from Baseline Draft.
+8. **ADR-0008: Controlled 3D workspace migration and ownership (accepted)** — package/library/binary names, feature boundaries, assets/tests, and compatibility policy.
+9. **3D acceptance evidence and platform matrix (unassigned)** — headless versus GPU gates, canonical GLB/reference ownership, image regression tolerances, and supported backends.
 
 ## Recommended next action
 

@@ -1,4 +1,4 @@
-# ADR-0009: Controlled 3D workspace migration and ownership
+# ADR-0008: Controlled 3D workspace migration and ownership
 
 - Status: Accepted
 - Date: 2026-08-18

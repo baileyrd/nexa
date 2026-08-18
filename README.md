@@ -52,7 +52,7 @@ A directory containing only `.gitkeep` reserves a planned boundary; it does not 
 
 ## Current implementation
 
-The first implemented slice is split across `nexa-3d`, `nexa-3d-validate`, and `nexa-3d-viewer`: a renderer-independent GLB validation library, headless acceptance tool, and minimal `wgpu`/`winit` debug viewer. The library retains the `nexa_3d_runtime` Rust import name for migration compatibility. See [ADR-0009](docs/adr/0009-controlled-3d-workspace-migration.md) for ownership and the complete old-to-new path map.
+The first implemented slice is split across `nexa-3d`, `nexa-3d-validate`, and `nexa-3d-viewer`: a renderer-independent GLB validation library, headless acceptance tool, and minimal `wgpu`/`winit` debug viewer. The library retains the `nexa_3d_runtime` Rust import name for migration compatibility. See [ADR-0008](docs/adr/0008-controlled-3d-workspace-migration.md) for ownership and the complete old-to-new path map.
 
 It currently validates and exercises:
 
