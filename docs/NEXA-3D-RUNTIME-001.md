@@ -65,7 +65,7 @@ The control state itself is renderer-independent and directly unit-testable. A G
 
 ## Headless contract
 
-`headless::validate_glb(path)` is the CI-safe required gate. It does not instantiate a GPU surface, window, event loop, audio system, or OS input. It must validate at least one skeleton and one morph target. Project CI should invoke this function plus the manifest checks described in the acceptance checklist.
+`headless::validate_glb(path)` is the CI-safe required gate. It does not instantiate a GPU surface, window, event loop, audio system, or OS input. It must validate at least one skeleton, one morph target, and nonempty renderable scene geometry. Project CI should invoke this function plus the manifest checks described in the acceptance checklist.
 
 ## Rendering increment plan
 

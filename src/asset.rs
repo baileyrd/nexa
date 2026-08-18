@@ -11,6 +11,8 @@ pub enum AssetError {
     MissingSkeleton,
     #[error("Nexa asset has no morph targets; facial/viseme validation cannot proceed")]
     MissingMorphTargets,
+    #[error("Nexa asset has no renderable scene geometry")]
+    MissingGeometry,
     #[error("mesh primitive {mesh}:{primitive} has no POSITION attribute")]
     MissingPosition { mesh: usize, primitive: usize },
 }
@@ -186,6 +188,13 @@ pub fn validate_first_model(report: &AssetReport) -> Result<(), AssetError> {
     Ok(())
 }
 
+pub fn validate_render_geometry(geometry: &StaticGeometry) -> Result<(), AssetError> {
+    if geometry.vertices.is_empty() || geometry.indices.is_empty() {
+        return Err(AssetError::MissingGeometry);
+    }
+    Ok(())
+}
+
 /// Load a rest-pose render mesh. Animation, skinning, and morph mixing remain
 /// renderer work and intentionally do not leak into this asset-inspection API.
 pub fn load_static_geometry(path: impl AsRef<Path>) -> Result<StaticGeometry, AssetError> {
@@ -295,5 +304,13 @@ mod tests {
         let bounds = geometry.bounds().unwrap();
         assert_eq!(bounds.center(), glam::Vec3::new(1.0, 2.5, 1.0));
         assert_eq!(bounds.extent(), glam::Vec3::new(6.0, 5.0, 4.0));
+    }
+
+    #[test]
+    fn empty_geometry_fails_first_model_render_gate() {
+        assert!(matches!(
+            validate_render_geometry(&StaticGeometry::default()),
+            Err(AssetError::MissingGeometry)
+        ));
     }
 }
