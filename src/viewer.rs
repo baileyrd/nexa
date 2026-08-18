@@ -3,6 +3,7 @@ use crate::{
     control::{InspectorPanel, RuntimeControls},
 };
 use anyhow::Context;
+use std::time::Instant;
 use wgpu::SurfaceError;
 use winit::{
     event::{ElementState, Event, KeyEvent, WindowEvent},
@@ -24,6 +25,7 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
     let geometry = load_static_geometry(&report.source)?;
     let mut viewer = pollster::block_on(Viewer::new(window, &geometry))?;
     let mut controls = RuntimeControls::default();
+    let mut last_update = Instant::now();
     event_loop.run(move |event, target| {
         target.set_control_flow(ControlFlow::Poll);
         match event {
@@ -54,6 +56,7 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
                     KeyCode::Digit2 => controls.panel = InspectorPanel::MorphTargets,
                     KeyCode::KeyM => controls.select_next_morph(report.morph_target_count),
                     KeyCode::Digit3 => controls.panel = InspectorPanel::Animation,
+                    KeyCode::KeyN => controls.select_next_animation(report.animations.len()),
                     KeyCode::Space => controls.animation_playing = !controls.animation_playing,
                     KeyCode::BracketLeft => controls.scrub(-0.1),
                     KeyCode::BracketRight => controls.scrub(0.1),
@@ -79,7 +82,13 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
                     }
                 }
             }
-            Event::AboutToWait => window.request_redraw(),
+            Event::AboutToWait => {
+                let now = Instant::now();
+                controls.advance((now - last_update).as_secs_f32());
+                last_update = now;
+                window.set_title(&title(&report, &controls));
+                window.request_redraw();
+            }
             _ => {}
         }
     })?;
@@ -98,6 +107,22 @@ fn title(report: &AssetReport, c: &RuntimeControls) -> String {
             .get(c.selected_morph)
             .map(|target| target.id.clone())
             .unwrap_or_else(|| "no morph targets".to_owned()),
+        InspectorPanel::Animation => report
+            .animations
+            .get(c.selected_animation)
+            .map(|animation| {
+                format!(
+                    "{} @ {:.2}s{}",
+                    animation.name,
+                    c.animation_time_seconds,
+                    if c.animation_playing {
+                        " (playing)"
+                    } else {
+                        " (paused)"
+                    }
+                )
+            })
+            .unwrap_or_else(|| "no animations".to_owned()),
         _ => format!("t={:.1}s", c.animation_time_seconds),
     };
     format!(

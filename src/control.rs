@@ -72,6 +72,17 @@ impl RuntimeControls {
             self.selected_morph = (self.selected_morph + 1) % available_count;
         }
     }
+    pub fn select_next_animation(&mut self, available_count: usize) {
+        if available_count > 0 {
+            self.selected_animation = (self.selected_animation + 1) % available_count;
+            self.animation_time_seconds = 0.0;
+        }
+    }
+    pub fn advance(&mut self, elapsed_seconds: f32) {
+        if self.animation_playing {
+            self.animation_time_seconds += elapsed_seconds.max(0.0);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -102,5 +113,16 @@ mod tests {
         assert_eq!(controls.selected_morph, 0);
         controls.select_next_morph(0);
         assert_eq!(controls.selected_morph, 0);
+    }
+
+    #[test]
+    fn playback_advances_only_while_enabled() {
+        let mut controls = RuntimeControls::default();
+        controls.advance(0.5);
+        assert_eq!(controls.animation_time_seconds, 0.0);
+        controls.animation_playing = true;
+        controls.advance(0.5);
+        controls.advance(-9.0);
+        assert_eq!(controls.animation_time_seconds, 0.5);
     }
 }
