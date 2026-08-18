@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "asset_version": "Nexa_v001",
+  "canonical_forward": "-Z",
+  "rig": {
+    "armature": "Nexa_Rig",
+    "head": "Head",
+    "left_eye": "Eye.L",
+    "right_eye": "Eye.R",
+    "jaw": "Jaw"
+  },
+  "expressions": {
+    "Neutral": "Neutral", "Focused": "Focused", "Encouraging": "Encouraging", "Skeptical": "Skeptical", "Corrective": "Corrective"
+  },
+  "visemes": {
+    "REST": "REST", "A": "A", "E": "E", "I": "I", "O": "O", "U": "U", "MBP": "MBP", "FV": "FV", "L": "L", "WQ": "WQ", "TH": "TH", "CHSH": "CHSH", "R": "R"
+  },
+  "gestures": {
+    "Idle_Seated": { "animation": "Idle_Seated", "looping": true },
+    "Point_Left": { "animation": "Point_Left", "looping": false },
+    "Point_Right": { "animation": "Point_Right", "looping": false },
+    "Open_Hand_Explain": { "animation": "Open_Hand_Explain", "looping": false },
+    "Adjust_Glasses": { "animation": "Adjust_Glasses", "looping": false },
+    "Thumbs_Up": { "animation": "Thumbs_Up", "looping": false },
+    "Typing": { "animation": "Typing", "looping": true },
+    "Listening": { "animation": "Listening", "looping": true }
+  }
+}
