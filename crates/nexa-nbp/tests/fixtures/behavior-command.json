@@ -1,0 +1,41 @@
+{
+  "nbp_version": "1.0",
+  "message_id": "018f5e91-16bd-7e67-83df-9d11f18444a1",
+  "message_type": "behavior.command",
+  "timestamp": "2026-08-17T23:30:00Z",
+  "session_id": "018f5e90-acde-7a45-b369-102662c8112a",
+  "sequence": 1042,
+  "source": "nexa.orchestrator",
+  "target": "nexa.avatar.primary",
+  "correlation_id": "018f5e90-fc92-75a0-9899-8890489270ff",
+  "payload": {
+    "behavior_id": "018f5e91-16bd-7e67-83df-9d11f18444a2",
+    "state": "explaining",
+    "priority": 50,
+    "interruptibility": "phrase_boundary",
+    "emotion": {
+      "preset": "encouraging",
+      "confidence": 0.88,
+      "intensity": 0.65
+    },
+    "gaze": {
+      "target_type": "canvas_object",
+      "target_id": "tcp.syn_ack",
+      "intensity": 0.85,
+      "duration_ms": 2400,
+      "lead_time_ms": 200
+    },
+    "gesture": {
+      "type": "point",
+      "target_id": "tcp.syn_ack",
+      "intensity": 0.6,
+      "duration_ms": 1800
+    },
+    "speech": {
+      "text": "The server responds with SYN-ACK.",
+      "style": "instructional",
+      "allow_interruption": true,
+      "emit_visemes": true
+    }
+  }
+}
