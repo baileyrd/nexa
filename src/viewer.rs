@@ -52,6 +52,7 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
                     KeyCode::Escape => target.exit(),
                     KeyCode::Digit1 => controls.panel = InspectorPanel::Skeleton,
                     KeyCode::Digit2 => controls.panel = InspectorPanel::MorphTargets,
+                    KeyCode::KeyM => controls.select_next_morph(report.morph_target_count),
                     KeyCode::Digit3 => controls.panel = InspectorPanel::Animation,
                     KeyCode::Space => controls.animation_playing = !controls.animation_playing,
                     KeyCode::BracketLeft => controls.scrub(-0.1),
@@ -86,13 +87,26 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
 }
 
 fn title(report: &AssetReport, c: &RuntimeControls) -> String {
+    let inspector_detail = match c.panel {
+        InspectorPanel::Skeleton => report
+            .skins
+            .first()
+            .map(|skin| format!("{} ({} joints)", skin.name, skin.joint_count))
+            .unwrap_or_else(|| "no skeleton".to_owned()),
+        InspectorPanel::MorphTargets => report
+            .morph_targets
+            .get(c.selected_morph)
+            .map(|target| target.id.clone())
+            .unwrap_or_else(|| "no morph targets".to_owned()),
+        _ => format!("t={:.1}s", c.animation_time_seconds),
+    };
     format!(
-        "Nexa 3D Runtime | {:?} | skins:{} morphs:{} animations:{} | t={:.1}s",
+        "Nexa 3D Runtime | {:?}: {} | skins:{} morphs:{} animations:{}",
         c.panel,
+        inspector_detail,
         report.skins.len(),
         report.morph_target_count,
-        report.animations.len(),
-        c.animation_time_seconds
+        report.animations.len()
     )
 }
 

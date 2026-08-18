@@ -67,6 +67,11 @@ impl RuntimeControls {
     pub fn trigger_viseme(&mut self, canonical_name: impl Into<String>) {
         self.pending_viseme = Some(canonical_name.into());
     }
+    pub fn select_next_morph(&mut self, available_count: usize) {
+        if available_count > 0 {
+            self.selected_morph = (self.selected_morph + 1) % available_count;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -87,5 +92,15 @@ mod tests {
         let mut camera = OrbitCamera::default();
         camera.orbit(0.0, 99.0);
         assert_eq!(camera.pitch_radians, 1.45);
+    }
+
+    #[test]
+    fn morph_selection_wraps_and_ignores_empty_assets() {
+        let mut controls = RuntimeControls::default();
+        controls.selected_morph = 2;
+        controls.select_next_morph(3);
+        assert_eq!(controls.selected_morph, 0);
+        controls.select_next_morph(0);
+        assert_eq!(controls.selected_morph, 0);
     }
 }

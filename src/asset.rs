@@ -32,7 +32,17 @@ pub struct StaticGeometry {
 pub struct SkinReport {
     pub name: String,
     pub joint_count: usize,
+    pub joint_names: Vec<String>,
     pub root_names: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MorphTargetReport {
+    /// Stable diagnostic identifier; map it to semantic face names in the runtime manifest.
+    pub id: String,
+    pub mesh_name: String,
+    pub primitive_index: usize,
+    pub target_index: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -48,6 +58,7 @@ pub struct AssetReport {
     pub mesh_count: usize,
     pub primitive_count: usize,
     pub morph_target_count: usize,
+    pub morph_targets: Vec<MorphTargetReport>,
     pub skins: Vec<SkinReport>,
     pub animations: Vec<AnimationReport>,
 }
@@ -74,11 +85,25 @@ pub fn inspect(path: impl AsRef<Path>) -> Result<AssetReport, AssetError> {
         })?;
 
     let mut primitive_count = 0;
-    let mut morph_target_count = 0;
-    for mesh in document.meshes() {
+    let mut morph_targets = Vec::new();
+    for (mesh_index, mesh) in document.meshes().enumerate() {
         for primitive in mesh.primitives() {
             primitive_count += 1;
-            morph_target_count += primitive.morph_targets().count();
+            for (target_index, _) in primitive.morph_targets().enumerate() {
+                let mesh_name = mesh
+                    .name()
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| format!("mesh_{mesh_index}"));
+                morph_targets.push(MorphTargetReport {
+                    id: format!(
+                        "{mesh_name}/primitive_{}/target_{target_index}",
+                        primitive.index()
+                    ),
+                    mesh_name,
+                    primitive_index: primitive.index(),
+                    target_index,
+                });
+            }
         }
     }
     let skins = document
@@ -86,6 +111,10 @@ pub fn inspect(path: impl AsRef<Path>) -> Result<AssetReport, AssetError> {
         .map(|skin| SkinReport {
             name: skin.name().unwrap_or("<unnamed-skin>").to_owned(),
             joint_count: skin.joints().count(),
+            joint_names: skin
+                .joints()
+                .map(|joint| joint.name().unwrap_or("<unnamed-joint>").to_owned())
+                .collect(),
             root_names: skin
                 .skeleton()
                 .map(|root| vec![root.name().unwrap_or("<unnamed-root>").to_owned()])
@@ -108,7 +137,8 @@ pub fn inspect(path: impl AsRef<Path>) -> Result<AssetReport, AssetError> {
         node_count: document.nodes().count(),
         mesh_count: document.meshes().count(),
         primitive_count,
-        morph_target_count,
+        morph_target_count: morph_targets.len(),
+        morph_targets,
         skins,
         animations,
     })

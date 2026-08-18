@@ -143,6 +143,7 @@ mod tests {
                 mesh_count: 0,
                 primitive_count: 0,
                 morph_target_count: 0,
+                morph_targets: vec![],
                 skins: vec![],
                 animations: vec![]
             })
