@@ -156,8 +156,10 @@ mod tests {
 
     #[test]
     fn morph_selection_wraps_and_ignores_empty_assets() {
-        let mut controls = RuntimeControls::default();
-        controls.selected_morph = 2;
+        let mut controls = RuntimeControls {
+            selected_morph: 2,
+            ..Default::default()
+        };
         controls.select_next_morph(3);
         assert_eq!(controls.selected_morph, 0);
         controls.select_next_morph(0);

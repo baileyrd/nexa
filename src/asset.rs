@@ -6,7 +6,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::animation::{Channel, ChannelValues};
+use crate::skin::{NodeHierarchy, VertexSkin};
 
 #[derive(Debug, Error)]
 pub enum AssetError {
@@ -38,6 +38,13 @@ pub struct StaticGeometry {
     pub vertices: Vec<StaticVertex>,
     pub indices: Vec<u32>,
     pub morph_position_deltas: Vec<Vec<[f32; 3]>>,
+    /// One entry per vertex, always parallel to `vertices`. Vertices from
+    /// unskinned primitives carry zero weights.
+    pub vertex_skins: Vec<VertexSkin>,
+    /// The glTF skin driving `vertex_skins`. Assets with several skinned meshes
+    /// need a palette per draw call, which this single-buffer debug viewer does
+    /// not do, so only the first skin encountered is recorded.
+    pub skin_index: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -262,139 +269,48 @@ pub fn load_static_geometry(path: impl AsRef<Path>) -> Result<StaticGeometry, As
     Ok(geometry)
 }
 
-/// Load rest-pose joint connections as line-list vertices for debug rendering.
-pub fn load_skeleton_debug_geometry(
-    path: impl AsRef<Path>,
-) -> Result<Vec<StaticVertex>, AssetError> {
-    let path = path.as_ref().to_path_buf();
-    let (document, _buffers, _images) =
-        gltf::import(&path).map_err(|source| AssetError::Import {
-            path: path.clone(),
-            source,
-        })?;
-    let joints: HashSet<usize> = document
-        .skins()
-        .flat_map(|skin| skin.joints().map(|joint| joint.index()))
-        .collect();
+/// Build joint connection lines for debug rendering, one line from each joint
+/// to its nearest joint ancestor.
+///
+/// This takes resolved world transforms rather than a file path: the viewer
+/// already computes them for the joint palette, so posing the debug skeleton
+/// costs nothing extra and needs no per-frame glTF import.
+pub fn skeleton_lines(
+    hierarchy: &NodeHierarchy,
+    joint_nodes: &HashSet<usize>,
+    world_transforms: &[glam::Mat4],
+) -> Vec<StaticVertex> {
     let mut vertices = Vec::new();
-    if let Some(scene) = document
-        .default_scene()
-        .or_else(|| document.scenes().next())
-    {
-        for node in scene.nodes() {
-            append_skeleton_lines(
-                &mut vertices,
-                &joints,
-                node,
-                glam::Mat4::IDENTITY,
-                None,
-                None,
-            );
-        }
-    }
-    Ok(vertices)
-}
-
-/// Load joint lines after applying a sampled animation pose. This remains a
-/// diagnostic-only path: mesh skinning stays renderer-specific.
-pub fn load_animated_skeleton_debug_geometry(
-    path: impl AsRef<Path>,
-    channels: &[Channel],
-    time_seconds: f32,
-) -> Result<Vec<StaticVertex>, AssetError> {
-    let path = path.as_ref().to_path_buf();
-    let (document, _buffers, _images) =
-        gltf::import(&path).map_err(|source| AssetError::Import { path, source })?;
-    let joints: HashSet<usize> = document
-        .skins()
-        .flat_map(|skin| skin.joints().map(|joint| joint.index()))
-        .collect();
-    let mut vertices = Vec::new();
-    if let Some(scene) = document
-        .default_scene()
-        .or_else(|| document.scenes().next())
-    {
-        for node in scene.nodes() {
-            append_skeleton_lines(
-                &mut vertices,
-                &joints,
-                node,
-                glam::Mat4::IDENTITY,
-                None,
-                Some((channels, time_seconds)),
-            );
-        }
-    }
-    Ok(vertices)
-}
-
-fn append_skeleton_lines(
-    vertices: &mut Vec<StaticVertex>,
-    joints: &HashSet<usize>,
-    node: gltf::Node<'_>,
-    parent_transform: glam::Mat4,
-    closest_parent_joint: Option<glam::Vec3>,
-    animation: Option<(&[Channel], f32)>,
-) {
-    let world_transform = parent_transform * animated_local_transform(&node, animation);
-    let position = world_transform.transform_point3(glam::Vec3::ZERO);
-    let is_joint = joints.contains(&node.index());
-    if is_joint {
-        if let Some(parent) = closest_parent_joint {
-            let color = [0.08, 0.85, 1.0, 1.0];
-            vertices.push(StaticVertex {
-                position: parent.to_array(),
-                normal: [0.0, 1.0, 0.0],
-                color,
-                emission: [0.0; 3],
-            });
-            vertices.push(StaticVertex {
-                position: position.to_array(),
-                normal: [0.0, 1.0, 0.0],
-                color,
-                emission: [0.0; 3],
-            });
-        }
-    }
-    let parent_joint = if is_joint {
-        Some(position)
-    } else {
-        closest_parent_joint
+    let position = |node: usize| {
+        world_transforms
+            .get(node)
+            .map(|world| world.transform_point3(glam::Vec3::ZERO))
     };
-    for child in node.children() {
-        append_skeleton_lines(
-            vertices,
-            joints,
-            child,
-            world_transform,
-            parent_joint,
-            animation,
-        );
-    }
-}
-
-fn animated_local_transform(
-    node: &gltf::Node<'_>,
-    animation: Option<(&[Channel], f32)>,
-) -> glam::Mat4 {
-    let (translation, rotation, scale) = node.transform().decomposed();
-    let mut translation = glam::Vec3::from(translation);
-    let mut rotation = glam::Quat::from_array(rotation);
-    let mut scale = glam::Vec3::from(scale);
-    if let Some((channels, time_seconds)) = animation {
-        for channel in channels
-            .iter()
-            .filter(|channel| channel.node_index == node.index())
-        {
-            match channel.sample(time_seconds) {
-                Some(ChannelValues::Translation(value)) => translation = value,
-                Some(ChannelValues::Rotation(value)) => rotation = value,
-                Some(ChannelValues::Scale(value)) => scale = value,
-                Some(ChannelValues::MorphWeight(_)) | None => {}
-            }
+    // Node-index order, not `joint_nodes` iteration order: a HashSet would make
+    // the emitted line order vary between runs.
+    for node in 0..hierarchy.node_count() {
+        if !joint_nodes.contains(&node) {
+            continue;
         }
+        let mut ancestor = hierarchy.parent(node);
+        while let Some(candidate) = ancestor {
+            if joint_nodes.contains(&candidate) {
+                break;
+            }
+            ancestor = hierarchy.parent(candidate);
+        }
+        let (Some(parent), Some(child)) = (ancestor.and_then(position), position(node)) else {
+            continue;
+        };
+        let color = [0.08, 0.85, 1.0, 1.0];
+        vertices.extend([parent, child].map(|position| StaticVertex {
+            position: position.to_array(),
+            normal: [0.0, 1.0, 0.0],
+            color,
+            emission: [0.0; 3],
+        }));
     }
-    glam::Mat4::from_scale_rotation_translation(scale, rotation, translation)
+    vertices
 }
 
 fn append_node(
@@ -412,7 +328,19 @@ fn append_node(
     );
     let world_transform = parent_transform * local_transform;
     if let Some(mesh) = node.mesh() {
-        let normal_transform = world_transform.inverse().transpose();
+        // Skinned vertices stay in the mesh node's local space: the joint
+        // palette maps them straight to scene space, so baking the node's world
+        // transform in would apply it twice.
+        let skin = node.skin();
+        let vertex_transform = if skin.is_some() {
+            glam::Mat4::IDENTITY
+        } else {
+            world_transform
+        };
+        let normal_transform = vertex_transform.inverse().transpose();
+        if let Some(skin) = &skin {
+            geometry.skin_index.get_or_insert(skin.index());
+        }
         for primitive in mesh.primitives() {
             let color = primitive
                 .material()
@@ -448,7 +376,7 @@ fn append_node(
                     local
                         .and_then(|delta| delta.get(index))
                         .map(|delta| {
-                            world_transform
+                            vertex_transform
                                 .transform_vector3(glam::Vec3::from(*delta))
                                 .to_array()
                         })
@@ -459,7 +387,7 @@ fn append_node(
                 Some(normals) => geometry.vertices.extend(positions.iter().zip(normals).map(
                     |(position, normal)| {
                         StaticVertex {
-                            position: world_transform
+                            position: vertex_transform
                                 .transform_point3(glam::Vec3::from(*position))
                                 .to_array(),
                             normal: normal_transform
@@ -473,7 +401,7 @@ fn append_node(
                 )),
                 None => geometry.vertices.extend(positions.iter().map(|position| {
                     StaticVertex {
-                        position: world_transform
+                        position: vertex_transform
                             .transform_point3(glam::Vec3::from(*position))
                             .to_array(),
                         normal: [0.0, 1.0, 0.0],
@@ -482,6 +410,26 @@ fn append_node(
                     }
                 })),
             }
+            let joints = reader
+                .read_joints(0)
+                .map(|joints| joints.into_u16().collect::<Vec<_>>());
+            let weights = reader
+                .read_weights(0)
+                .map(|weights| weights.into_f32().collect::<Vec<_>>());
+            geometry
+                .vertex_skins
+                .extend((0..positions.len()).map(|index| {
+                    match (&joints, &weights) {
+                        (Some(joints), Some(weights)) => VertexSkin {
+                            joints: joints
+                                .get(index)
+                                .map(|joints| joints.map(u32::from))
+                                .unwrap_or_default(),
+                            weights: weights.get(index).copied().unwrap_or_default(),
+                        },
+                        _ => VertexSkin::default(),
+                    }
+                }));
             if let Some(indices) = reader.read_indices() {
                 geometry
                     .indices
@@ -502,7 +450,56 @@ fn append_node(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::load_supported_channels;
+    use crate::{
+        animation::load_animation_clip, skin::load_skin_rig, test_fixtures::skinned_rig_gltf,
+    };
+
+    #[test]
+    fn skinned_vertices_import_unbaked_with_their_joint_bindings() {
+        let directory = tempfile::tempdir().unwrap();
+        let geometry = load_static_geometry(skinned_rig_gltf(directory.path())).unwrap();
+        assert_eq!(geometry.skin_index, Some(0));
+        assert_eq!(geometry.vertex_skins.len(), geometry.vertices.len());
+        // The mesh node sits at x=10, but the joint palette will place these
+        // vertices, so the node transform must not be baked into them.
+        assert_eq!(geometry.vertices[0].position, [0.0, 1.5, 0.0]);
+        let skin = geometry.vertex_skins[0];
+        assert!(skin.is_skinned());
+        assert_eq!(skin.joints, [1, 0, 0, 0]);
+        assert_eq!(skin.weights, [1.0, 0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn unskinned_vertices_stay_baked_to_world_space_and_carry_no_weights() {
+        let directory = tempfile::tempdir().unwrap();
+        let gltf_path = directory.path().join("static.gltf");
+        std::fs::write(directory.path().join("static.bin"), {
+            let mut bytes = Vec::new();
+            for value in [0.0_f32, 1.5, 0.0] {
+                bytes.extend(value.to_le_bytes());
+            }
+            bytes
+        })
+        .unwrap();
+        std::fs::write(
+            &gltf_path,
+            r#"{
+              "asset":{"version":"2.0"},
+              "buffers":[{"uri":"static.bin","byteLength":12}],
+              "bufferViews":[{"buffer":0,"byteOffset":0,"byteLength":12}],
+              "accessors":[{"bufferView":0,"componentType":5126,"count":1,"type":"VEC3","min":[0,1.5,0],"max":[0,1.5,0]}],
+              "meshes":[{"primitives":[{"attributes":{"POSITION":0}}]}],
+              "nodes":[{"name":"Prop","mesh":0,"translation":[10,0,0]}],
+              "scenes":[{"nodes":[0]}],"scene":0
+            }"#,
+        )
+        .unwrap();
+
+        let geometry = load_static_geometry(&gltf_path).unwrap();
+        assert_eq!(geometry.skin_index, None);
+        assert_eq!(geometry.vertices[0].position, [10.0, 1.5, 0.0]);
+        assert!(!geometry.vertex_skins[0].is_skinned());
+    }
 
     #[test]
     fn bounds_cover_every_static_vertex() {
@@ -521,8 +518,7 @@ mod tests {
                     emission: [0.0; 3],
                 },
             ],
-            indices: vec![],
-            morph_position_deltas: vec![],
+            ..Default::default()
         };
         let bounds = geometry.bounds().unwrap();
         assert_eq!(bounds.center(), glam::Vec3::new(1.0, 2.5, 1.0));
@@ -535,6 +531,32 @@ mod tests {
             validate_render_geometry(&StaticGeometry::default()),
             Err(AssetError::MissingGeometry)
         ));
+    }
+
+    #[test]
+    fn skeleton_lines_are_emitted_in_node_order_and_skip_unjointed_ancestors() {
+        let directory = tempfile::tempdir().unwrap();
+        let rig = load_skin_rig(skinned_rig_gltf(directory.path())).unwrap();
+        let lines = skeleton_lines(
+            &rig.hierarchy,
+            &rig.joint_nodes(),
+            &rig.hierarchy.rest_world_transforms(),
+        );
+        // Node 0 is the mesh, node 1 the root joint, node 2 its child: one line.
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0].position, [0.0, 0.0, 0.0]);
+        assert_eq!(lines[1].position, [0.0, 1.0, 0.0]);
+        for _ in 0..8 {
+            let repeat = skeleton_lines(
+                &rig.hierarchy,
+                &rig.joint_nodes(),
+                &rig.hierarchy.rest_world_transforms(),
+            );
+            assert_eq!(
+                repeat.iter().map(|v| v.position).collect::<Vec<_>>(),
+                lines.iter().map(|v| v.position).collect::<Vec<_>>()
+            );
+        }
     }
 
     #[test]
@@ -574,8 +596,12 @@ mod tests {
         )
         .unwrap();
 
-        let channels = load_supported_channels(&gltf_path, 0).unwrap();
-        let lines = load_animated_skeleton_debug_geometry(&gltf_path, &channels, 0.5).unwrap();
+        let clip = load_animation_clip(&gltf_path, 0).unwrap();
+        let rig = load_skin_rig(&gltf_path).unwrap();
+        let world = rig.hierarchy.world_transforms(&clip.sample_pose(0.5));
+        let lines = skeleton_lines(&rig.hierarchy, &rig.joint_nodes(), &world);
+        // One line: the head joint back to its root. The root has no joint
+        // ancestor, so it contributes none.
         assert_eq!(lines.len(), 2);
         assert_eq!(lines[0].position, [1.0, 0.0, 0.0]);
         assert_eq!(lines[1].position, [1.0, 1.0, 0.0]);

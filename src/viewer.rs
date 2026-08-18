@@ -1,10 +1,8 @@
 use crate::{
-    animation::load_supported_channels,
-    asset::{
-        load_animated_skeleton_debug_geometry, load_skeleton_debug_geometry, load_static_geometry,
-        AssetReport, StaticVertex,
-    },
+    animation::{load_animation_clip, AnimationClip},
+    asset::{load_static_geometry, skeleton_lines, AssetReport, StaticVertex},
     control::{InspectorPanel, RuntimeControls},
+    skin::{load_skin_rig, SkinBinding, VertexSkin},
 };
 use anyhow::Context;
 use std::time::Instant;
@@ -27,15 +25,31 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
             .build(&event_loop)?,
     ));
     let geometry = load_static_geometry(&report.source)?;
-    let skeleton = load_skeleton_debug_geometry(&report.source)?;
-    let animation_channels: Vec<_> = (0..report.animations.len())
-        .map(|index| load_supported_channels(&report.source, index))
+    let rig = load_skin_rig(&report.source)?;
+    let joint_nodes = rig.joint_nodes();
+    let skeleton = skeleton_lines(
+        &rig.hierarchy,
+        &joint_nodes,
+        &rig.hierarchy.rest_world_transforms(),
+    );
+    let skin = geometry
+        .skin_index
+        .and_then(|index| rig.skins.get(index))
+        .cloned();
+    let animation_clips: Vec<AnimationClip> = (0..report.animations.len())
+        .map(|index| load_animation_clip(&report.source, index))
         .collect::<Result<_, _>>()?;
+    let mut morph_weights = vec![0.0_f32; report.morph_target_count];
     let mut controls = RuntimeControls::default();
     if let Some(bounds) = geometry.bounds() {
         controls.camera.frame_bounds(bounds);
     }
-    let mut viewer = pollster::block_on(Viewer::new(window, &geometry, &skeleton))?;
+    let mut viewer = pollster::block_on(Viewer::new(window, &geometry, &skeleton, skin.as_ref()))?;
+    // An asset with a skin but no animations never reaches the per-frame palette
+    // update, so seed the rest pose here rather than leaving identities behind.
+    if let Some(skin) = &skin {
+        viewer.update_joints(&skin.joint_matrices(&rig.hierarchy.rest_world_transforms()));
+    }
     let mut last_update = Instant::now();
     event_loop.run(move |event, target| {
         target.set_control_flow(ControlFlow::Poll);
@@ -110,8 +124,7 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
                 if let Err(e) = viewer.render(
                     &controls.camera,
                     controls.panel == InspectorPanel::Skeleton,
-                    controls.selected_morph,
-                    controls.morph_weight,
+                    &morph_weights,
                 ) {
                     if !matches!(e, SurfaceError::Outdated | SurfaceError::Lost) {
                         eprintln!("render error: {e:?}");
@@ -127,14 +140,26 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
                     .unwrap_or(0.0);
                 controls.advance_looping((now - last_update).as_secs_f32(), duration);
                 last_update = now;
-                if let Some(channels) = animation_channels.get(controls.selected_animation) {
-                    if let Ok(posed_skeleton) = load_animated_skeleton_debug_geometry(
-                        &report.source,
-                        channels,
-                        controls.animation_time_seconds,
-                    ) {
-                        viewer.update_skeleton(&posed_skeleton);
+                morph_weights = match animation_clips.get(controls.selected_animation) {
+                    Some(clip) => {
+                        let pose = clip.sample_pose(controls.animation_time_seconds);
+                        let world = rig.hierarchy.world_transforms(&pose);
+                        viewer.update_skeleton(&skeleton_lines(
+                            &rig.hierarchy,
+                            &joint_nodes,
+                            &world,
+                        ));
+                        if let Some(skin) = &skin {
+                            viewer.update_joints(&skin.joint_matrices(&world));
+                        }
+                        pose.morph_slot_weights(report.morph_target_count)
                     }
+                    None => vec![0.0; report.morph_target_count],
+                };
+                // The manual morph slider stays authoritative for its own target so
+                // an unanimated target can still be posed by hand.
+                if let Some(manual) = morph_weights.get_mut(controls.selected_morph) {
+                    *manual = manual.max(controls.morph_weight);
                 }
                 window.set_title(&title(&report, &controls));
                 window.request_redraw();
@@ -216,7 +241,7 @@ fn create_skeleton_pipeline(
         layout: Some(layout),
         vertex: wgpu::VertexState {
             module: shader,
-            entry_point: "vs_main",
+            entry_point: "vs_skeleton",
             buffers: &[wgpu::VertexBufferLayout {
                 array_stride: std::mem::size_of::<StaticVertex>() as u64,
                 step_mode: wgpu::VertexStepMode::Vertex,
@@ -300,9 +325,13 @@ struct Viewer<'a> {
     pipeline: wgpu::RenderPipeline,
     skeleton_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
+    skin_vertex_buffer: wgpu::Buffer,
+    joint_buffer: wgpu::Buffer,
+    joint_bind_group: wgpu::BindGroup,
+    joint_capacity: usize,
     base_vertices: Vec<StaticVertex>,
     morph_position_deltas: Vec<Vec<[f32; 3]>>,
-    active_morph: Option<(usize, u32)>,
+    active_morph_weights: Vec<f32>,
     index_buffer: wgpu::Buffer,
     index_count: u32,
     skeleton_vertex_buffer: Option<wgpu::Buffer>,
@@ -315,6 +344,7 @@ impl<'a> Viewer<'a> {
         window: &'a winit::window::Window,
         geometry: &crate::asset::StaticGeometry,
         skeleton: &[StaticVertex],
+        skin: Option<&SkinBinding>,
     ) -> anyhow::Result<Self> {
         let instance = wgpu::Instance::default();
         let surface = instance.create_surface(window)?;
@@ -377,13 +407,45 @@ impl<'a> Viewer<'a> {
                 resource: camera_buffer.as_entire_binding(),
             }],
         });
+        // A skinless asset still binds a one-entry identity palette so the
+        // pipeline layout, and the shader, need no unskinned variant.
+        let joint_capacity = skin.map(SkinBinding::joint_count).unwrap_or(0).max(1);
+        let joint_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Nexa joint palette"),
+            contents: bytemuck::cast_slice(&vec![
+                glam::Mat4::IDENTITY.to_cols_array();
+                joint_capacity
+            ]),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+        let joint_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Nexa joint palette layout"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+        let joint_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Nexa joint palette bind group"),
+            layout: &joint_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: joint_buffer.as_entire_binding(),
+            }],
+        });
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Nexa static mesh shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("static_mesh.wgsl").into()),
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Nexa static pipeline layout"),
-            bind_group_layouts: &[&camera_layout],
+            bind_group_layouts: &[&camera_layout, &joint_layout],
             push_constant_ranges: &[],
         });
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -392,32 +454,50 @@ impl<'a> Viewer<'a> {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<StaticVertex>() as u64,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &[
-                        wgpu::VertexAttribute {
-                            format: wgpu::VertexFormat::Float32x3,
-                            offset: 0,
-                            shader_location: 0,
-                        },
-                        wgpu::VertexAttribute {
-                            format: wgpu::VertexFormat::Float32x3,
-                            offset: 12,
-                            shader_location: 1,
-                        },
-                        wgpu::VertexAttribute {
-                            format: wgpu::VertexFormat::Float32x4,
-                            offset: 24,
-                            shader_location: 2,
-                        },
-                        wgpu::VertexAttribute {
-                            format: wgpu::VertexFormat::Float32x3,
-                            offset: 40,
-                            shader_location: 3,
-                        },
-                    ],
-                }],
+                buffers: &[
+                    wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<StaticVertex>() as u64,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &[
+                            wgpu::VertexAttribute {
+                                format: wgpu::VertexFormat::Float32x3,
+                                offset: 0,
+                                shader_location: 0,
+                            },
+                            wgpu::VertexAttribute {
+                                format: wgpu::VertexFormat::Float32x3,
+                                offset: 12,
+                                shader_location: 1,
+                            },
+                            wgpu::VertexAttribute {
+                                format: wgpu::VertexFormat::Float32x4,
+                                offset: 24,
+                                shader_location: 2,
+                            },
+                            wgpu::VertexAttribute {
+                                format: wgpu::VertexFormat::Float32x3,
+                                offset: 40,
+                                shader_location: 3,
+                            },
+                        ],
+                    },
+                    wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<VertexSkin>() as u64,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &[
+                            wgpu::VertexAttribute {
+                                format: wgpu::VertexFormat::Uint32x4,
+                                offset: 0,
+                                shader_location: 4,
+                            },
+                            wgpu::VertexAttribute {
+                                format: wgpu::VertexFormat::Float32x4,
+                                offset: 16,
+                                shader_location: 5,
+                            },
+                        ],
+                    },
+                ],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
@@ -450,6 +530,11 @@ impl<'a> Viewer<'a> {
             contents: bytemuck::cast_slice(&geometry.vertices),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
+        let skin_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Nexa vertex skin bindings"),
+            contents: bytemuck::cast_slice(&geometry.vertex_skins),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Nexa indices"),
             contents: bytemuck::cast_slice(&geometry.indices),
@@ -471,9 +556,13 @@ impl<'a> Viewer<'a> {
             pipeline,
             skeleton_pipeline,
             vertex_buffer,
+            skin_vertex_buffer,
+            joint_buffer,
+            joint_bind_group,
+            joint_capacity,
             base_vertices: geometry.vertices.clone(),
             morph_position_deltas: geometry.morph_position_deltas.clone(),
-            active_morph: None,
+            active_morph_weights: Vec::new(),
             index_buffer,
             index_count: geometry.indices.len() as u32,
             skeleton_vertex_buffer,
@@ -501,10 +590,9 @@ impl<'a> Viewer<'a> {
         &mut self,
         camera: &crate::control::OrbitCamera,
         show_skeleton: bool,
-        selected_morph: usize,
-        morph_weight: f32,
+        morph_weights: &[f32],
     ) -> Result<(), SurfaceError> {
-        self.update_morph(selected_morph, morph_weight);
+        self.update_morph(morph_weights);
         let aspect = self.config.width as f32 / self.config.height as f32;
         let eye = camera.target
             + glam::Vec3::new(
@@ -552,7 +640,9 @@ impl<'a> Viewer<'a> {
             });
             _pass.set_pipeline(&self.pipeline);
             _pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            _pass.set_bind_group(1, &self.joint_bind_group, &[]);
             _pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            _pass.set_vertex_buffer(1, self.skin_vertex_buffer.slice(..));
             _pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             _pass.draw_indexed(0..self.index_count, 0, 0..1);
             if show_skeleton {
@@ -567,21 +657,69 @@ impl<'a> Viewer<'a> {
         frame.present();
         Ok(())
     }
-    fn update_morph(&mut self, selected_morph: usize, weight: f32) {
-        let state = (selected_morph, weight.to_bits());
-        if self.active_morph == Some(state) {
+    /// Uploads this frame's joint palette. Entries beyond what the buffer was
+    /// sized for are dropped rather than reallocating mid-frame; the skin's joint
+    /// count is fixed at import.
+    fn update_joints(&mut self, matrices: &[glam::Mat4]) {
+        let columns: Vec<[f32; 16]> = matrices
+            .iter()
+            .take(self.joint_capacity)
+            .map(glam::Mat4::to_cols_array)
+            .collect();
+        if columns.is_empty() {
+            return;
+        }
+        self.queue
+            .write_buffer(&self.joint_buffer, 0, bytemuck::cast_slice(&columns));
+    }
+
+    /// Rebuilds the vertex buffer from every non-zero morph target weight, so an
+    /// animated `weights` channel and the manual slider both reach the GPU.
+    fn update_morph(&mut self, weights: &[f32]) {
+        if self.active_morph_weights == weights {
             return;
         }
         let mut vertices = self.base_vertices.clone();
-        if let Some(deltas) = self.morph_position_deltas.get(selected_morph) {
+        for (slot, weight) in weights.iter().enumerate() {
+            if *weight == 0.0 {
+                continue;
+            }
+            let Some(deltas) = self.morph_position_deltas.get(slot) else {
+                continue;
+            };
             for (vertex, delta) in vertices.iter_mut().zip(deltas) {
                 vertex.position = (glam::Vec3::from(vertex.position)
-                    + glam::Vec3::from(*delta) * weight)
+                    + glam::Vec3::from(*delta) * *weight)
                     .to_array();
             }
         }
         self.queue
             .write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
-        self.active_morph = Some(state);
+        self.active_morph_weights = weights.to_vec();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// The viewer needs a GPU to run, so the shader would otherwise only be
+    /// checked at `create_shader_module` time on a developer's machine. Naga is
+    /// the same front end wgpu uses, so parsing and validating here catches a
+    /// broken shader in CI instead.
+    #[test]
+    fn the_static_mesh_shader_compiles_and_validates() {
+        let source = include_str!("static_mesh.wgsl");
+        let module = naga::front::wgsl::parse_str(source).expect("shader failed to parse");
+        naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::empty(),
+        )
+        .validate(&module)
+        .expect("shader failed validation");
+        let entry_points: Vec<&str> = module
+            .entry_points
+            .iter()
+            .map(|entry| entry.name.as_str())
+            .collect();
+        assert_eq!(entry_points, ["vs_main", "vs_skeleton", "fs_main"]);
     }
 }

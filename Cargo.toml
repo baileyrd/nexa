@@ -34,4 +34,5 @@ wgpu = { version = "0.19", optional = true }
 winit = { version = "0.29", optional = true }
 
 [dev-dependencies]
+naga = { version = "0.19", features = ["wgsl-in"] }
 tempfile = "3"

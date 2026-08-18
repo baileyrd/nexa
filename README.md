@@ -8,7 +8,7 @@ Minimal Rust validation/runtime viewer for the canonical Nexa GLB. It is deliber
 cargo run --bin nexa-3d-viewer -- path\to\Nexa.glb path\to\nexa.runtime.json
 ```
 
-The window draws imported GLB rest-pose geometry with depth testing, authored scene-node transforms, PBR base-color/emissive factors, and source-over material alpha; it automatically frames the bounds and overlays the joint hierarchy in cyan. The terminal reports GLB skeleton, morph-target, and animation validation; the window title reports current inspection state. Texture maps and skinning remain future rendering increments.
+The window draws imported GLB rest-pose geometry with depth testing, authored scene-node transforms, PBR base-color/emissive factors, and source-over material alpha; it automatically frames the bounds and overlays the joint hierarchy in cyan. The terminal reports GLB skeleton, morph-target, and animation validation; the window title reports current inspection state. Playing a clip drives every exported morph target from its `weights` channel, mixed with the manual morph slider, and deforms the mesh on the GPU from a joint matrix palette rebuilt each frame. Texture maps remain a future rendering increment.
 
 Controls: `1` skeleton/node inspection, `J` select the next named GLB node, `2` morph inspection, `M` select the next exported morph target, `Z/X` decrease/increase morph weight, `3` animation inspection, `N` select the next animation, `Space` play/pause, `[` / `]` scrub, arrow keys orbit, mouse wheel zoom, `G` toggle eye/head gaze, `W/A/S/D` move gaze target horizontally/depth, `Q/E` move it vertically, `V` trigger a viseme hook, `R` reset. `Esc` closes.
 
@@ -21,8 +21,21 @@ src/
   control.rs     renderer-neutral debug, gaze, viseme, and timeline state
   headless.rs    CI-safe validation runner (no GPU/window)
   viewer.rs      minimal wgpu/winit surface and debug input mapping
-docs/            architecture, Blender export contract, acceptance checklist
+docs/
+  NEXA-3D-001.md                    3D character, rig, facial animation, rendering architecture
+  NEXA-3D-ART-001.md                modeling, topology, rigging, asset production
+  NEXA-3D-REF-001.md                canonical reference and turnaround spec (visual authority)
+  NEXA-3D-BLENDER-GLB-001.md        Blender-to-GLB production and export pipeline
+  NEXA-3D-RUNTIME-001.md            this viewer's architecture and contracts
+  NEXA-3D-FIRST-MODEL-ACCEPTANCE-001.md   first-asset acceptance checklist
+  reference/
+    images/                         approved NEXA-3D-REF-002 and REF-003 sheets
+    NEXA-3D-SOURCE-CONVERSATION.md  provenance: the design conversation these specs came from
 ```
+
+The approved turnaround, expression, viseme, hand, and gesture sheets in
+`docs/reference/images/` are the project's visual authority. Nothing in this repository
+reinterprets or supersedes them.
 
 ## Commands
 

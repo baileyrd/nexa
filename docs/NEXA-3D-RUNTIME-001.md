@@ -1,7 +1,7 @@
 # NEXA-3D-RUNTIME-001 — Nexa 3D Runtime Validation Viewer
 
 **Status:** implementation scaffold  
-**Depends on:** NEXA-3D-001, NEXA-3D-ART-001, NEXA-3D-REF-003  
+**Depends on:** [NEXA-3D-001](NEXA-3D-001.md), [NEXA-3D-ART-001](NEXA-3D-ART-001.md), [NEXA-3D-REF-001](NEXA-3D-REF-001.md) and its NEXA-3D-REF-003 sheet  
 **Visual authority:** approved canonical Nexa turnaround, face/expression, viseme, hand, and gesture sheets. This specification does not reinterpret or supersede them.
 
 ## Purpose
@@ -75,8 +75,8 @@ The test suite generates a minimal skinned/morph-enabled glTF fixture at runtime
 
 1. Current: GLB metadata import, headless checks, `wgpu` device/surface, debug input state.
 2. Add GPU buffer/material upload and static mesh draw. ✓
-3. Add skinning, joint visualization, and named node selection. (Rest-pose and headless-regression-tested sampled-clip joint visualization, plus named-node inventory and selection, are available; mesh skinning remains pending.)
-4. Add morph weights, animation sampler evaluation, and timeline UI. (Morph preview, clip-duration looping, and a renderer-neutral sampler with linear/step/cubic transform-channel evaluation are available; multi-weight adaptation and GPU skinning remain pending.)
+3. Add skinning, joint visualization, and named node selection. (Joint visualization, named-node inventory and selection, a renderer-independent joint matrix palette, per-vertex skin attributes, and a GPU skinning draw are available. The palette math and the shader are covered headlessly; the pipeline binding itself needs a GPU to exercise.)
+4. Add morph weights, animation sampler evaluation, and timeline UI. (Morph preview, clip-duration looping, and a renderer-neutral sampler with linear/step/cubic evaluation of both transform and multi-target `weights` channels are available; the viewer mixes every animated morph target with the manual slider.) ✓
 5. Add gaze/IK and viseme mixing through the semantic adapter.
 6. Add image regression tests using a deterministic offscreen backend where available.
 
