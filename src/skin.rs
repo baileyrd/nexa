@@ -66,6 +66,16 @@ pub struct SkinRig {
     pub skins: Vec<SkinBinding>,
 }
 
+impl SkinRig {
+    /// Every node used as a joint by any skin. The debug skeleton draws these.
+    pub fn joint_nodes(&self) -> std::collections::HashSet<usize> {
+        self.skins
+            .iter()
+            .flat_map(|skin| skin.joint_nodes.iter().copied())
+            .collect()
+    }
+}
+
 pub fn load_skin_rig(path: impl AsRef<Path>) -> Result<SkinRig, AssetError> {
     let path = path.as_ref().to_path_buf();
     let (document, buffers, _images) =

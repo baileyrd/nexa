@@ -6,10 +6,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{
-    animation::{Channel, ChannelValues},
-    skin::VertexSkin,
-};
+use crate::skin::{NodeHierarchy, VertexSkin};
 
 #[derive(Debug, Error)]
 pub enum AssetError {
@@ -272,139 +269,48 @@ pub fn load_static_geometry(path: impl AsRef<Path>) -> Result<StaticGeometry, As
     Ok(geometry)
 }
 
-/// Load rest-pose joint connections as line-list vertices for debug rendering.
-pub fn load_skeleton_debug_geometry(
-    path: impl AsRef<Path>,
-) -> Result<Vec<StaticVertex>, AssetError> {
-    let path = path.as_ref().to_path_buf();
-    let (document, _buffers, _images) =
-        gltf::import(&path).map_err(|source| AssetError::Import {
-            path: path.clone(),
-            source,
-        })?;
-    let joints: HashSet<usize> = document
-        .skins()
-        .flat_map(|skin| skin.joints().map(|joint| joint.index()))
-        .collect();
+/// Build joint connection lines for debug rendering, one line from each joint
+/// to its nearest joint ancestor.
+///
+/// This takes resolved world transforms rather than a file path: the viewer
+/// already computes them for the joint palette, so posing the debug skeleton
+/// costs nothing extra and needs no per-frame glTF import.
+pub fn skeleton_lines(
+    hierarchy: &NodeHierarchy,
+    joint_nodes: &HashSet<usize>,
+    world_transforms: &[glam::Mat4],
+) -> Vec<StaticVertex> {
     let mut vertices = Vec::new();
-    if let Some(scene) = document
-        .default_scene()
-        .or_else(|| document.scenes().next())
-    {
-        for node in scene.nodes() {
-            append_skeleton_lines(
-                &mut vertices,
-                &joints,
-                node,
-                glam::Mat4::IDENTITY,
-                None,
-                None,
-            );
-        }
-    }
-    Ok(vertices)
-}
-
-/// Load joint lines after applying a sampled animation pose. This remains a
-/// diagnostic-only path: mesh skinning stays renderer-specific.
-pub fn load_animated_skeleton_debug_geometry(
-    path: impl AsRef<Path>,
-    channels: &[Channel],
-    time_seconds: f32,
-) -> Result<Vec<StaticVertex>, AssetError> {
-    let path = path.as_ref().to_path_buf();
-    let (document, _buffers, _images) =
-        gltf::import(&path).map_err(|source| AssetError::Import { path, source })?;
-    let joints: HashSet<usize> = document
-        .skins()
-        .flat_map(|skin| skin.joints().map(|joint| joint.index()))
-        .collect();
-    let mut vertices = Vec::new();
-    if let Some(scene) = document
-        .default_scene()
-        .or_else(|| document.scenes().next())
-    {
-        for node in scene.nodes() {
-            append_skeleton_lines(
-                &mut vertices,
-                &joints,
-                node,
-                glam::Mat4::IDENTITY,
-                None,
-                Some((channels, time_seconds)),
-            );
-        }
-    }
-    Ok(vertices)
-}
-
-fn append_skeleton_lines(
-    vertices: &mut Vec<StaticVertex>,
-    joints: &HashSet<usize>,
-    node: gltf::Node<'_>,
-    parent_transform: glam::Mat4,
-    closest_parent_joint: Option<glam::Vec3>,
-    animation: Option<(&[Channel], f32)>,
-) {
-    let world_transform = parent_transform * animated_local_transform(&node, animation);
-    let position = world_transform.transform_point3(glam::Vec3::ZERO);
-    let is_joint = joints.contains(&node.index());
-    if is_joint {
-        if let Some(parent) = closest_parent_joint {
-            let color = [0.08, 0.85, 1.0, 1.0];
-            vertices.push(StaticVertex {
-                position: parent.to_array(),
-                normal: [0.0, 1.0, 0.0],
-                color,
-                emission: [0.0; 3],
-            });
-            vertices.push(StaticVertex {
-                position: position.to_array(),
-                normal: [0.0, 1.0, 0.0],
-                color,
-                emission: [0.0; 3],
-            });
-        }
-    }
-    let parent_joint = if is_joint {
-        Some(position)
-    } else {
-        closest_parent_joint
+    let position = |node: usize| {
+        world_transforms
+            .get(node)
+            .map(|world| world.transform_point3(glam::Vec3::ZERO))
     };
-    for child in node.children() {
-        append_skeleton_lines(
-            vertices,
-            joints,
-            child,
-            world_transform,
-            parent_joint,
-            animation,
-        );
-    }
-}
-
-fn animated_local_transform(
-    node: &gltf::Node<'_>,
-    animation: Option<(&[Channel], f32)>,
-) -> glam::Mat4 {
-    let (translation, rotation, scale) = node.transform().decomposed();
-    let mut translation = glam::Vec3::from(translation);
-    let mut rotation = glam::Quat::from_array(rotation);
-    let mut scale = glam::Vec3::from(scale);
-    if let Some((channels, time_seconds)) = animation {
-        for channel in channels
-            .iter()
-            .filter(|channel| channel.node_index == node.index())
-        {
-            match channel.sample(time_seconds) {
-                Some(ChannelValues::Translation(value)) => translation = value,
-                Some(ChannelValues::Rotation(value)) => rotation = value,
-                Some(ChannelValues::Scale(value)) => scale = value,
-                None => {}
-            }
+    // Node-index order, not `joint_nodes` iteration order: a HashSet would make
+    // the emitted line order vary between runs.
+    for node in 0..hierarchy.node_count() {
+        if !joint_nodes.contains(&node) {
+            continue;
         }
+        let mut ancestor = hierarchy.parent(node);
+        while let Some(candidate) = ancestor {
+            if joint_nodes.contains(&candidate) {
+                break;
+            }
+            ancestor = hierarchy.parent(candidate);
+        }
+        let (Some(parent), Some(child)) = (ancestor.and_then(position), position(node)) else {
+            continue;
+        };
+        let color = [0.08, 0.85, 1.0, 1.0];
+        vertices.extend([parent, child].map(|position| StaticVertex {
+            position: position.to_array(),
+            normal: [0.0, 1.0, 0.0],
+            color,
+            emission: [0.0; 3],
+        }));
     }
-    glam::Mat4::from_scale_rotation_translation(scale, rotation, translation)
+    vertices
 }
 
 fn append_node(
@@ -544,7 +450,9 @@ fn append_node(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{animation::load_animation_clip, test_fixtures::skinned_rig_gltf};
+    use crate::{
+        animation::load_animation_clip, skin::load_skin_rig, test_fixtures::skinned_rig_gltf,
+    };
 
     #[test]
     fn skinned_vertices_import_unbaked_with_their_joint_bindings() {
@@ -626,6 +534,32 @@ mod tests {
     }
 
     #[test]
+    fn skeleton_lines_are_emitted_in_node_order_and_skip_unjointed_ancestors() {
+        let directory = tempfile::tempdir().unwrap();
+        let rig = load_skin_rig(skinned_rig_gltf(directory.path())).unwrap();
+        let lines = skeleton_lines(
+            &rig.hierarchy,
+            &rig.joint_nodes(),
+            &rig.hierarchy.rest_world_transforms(),
+        );
+        // Node 0 is the mesh, node 1 the root joint, node 2 its child: one line.
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0].position, [0.0, 0.0, 0.0]);
+        assert_eq!(lines[1].position, [0.0, 1.0, 0.0]);
+        for _ in 0..8 {
+            let repeat = skeleton_lines(
+                &rig.hierarchy,
+                &rig.joint_nodes(),
+                &rig.hierarchy.rest_world_transforms(),
+            );
+            assert_eq!(
+                repeat.iter().map(|v| v.position).collect::<Vec<_>>(),
+                lines.iter().map(|v| v.position).collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
     fn animated_skeleton_lines_follow_the_sampled_joint_pose() {
         let directory = tempfile::tempdir().unwrap();
         let gltf_path = directory.path().join("rig.gltf");
@@ -662,8 +596,12 @@ mod tests {
         )
         .unwrap();
 
-        let channels = load_animation_clip(&gltf_path, 0).unwrap().transforms;
-        let lines = load_animated_skeleton_debug_geometry(&gltf_path, &channels, 0.5).unwrap();
+        let clip = load_animation_clip(&gltf_path, 0).unwrap();
+        let rig = load_skin_rig(&gltf_path).unwrap();
+        let world = rig.hierarchy.world_transforms(&clip.sample_pose(0.5));
+        let lines = skeleton_lines(&rig.hierarchy, &rig.joint_nodes(), &world);
+        // One line: the head joint back to its root. The root has no joint
+        // ancestor, so it contributes none.
         assert_eq!(lines.len(), 2);
         assert_eq!(lines[0].position, [1.0, 0.0, 0.0]);
         assert_eq!(lines[1].position, [1.0, 1.0, 0.0]);

@@ -1,9 +1,6 @@
 use crate::{
     animation::{load_animation_clip, AnimationClip},
-    asset::{
-        load_animated_skeleton_debug_geometry, load_skeleton_debug_geometry, load_static_geometry,
-        AssetReport, StaticVertex,
-    },
+    asset::{load_static_geometry, skeleton_lines, AssetReport, StaticVertex},
     control::{InspectorPanel, RuntimeControls},
     skin::{load_skin_rig, SkinBinding, VertexSkin},
 };
@@ -28,8 +25,13 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
             .build(&event_loop)?,
     ));
     let geometry = load_static_geometry(&report.source)?;
-    let skeleton = load_skeleton_debug_geometry(&report.source)?;
     let rig = load_skin_rig(&report.source)?;
+    let joint_nodes = rig.joint_nodes();
+    let skeleton = skeleton_lines(
+        &rig.hierarchy,
+        &joint_nodes,
+        &rig.hierarchy.rest_world_transforms(),
+    );
     let skin = geometry
         .skin_index
         .and_then(|index| rig.skins.get(index))
@@ -140,16 +142,14 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
                 last_update = now;
                 morph_weights = match animation_clips.get(controls.selected_animation) {
                     Some(clip) => {
-                        if let Ok(posed_skeleton) = load_animated_skeleton_debug_geometry(
-                            &report.source,
-                            &clip.transforms,
-                            controls.animation_time_seconds,
-                        ) {
-                            viewer.update_skeleton(&posed_skeleton);
-                        }
                         let pose = clip.sample_pose(controls.animation_time_seconds);
+                        let world = rig.hierarchy.world_transforms(&pose);
+                        viewer.update_skeleton(&skeleton_lines(
+                            &rig.hierarchy,
+                            &joint_nodes,
+                            &world,
+                        ));
                         if let Some(skin) = &skin {
-                            let world = rig.hierarchy.world_transforms(&pose);
                             viewer.update_joints(&skin.joint_matrices(&world));
                         }
                         pose.morph_slot_weights(report.morph_target_count)
