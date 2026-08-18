@@ -1062,22 +1062,41 @@ dependencies = [
 ]
 
 [[package]]
-name = "nexa-3d-runtime"
+name = "nexa-3d"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytemuck",
  "glam",
  "gltf",
- "naga",
  "nexa-avatar",
  "nexa-domain",
  "nexa-nbp",
- "pollster",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "nexa-3d-validate"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "nexa-3d",
+ "serde_json",
+]
+
+[[package]]
+name = "nexa-3d-viewer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "glam",
+ "naga",
+ "nexa-3d",
+ "pollster",
  "wgpu",
  "winit",
 ]

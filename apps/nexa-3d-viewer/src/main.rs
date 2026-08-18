@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+mod viewer;
+
 fn main() -> anyhow::Result<()> {
     let mut arguments = std::env::args().skip(1);
     let path = arguments
@@ -19,16 +21,6 @@ fn main() -> anyhow::Result<()> {
     present(report)
 }
 
-#[cfg(feature = "viewer")]
 fn present(report: nexa_3d_runtime::asset::AssetReport) -> anyhow::Result<()> {
-    nexa_3d_runtime::viewer::run(report)
-}
-
-/// The inspection and manifest gates are the point of a headless build; opening
-/// a window is not available there.
-#[cfg(not(feature = "viewer"))]
-fn present(_report: nexa_3d_runtime::asset::AssetReport) -> anyhow::Result<()> {
-    Err(anyhow::anyhow!(
-        "build with the `viewer` feature to open a window"
-    ))
+    viewer::run(report)
 }

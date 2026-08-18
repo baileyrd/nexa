@@ -25,10 +25,15 @@ Exit: downstream subsystems consume one canonical set of serialized contracts wi
 
 ## Phase 2 — Migrate embodiment
 
-- Split the existing root package into `crates/nexa-3d` and `apps/nexa-3d-viewer`.
-- Add `nexa-avatar` as the renderer-neutral embodiment port.
-- Preserve headless validation, animation, skinning, gaze, and viseme behavior.
-- Validate the canonical GLB and runtime manifest through CI.
+**Status:** In progress. The package ownership migration is complete; broader contract integration remains.
+
+- [x] Split the former root package into `crates/nexa-3d`, `apps/nexa-3d-viewer`, and `tools/nexa-3d-validate`.
+- [x] Add `nexa-avatar` as the renderer-neutral embodiment port.
+- [x] Preserve headless validation, animation, skinning, gaze, and viseme behavior.
+- [x] Validate runtime assets and manifests through headless CI gates.
+- [ ] Complete the broader NBP/avatar contract integration required by the phase exit.
+
+The completed ownership move and compatibility policy are recorded in [ADR-0008](../adr/0008-controlled-3d-workspace-migration.md).
 
 Exit: the 3D implementation consumes NBP/avatar contracts and all existing tests pass from the workspace root.
 
