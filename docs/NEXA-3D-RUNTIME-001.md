@@ -32,6 +32,8 @@ GLB inspector ── metadata + acceptance gates ── CI/headless
 
 `AvatarRenderer` is the renderer boundary. The NEXA behavior layer sends canonical names (for example `Focused`, `Point_Right`, `A`) rather than glTF node indices or `wgpu` objects. The selected renderer resolves those names through the asset manifest.
 
+`behavior::AvatarBehaviorEvent` is the preferred NEXA-3D-001 integration input. Its dispatcher transforms expression, gesture, gaze, and viseme intents into adapter commands, preserving event order and keeping authoring/orchestration independent of rendering technology.
+
 ## Stable semantic contract
 
 The runtime exposes four commands: `ExpressionCommand`, `VisemeCommand`, `GazeCommand`, and `GestureCommand`. Renderers must treat missing or unmapped names as diagnosable validation errors, never silently substitute an unrelated pose.

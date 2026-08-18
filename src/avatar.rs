@@ -48,6 +48,12 @@ impl<R: AvatarRenderer> NexaAvatarAdapter<R> {
             eye_weight: 1.0,
         });
     }
+    pub fn apply_expression(&mut self, name: &str, weight: f32) {
+        self.renderer.set_expression(ExpressionCommand {
+            canonical_name: name.to_owned(),
+            weight,
+        });
+    }
     pub fn apply_viseme(&mut self, name: &str, weight: f32, duration_seconds: f32) {
         self.renderer.set_viseme(VisemeCommand {
             canonical_name: name.to_owned(),
