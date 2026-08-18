@@ -82,11 +82,32 @@ impl Default for NodeTransform {
     }
 }
 
+/// The transform components a clip actually drives for one node. Components the
+/// clip leaves alone stay `None` so they fall back to the node's exported rest
+/// transform: a translation-only channel must not discard an authored rotation.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct PoseTransform {
+    pub translation: Option<Vec3>,
+    pub rotation: Option<Quat>,
+    pub scale: Option<Vec3>,
+}
+
+impl PoseTransform {
+    /// Overlays the driven components onto a node's rest transform.
+    pub fn apply_to(self, rest: NodeTransform) -> NodeTransform {
+        NodeTransform {
+            translation: self.translation.unwrap_or(rest.translation),
+            rotation: self.rotation.unwrap_or(rest.rotation),
+            scale: self.scale.unwrap_or(rest.scale),
+        }
+    }
+}
+
 /// A renderer-neutral snapshot of one timeline instant. Morph weights stay keyed
 /// by node and ordered by target index, so no per-target weight is collapsed.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Pose {
-    pub nodes: BTreeMap<usize, NodeTransform>,
+    pub nodes: BTreeMap<usize, PoseTransform>,
     pub morph_weights: BTreeMap<usize, Vec<f32>>,
 }
 
@@ -474,13 +495,13 @@ pub fn sample_pose(channels: &[Channel], time_seconds: f32) -> Pose {
                 pose.nodes
                     .entry(channel.node_index)
                     .or_default()
-                    .translation = translation;
+                    .translation = Some(translation);
             }
             ChannelValues::Rotation(rotation) => {
-                pose.nodes.entry(channel.node_index).or_default().rotation = rotation;
+                pose.nodes.entry(channel.node_index).or_default().rotation = Some(rotation);
             }
             ChannelValues::Scale(scale) => {
-                pose.nodes.entry(channel.node_index).or_default().scale = scale;
+                pose.nodes.entry(channel.node_index).or_default().scale = Some(scale);
             }
         }
     }
@@ -600,7 +621,7 @@ mod tests {
             cubic_tangents: None,
         };
         let pose = sample_pose(&[channel], 0.5);
-        assert_eq!(pose.nodes[&7].translation, Vec3::new(1.0, 0.5, 0.0));
+        assert_eq!(pose.nodes[&7].translation, Some(Vec3::new(1.0, 0.5, 0.0)));
     }
 
     #[test]
@@ -616,7 +637,7 @@ mod tests {
             cubic_tangents: None,
         };
         let pose = sample_pose(&[channel], 0.9);
-        assert_eq!(pose.nodes[&2].translation, Vec3::ZERO);
+        assert_eq!(pose.nodes[&2].translation, Some(Vec3::ZERO));
     }
 
     #[test]
@@ -632,8 +653,9 @@ mod tests {
             cubic_tangents: None,
         };
         let pose = sample_pose(&[channel], 0.5);
-        assert!(pose.nodes[&4].rotation.is_normalized());
-        let facing = pose.nodes[&4].rotation.mul_vec3(Vec3::Z);
+        let rotation = pose.nodes[&4].rotation.unwrap();
+        assert!(rotation.is_normalized());
+        let facing = rotation.mul_vec3(Vec3::Z);
         assert!(facing.x.abs() > 0.9999, "facing was {facing:?}");
         assert!(facing.y.abs() < 0.0001 && facing.z.abs() < 0.0001);
     }
@@ -662,6 +684,7 @@ mod tests {
         let pose = sample_pose(&[channel], 0.5);
         assert!(pose.nodes[&3]
             .translation
+            .unwrap()
             .abs_diff_eq(Vec3::new(0.75, 0.0, 0.0), 0.0001));
     }
 
@@ -741,11 +764,34 @@ mod tests {
         };
         assert_eq!(clip.duration_seconds(), 4.0);
         let pose = clip.sample_pose(0.5);
-        assert_eq!(pose.nodes[&1].translation, Vec3::new(0.5, 0.0, 0.0));
+        assert_eq!(pose.nodes[&1].translation, Some(Vec3::new(0.5, 0.0, 0.0)));
         assert_eq!(pose.morph_weights[&2], vec![0.5, 0.5, 0.5]);
         assert_eq!(pose.morph_weight(2, 1), Some(0.5));
         assert_eq!(pose.morph_weight(2, 3), None);
         assert_eq!(pose.morph_weight(9, 0), None);
+    }
+
+    #[test]
+    fn undriven_transform_components_fall_back_to_the_rest_transform() {
+        let channel = Channel {
+            node_index: 6,
+            interpolation: Interpolation::Linear,
+            times_seconds: vec![0.0, 1.0],
+            values: vec![
+                ChannelValues::Translation(Vec3::ZERO),
+                ChannelValues::Translation(Vec3::Y),
+            ],
+            cubic_tangents: None,
+        };
+        let rest = NodeTransform {
+            translation: Vec3::new(9.0, 9.0, 9.0),
+            rotation: Quat::from_rotation_z(0.5),
+            scale: Vec3::splat(2.0),
+        };
+        let posed = sample_pose(&[channel], 1.0).nodes[&6].apply_to(rest);
+        assert_eq!(posed.translation, Vec3::Y);
+        assert_eq!(posed.rotation, rest.rotation);
+        assert_eq!(posed.scale, rest.scale);
     }
 
     #[test]
@@ -796,7 +842,7 @@ mod tests {
         assert_eq!(clip.transforms.len(), 1);
         assert!(clip.morphs.is_empty());
         let pose = clip.sample_pose(0.25);
-        assert_eq!(pose.nodes[&0].translation, Vec3::new(0.5, 0.0, 0.0));
+        assert_eq!(pose.nodes[&0].translation, Some(Vec3::new(0.5, 0.0, 0.0)));
     }
 
     /// Two morph targets driven by one `weights` channel: the weights must stay
