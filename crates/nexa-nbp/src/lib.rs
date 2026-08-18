@@ -21,10 +21,8 @@ pub enum NbpError {
     },
     #[error("priority must be in the inclusive range 0..=100")]
     InvalidPriority,
-    #[error("extension key must contain a namespace and local name separated by '.'")]
+    #[error("extension key must be dot-separated lowercase ASCII identifier segments")]
     InvalidExtensionKey,
-    #[error("extension values must be JSON objects")]
-    InvalidExtensionValue,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -116,7 +114,7 @@ pub enum ErrorSeverity {
     Fatal,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct Priority(u8);
 impl Priority {
@@ -134,6 +132,11 @@ impl Priority {
 impl Default for Priority {
     fn default() -> Self {
         Self(50)
+    }
+}
+impl<'de> Deserialize<'de> for Priority {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::new(u8::deserialize(deserializer)?).map_err(de::Error::custom)
     }
 }
 
@@ -294,14 +297,22 @@ impl NbpMessage {
     }
 }
 fn validate_extensions(extensions: &Extensions) -> Result<(), NbpError> {
-    for (key, value) in extensions {
-        let valid = key
-            .split_once('.')
-            .is_some_and(|(a, b)| !a.is_empty() && !b.is_empty());
+    for key in extensions.keys() {
+        let mut segments = key.split('.');
+        let valid_segment = |segment: &str| {
+            !segment.is_empty()
+                && segment.bytes().enumerate().all(|(index, byte)| {
+                    byte.is_ascii_lowercase()
+                        || byte.is_ascii_digit()
+                        || (index > 0 && matches!(byte, b'_' | b'-'))
+                })
+        };
+        let valid = segments.next().is_some_and(valid_segment)
+            && segments.next().is_some_and(valid_segment)
+            && segments.all(valid_segment);
         if !valid {
             return Err(NbpError::InvalidExtensionKey);
         }
-        if value.is_empty() { /* empty objects are valid */ }
     }
     Ok(())
 }

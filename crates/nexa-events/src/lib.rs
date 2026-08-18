@@ -5,7 +5,7 @@ use nexa_domain::{
     CorrelationId, EndpointId, EventId, ProtocolVersion, Sequence, SessionId, SubjectId, Timestamp,
     TraceId,
 };
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
@@ -52,11 +52,11 @@ pub enum EventKind {
 pub type EventMetadata = serde_json::Map<String, Value>;
 
 /// One immutable typed fact. Sequence scope is `(source, session_id)`.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Event<T> {
     pub event_version: ProtocolVersion,
     pub event_id: EventId,
-    pub event_type: EventKind,
+    event_type: EventKind,
     pub timestamp: Timestamp,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session_id: Option<SessionId>,
@@ -81,6 +81,89 @@ pub trait DomainEvent:
     Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static
 {
     const KIND: EventKind;
+}
+
+impl<T: DomainEvent> Event<T> {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        event_version: ProtocolVersion,
+        event_id: EventId,
+        timestamp: Timestamp,
+        session_id: Option<SessionId>,
+        sequence: Option<Sequence>,
+        source: EndpointId,
+        subject: Option<SubjectId>,
+        correlation_id: Option<CorrelationId>,
+        causation_id: Option<EventId>,
+        trace_id: Option<TraceId>,
+        payload: T,
+        metadata: EventMetadata,
+    ) -> Self {
+        Self {
+            event_version,
+            event_id,
+            event_type: T::KIND,
+            timestamp,
+            session_id,
+            sequence,
+            source,
+            subject,
+            correlation_id,
+            causation_id,
+            trace_id,
+            payload,
+            metadata,
+        }
+    }
+
+    pub const fn event_type(&self) -> EventKind {
+        self.event_type
+    }
+}
+
+impl<'de, T: DomainEvent> Deserialize<'de> for Event<T> {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct WireEvent<T> {
+            event_version: ProtocolVersion,
+            event_id: EventId,
+            event_type: EventKind,
+            timestamp: Timestamp,
+            session_id: Option<SessionId>,
+            sequence: Option<Sequence>,
+            source: EndpointId,
+            subject: Option<SubjectId>,
+            correlation_id: Option<CorrelationId>,
+            causation_id: Option<EventId>,
+            trace_id: Option<TraceId>,
+            payload: T,
+            #[serde(default)]
+            metadata: EventMetadata,
+        }
+
+        let wire = WireEvent::<T>::deserialize(deserializer)?;
+        if wire.event_type != T::KIND {
+            return Err(de::Error::custom(format_args!(
+                "event_type {:?} does not match payload kind {:?}",
+                wire.event_type,
+                T::KIND
+            )));
+        }
+        Ok(Self::new(
+            wire.event_version,
+            wire.event_id,
+            wire.timestamp,
+            wire.session_id,
+            wire.sequence,
+            wire.source,
+            wire.subject,
+            wire.correlation_id,
+            wire.causation_id,
+            wire.trace_id,
+            wire.payload,
+            wire.metadata,
+        ))
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -131,10 +214,12 @@ pub struct SubscriberError {
 }
 
 /// Aggregate publication failures after fan-out completes.
-#[derive(Clone, Debug, Error, Eq, PartialEq)]
-#[error("{failed_subscribers} subscriber(s) failed")]
-pub struct PublishError {
-    pub failed_subscribers: usize,
+#[derive(Debug, Error)]
+pub enum PublishError {
+    #[error("event payload encoding failed: {0}")]
+    Encoding(#[source] serde_json::Error),
+    #[error("{failed_subscribers} subscriber(s) failed")]
+    Subscribers { failed_subscribers: usize },
 }
 
 type Handler = Arc<dyn Fn(&Event<Value>) -> Result<(), SubscriberError> + Send + Sync>;
@@ -180,8 +265,7 @@ impl InProcessEventBus {
             correlation_id: event.correlation_id,
             causation_id: event.causation_id,
             trace_id: event.trace_id,
-            payload: serde_json::to_value(&event.payload)
-                .expect("serializing a typed event payload cannot fail"),
+            payload: serde_json::to_value(&event.payload).map_err(PublishError::Encoding)?,
             metadata: event.metadata.clone(),
         };
         let subscribers = self
@@ -199,7 +283,7 @@ impl InProcessEventBus {
         if failed_subscribers == 0 {
             Ok(())
         } else {
-            Err(PublishError { failed_subscribers })
+            Err(PublishError::Subscribers { failed_subscribers })
         }
     }
 }

@@ -68,7 +68,40 @@ fn mismatched_payload_is_rejected() {
 #[test]
 fn major_version_and_priority_are_validated() {
     assert!(Priority::new(101).is_err());
+    assert!(serde_json::from_str::<Priority>("101").is_err());
     let mut value = serde_json::to_value(fixture()).unwrap();
     value["nbp_version"] = "2.0".into();
     assert!(serde_json::from_value::<NbpMessage>(value).is_err());
+}
+
+#[test]
+fn extension_keys_follow_the_wire_grammar() {
+    for key in ["live2d.physics_hint", "com.vendor.feature-name", "x.0"] {
+        let mut extensions = Extensions::new();
+        extensions.insert(key.into(), Default::default());
+        assert!(NbpMessage::new(
+            fixture().nbp_version,
+            fixture().message_id,
+            fixture().timestamp,
+            fixture().session_id,
+            fixture().sequence,
+            fixture().source,
+            fixture().target,
+            fixture().correlation_id,
+            fixture().payload,
+            extensions,
+        )
+        .is_ok());
+    }
+
+    for key in ["a. b", "single", ".local", "ns.", "UPPER.local", "a.!bad"] {
+        let mut extensions = Extensions::new();
+        extensions.insert(key.into(), Default::default());
+        let mut value = serde_json::to_value(fixture()).unwrap();
+        value["extensions"] = serde_json::to_value(extensions).unwrap();
+        assert!(
+            serde_json::from_value::<NbpMessage>(value).is_err(),
+            "{key}"
+        );
+    }
 }
