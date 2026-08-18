@@ -85,6 +85,20 @@ impl NexaRuntimeManifest {
         ] {
             require_mapping(&self.visemes, required, "viseme")?;
         }
+        let exported_morph_ids: std::collections::HashSet<_> = report
+            .morph_targets
+            .iter()
+            .map(|target| target.id.as_str())
+            .collect();
+        for (category, mappings) in [("expression", &self.expressions), ("viseme", &self.visemes)] {
+            for (canonical_name, exported_id) in mappings {
+                if !exported_morph_ids.contains(exported_id.as_str()) {
+                    return Err(ManifestError::Invalid(format!(
+                        "{category} `{canonical_name}` refers to missing GLB morph target `{exported_id}`"
+                    )));
+                }
+            }
+        }
         for required in [
             "Idle_Seated",
             "Point_Left",
@@ -207,5 +221,98 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("head"));
+    }
+
+    #[test]
+    fn unknown_morph_mapping_is_rejected_without_gpu() {
+        let morph_id = "Nexa_Body/primitive_0/target_0";
+        let manifest = NexaRuntimeManifest {
+            schema_version: 1,
+            asset_version: "v001".into(),
+            canonical_forward: "-Z".into(),
+            rig: RigMap {
+                armature: "Nexa_Rig".into(),
+                head: "Head".into(),
+                left_eye: "Eye.L".into(),
+                right_eye: "Eye.R".into(),
+                jaw: "Jaw".into(),
+            },
+            expressions: [
+                "Neutral",
+                "Focused",
+                "Encouraging",
+                "Skeptical",
+                "Corrective",
+            ]
+            .into_iter()
+            .map(|name| (name.into(), morph_id.into()))
+            .collect(),
+            visemes: [
+                "REST", "A", "E", "I", "O", "U", "MBP", "FV", "L", "WQ", "TH", "CHSH", "R",
+            ]
+            .into_iter()
+            .map(|name| (name.into(), morph_id.into()))
+            .collect(),
+            gestures: [
+                "Idle_Seated",
+                "Point_Left",
+                "Point_Right",
+                "Open_Hand_Explain",
+                "Adjust_Glasses",
+                "Thumbs_Up",
+                "Typing",
+                "Listening",
+            ]
+            .into_iter()
+            .map(|name| {
+                (
+                    name.into(),
+                    GestureBinding {
+                        animation: name.into(),
+                        looping: false,
+                    },
+                )
+            })
+            .collect(),
+        };
+        let mut report = AssetReport {
+            source: Default::default(),
+            node_count: 5,
+            mesh_count: 1,
+            primitive_count: 1,
+            morph_target_count: 1,
+            morph_targets: vec![crate::asset::MorphTargetReport {
+                id: morph_id.into(),
+                mesh_name: "Nexa_Body".into(),
+                primitive_index: 0,
+                target_index: 0,
+            }],
+            nodes: ["Nexa_Rig", "Head", "Eye.L", "Eye.R", "Jaw"]
+                .into_iter()
+                .enumerate()
+                .map(|(index, name)| crate::asset::NodeReport {
+                    index,
+                    name: name.into(),
+                    has_mesh: false,
+                    is_joint: true,
+                })
+                .collect(),
+            skins: vec![],
+            animations: manifest
+                .gestures
+                .values()
+                .map(|binding| crate::asset::AnimationReport {
+                    name: binding.animation.clone(),
+                    channel_count: 0,
+                    duration_seconds: 0.0,
+                })
+                .collect(),
+        };
+        report.morph_targets.first_mut().unwrap().id = "missing-target".into();
+        assert!(manifest
+            .validate(&report)
+            .unwrap_err()
+            .to_string()
+            .contains("missing GLB morph target"));
     }
 }

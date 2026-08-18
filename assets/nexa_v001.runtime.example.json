@@ -10,10 +10,10 @@
     "jaw": "Jaw"
   },
   "expressions": {
-    "Neutral": "Neutral", "Focused": "Focused", "Encouraging": "Encouraging", "Skeptical": "Skeptical", "Corrective": "Corrective"
+    "Neutral": "<exported-morph-target-id>", "Focused": "<exported-morph-target-id>", "Encouraging": "<exported-morph-target-id>", "Skeptical": "<exported-morph-target-id>", "Corrective": "<exported-morph-target-id>"
   },
   "visemes": {
-    "REST": "REST", "A": "A", "E": "E", "I": "I", "O": "O", "U": "U", "MBP": "MBP", "FV": "FV", "L": "L", "WQ": "WQ", "TH": "TH", "CHSH": "CHSH", "R": "R"
+    "REST": "<exported-morph-target-id>", "A": "<exported-morph-target-id>", "E": "<exported-morph-target-id>", "I": "<exported-morph-target-id>", "O": "<exported-morph-target-id>", "U": "<exported-morph-target-id>", "MBP": "<exported-morph-target-id>", "FV": "<exported-morph-target-id>", "L": "<exported-morph-target-id>", "WQ": "<exported-morph-target-id>", "TH": "<exported-morph-target-id>", "CHSH": "<exported-morph-target-id>", "R": "<exported-morph-target-id>"
   },
   "gestures": {
     "Idle_Seated": { "animation": "Idle_Seated", "looping": true },
