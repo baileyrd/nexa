@@ -59,6 +59,8 @@ Canonical content namespaces:
 
 The control state itself is renderer-independent and directly unit-testable. A GUI inspector can replace the title-bar implementation without changing the contract.
 
+`runtime::apply_debug_controls` is the control-to-renderer bridge. Every frame it converts enabled gaze to a `GazeCommand`; queued visemes are emitted exactly once as `VisemeCommand`s. The active renderer decides how to apply eye/head limits, blendshape weights, and animation mixing.
+
 ## Headless contract
 
 `headless::validate_glb(path)` is the CI-safe required gate. It does not instantiate a GPU surface, window, event loop, audio system, or OS input. It must validate at least one skeleton and one morph target. Project CI should invoke this function plus the manifest checks described in the acceptance checklist.

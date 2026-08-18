@@ -5,6 +5,7 @@ pub mod avatar;
 pub mod control;
 pub mod headless;
 pub mod manifest;
+pub mod runtime;
 
 #[cfg(feature = "viewer")]
 pub mod viewer;

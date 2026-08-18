@@ -37,3 +37,5 @@ cargo run --bin nexa-3d-viewer -- path\to\Nexa.glb
 The repository CI always runs formatting, `cargo check --all-targets`, and headless unit tests. Add a versioned Nexa GLB plus its runtime manifest to CI only after the first asset is accepted; then invoke `nexa-3d-validate` as an additional required job.
 
 `assets/nexa_v001.runtime.example.json` is the required semantic sidecar template. It maps approved NEXA-3D-001 expression, viseme, gesture, and gaze-rig names to the actual exported Blender/GLB identifiers. Passing it as the optional second argument verifies the mappings before the window opens.
+
+The `runtime::apply_debug_controls` bridge converts viewer gaze and queued viseme input into `AvatarRenderer` commands. This keeps facial/IK implementation renderer-independent while providing a unit-tested hook for the first production renderer.
