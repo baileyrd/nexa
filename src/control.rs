@@ -46,6 +46,7 @@ pub struct RuntimeControls {
     pub panel: InspectorPanel,
     pub camera: OrbitCamera,
     pub selected_morph: usize,
+    pub morph_weight: f32,
     pub selected_animation: usize,
     pub animation_playing: bool,
     pub animation_time_seconds: f32,
@@ -59,6 +60,7 @@ impl Default for RuntimeControls {
             panel: InspectorPanel::Skeleton,
             camera: OrbitCamera::default(),
             selected_morph: 0,
+            morph_weight: 0.0,
             selected_animation: 0,
             animation_playing: false,
             animation_time_seconds: 0.0,
@@ -79,6 +81,9 @@ impl RuntimeControls {
         if available_count > 0 {
             self.selected_morph = (self.selected_morph + 1) % available_count;
         }
+    }
+    pub fn adjust_morph_weight(&mut self, delta: f32) {
+        self.morph_weight = (self.morph_weight + delta).clamp(0.0, 1.0);
     }
     pub fn select_next_animation(&mut self, available_count: usize) {
         if available_count > 0 {
@@ -144,6 +149,15 @@ mod tests {
         assert_eq!(controls.selected_morph, 0);
         controls.select_next_morph(0);
         assert_eq!(controls.selected_morph, 0);
+    }
+
+    #[test]
+    fn morph_weight_stays_normalized() {
+        let mut controls = RuntimeControls::default();
+        controls.adjust_morph_weight(4.0);
+        assert_eq!(controls.morph_weight, 1.0);
+        controls.adjust_morph_weight(-4.0);
+        assert_eq!(controls.morph_weight, 0.0);
     }
 
     #[test]

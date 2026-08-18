@@ -70,6 +70,8 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
                     KeyCode::Digit1 => controls.panel = InspectorPanel::Skeleton,
                     KeyCode::Digit2 => controls.panel = InspectorPanel::MorphTargets,
                     KeyCode::KeyM => controls.select_next_morph(report.morph_target_count),
+                    KeyCode::KeyZ => controls.adjust_morph_weight(-0.1),
+                    KeyCode::KeyX => controls.adjust_morph_weight(0.1),
                     KeyCode::Digit3 => controls.panel = InspectorPanel::Animation,
                     KeyCode::KeyN => controls.select_next_animation(report.animations.len()),
                     KeyCode::Space => controls.animation_playing = !controls.animation_playing,
@@ -97,9 +99,12 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
                 event: WindowEvent::RedrawRequested,
                 ..
             } => {
-                if let Err(e) =
-                    viewer.render(&controls.camera, controls.panel == InspectorPanel::Skeleton)
-                {
+                if let Err(e) = viewer.render(
+                    &controls.camera,
+                    controls.panel == InspectorPanel::Skeleton,
+                    controls.selected_morph,
+                    controls.morph_weight,
+                ) {
                     if !matches!(e, SurfaceError::Outdated | SurfaceError::Lost) {
                         eprintln!("render error: {e:?}");
                     }
@@ -128,7 +133,7 @@ fn title(report: &AssetReport, c: &RuntimeControls) -> String {
         InspectorPanel::MorphTargets => report
             .morph_targets
             .get(c.selected_morph)
-            .map(|target| target.id.clone())
+            .map(|target| format!("{} @ {:.0}%", target.id, c.morph_weight * 100.0))
             .unwrap_or_else(|| "no morph targets".to_owned()),
         InspectorPanel::Animation => report
             .animations
@@ -230,6 +235,9 @@ struct Viewer<'a> {
     pipeline: wgpu::RenderPipeline,
     skeleton_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
+    base_vertices: Vec<StaticVertex>,
+    morph_position_deltas: Vec<Vec<[f32; 3]>>,
+    active_morph: Option<(usize, u32)>,
     index_buffer: wgpu::Buffer,
     index_count: u32,
     skeleton_vertex_buffer: Option<wgpu::Buffer>,
@@ -363,7 +371,7 @@ impl<'a> Viewer<'a> {
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Nexa vertices"),
             contents: bytemuck::cast_slice(&geometry.vertices),
-            usage: wgpu::BufferUsages::VERTEX,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Nexa indices"),
@@ -385,6 +393,9 @@ impl<'a> Viewer<'a> {
             pipeline,
             skeleton_pipeline,
             vertex_buffer,
+            base_vertices: geometry.vertices.clone(),
+            morph_position_deltas: geometry.morph_position_deltas.clone(),
+            active_morph: None,
             index_buffer,
             index_count: geometry.indices.len() as u32,
             skeleton_vertex_buffer,
@@ -402,7 +413,10 @@ impl<'a> Viewer<'a> {
         &mut self,
         camera: &crate::control::OrbitCamera,
         show_skeleton: bool,
+        selected_morph: usize,
+        morph_weight: f32,
     ) -> Result<(), SurfaceError> {
+        self.update_morph(selected_morph, morph_weight);
         let aspect = self.config.width as f32 / self.config.height as f32;
         let eye = camera.target
             + glam::Vec3::new(
@@ -457,5 +471,22 @@ impl<'a> Viewer<'a> {
         self.queue.submit(Some(encoder.finish()));
         frame.present();
         Ok(())
+    }
+    fn update_morph(&mut self, selected_morph: usize, weight: f32) {
+        let state = (selected_morph, weight.to_bits());
+        if self.active_morph == Some(state) {
+            return;
+        }
+        let mut vertices = self.base_vertices.clone();
+        if let Some(deltas) = self.morph_position_deltas.get(selected_morph) {
+            for (vertex, delta) in vertices.iter_mut().zip(deltas) {
+                vertex.position = (glam::Vec3::from(vertex.position)
+                    + glam::Vec3::from(*delta) * weight)
+                    .to_array();
+            }
+        }
+        self.queue
+            .write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
+        self.active_morph = Some(state);
     }
 }

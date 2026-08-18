@@ -32,6 +32,7 @@ pub struct StaticVertex {
 pub struct StaticGeometry {
     pub vertices: Vec<StaticVertex>,
     pub indices: Vec<u32>,
+    pub morph_position_deltas: Vec<Vec<[f32; 3]>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -310,33 +311,60 @@ fn append_node(
                 .pbr_metallic_roughness()
                 .base_color_factor();
             let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
-            let positions = reader.read_positions().ok_or(AssetError::MissingPosition {
-                mesh: mesh.index(),
-                primitive: primitive.index(),
-            })?;
-            let normals = reader.read_normals();
+            let positions: Vec<_> = reader
+                .read_positions()
+                .ok_or(AssetError::MissingPosition {
+                    mesh: mesh.index(),
+                    primitive: primitive.index(),
+                })?
+                .collect();
+            let normals = reader.read_normals().map(Iterator::collect::<Vec<_>>);
             let base = geometry.vertices.len() as u32;
+            let local_deltas: Vec<Vec<[f32; 3]>> = reader
+                .read_morph_targets()
+                .map(|(target_positions, _, _)| {
+                    target_positions
+                        .map(Iterator::collect)
+                        .unwrap_or_else(|| vec![[0.0; 3]; positions.len()])
+                })
+                .collect();
+            while geometry.morph_position_deltas.len() < local_deltas.len() {
+                geometry
+                    .morph_position_deltas
+                    .push(vec![[0.0; 3]; base as usize]);
+            }
+            for (target_index, target) in geometry.morph_position_deltas.iter_mut().enumerate() {
+                let local = local_deltas.get(target_index);
+                target.extend((0..positions.len()).map(|index| {
+                    local
+                        .and_then(|delta| delta.get(index))
+                        .map(|delta| {
+                            world_transform
+                                .transform_vector3(glam::Vec3::from(*delta))
+                                .to_array()
+                        })
+                        .unwrap_or([0.0; 3])
+                }));
+            }
             match normals {
-                Some(normals) => {
-                    geometry
-                        .vertices
-                        .extend(positions.zip(normals).map(|(position, normal)| {
-                            StaticVertex {
-                                position: world_transform
-                                    .transform_point3(glam::Vec3::from(position))
-                                    .to_array(),
-                                normal: normal_transform
-                                    .transform_vector3(glam::Vec3::from(normal))
-                                    .normalize_or_zero()
-                                    .to_array(),
-                                color,
-                            }
-                        }))
-                }
-                None => geometry.vertices.extend(positions.map(|position| {
+                Some(normals) => geometry.vertices.extend(positions.iter().zip(normals).map(
+                    |(position, normal)| {
+                        StaticVertex {
+                            position: world_transform
+                                .transform_point3(glam::Vec3::from(*position))
+                                .to_array(),
+                            normal: normal_transform
+                                .transform_vector3(glam::Vec3::from(normal))
+                                .normalize_or_zero()
+                                .to_array(),
+                            color,
+                        }
+                    },
+                )),
+                None => geometry.vertices.extend(positions.iter().map(|position| {
                     StaticVertex {
                         position: world_transform
-                            .transform_point3(glam::Vec3::from(position))
+                            .transform_point3(glam::Vec3::from(*position))
                             .to_array(),
                         normal: [0.0, 1.0, 0.0],
                         color,
@@ -380,6 +408,7 @@ mod tests {
                 },
             ],
             indices: vec![],
+            morph_position_deltas: vec![],
         };
         let bounds = geometry.bounds().unwrap();
         assert_eq!(bounds.center(), glam::Vec3::new(1.0, 2.5, 1.0));
