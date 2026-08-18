@@ -6,7 +6,7 @@ license = "MIT OR Apache-2.0"
 description = "Renderer-independent validation and debug viewer for the Nexa tutor asset."
 
 [workspace]
-members = [".", "crates/nexa-domain", "crates/nexa-events", "crates/nexa-nbp"]
+members = [".", "crates/nexa-avatar", "crates/nexa-domain", "crates/nexa-events", "crates/nexa-nbp"]
 resolver = "2"
 
 [workspace.package]
@@ -51,6 +51,9 @@ gltf = { version = "1.4", features = ["import", "names", "utils"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+nexa-avatar = { path = "crates/nexa-avatar" }
+nexa-domain = { path = "crates/nexa-domain" }
+nexa-nbp = { path = "crates/nexa-nbp" }
 pollster = { version = "0.4", optional = true }
 wgpu = { version = "0.19", optional = true }
 winit = { version = "0.29", optional = true }
