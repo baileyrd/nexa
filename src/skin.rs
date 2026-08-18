@@ -15,6 +15,23 @@ use crate::{
     asset::AssetError,
 };
 
+/// Per-vertex skin binding: glTF's `JOINTS_0`/`WEIGHTS_0`, four influences wide.
+/// A zero weight set marks an unskinned vertex, which a renderer must leave at
+/// its imported position rather than fold through joint 0.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct VertexSkin {
+    /// Indices into [`SkinBinding::joint_nodes`], not into the glTF node list.
+    pub joints: [u32; 4],
+    pub weights: [f32; 4],
+}
+
+impl VertexSkin {
+    pub fn is_skinned(&self) -> bool {
+        self.weights.iter().any(|weight| *weight != 0.0)
+    }
+}
+
 /// Scene node parents and rest transforms, captured once at import so a sampled
 /// pose resolves to world space without reopening the glTF every frame.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -333,60 +350,7 @@ mod tests {
     #[test]
     fn a_skinned_gltf_crosses_the_import_boundary() {
         let directory = tempfile::tempdir().unwrap();
-        let gltf_path = directory.path().join("rig.gltf");
-        let bin_path = directory.path().join("rig.bin");
-        let mut bytes = Vec::new();
-        // POSITION: one vertex half a metre above the head joint.
-        for value in [0.0_f32, 1.5, 0.0] {
-            bytes.extend(value.to_le_bytes());
-        }
-        // JOINTS_0: fully bound to skin joint 1 (the head).
-        for value in [1_u16, 0, 0, 0] {
-            bytes.extend(value.to_le_bytes());
-        }
-        // WEIGHTS_0
-        for value in [1.0_f32, 0.0, 0.0, 0.0] {
-            bytes.extend(value.to_le_bytes());
-        }
-        // inverseBindMatrices, column-major: identity, then translate(0, -1, 0).
-        for value in [
-            1.0_f32, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
-            1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 1.0,
-        ] {
-            bytes.extend(value.to_le_bytes());
-        }
-        assert_eq!(bytes.len(), 164);
-        std::fs::write(bin_path, bytes).unwrap();
-        std::fs::write(
-            &gltf_path,
-            r#"{
-              "asset":{"version":"2.0"},
-              "buffers":[{"uri":"rig.bin","byteLength":164}],
-              "bufferViews":[
-                {"buffer":0,"byteOffset":0,"byteLength":12},
-                {"buffer":0,"byteOffset":12,"byteLength":8},
-                {"buffer":0,"byteOffset":20,"byteLength":16},
-                {"buffer":0,"byteOffset":36,"byteLength":128}
-              ],
-              "accessors":[
-                {"bufferView":0,"componentType":5126,"count":1,"type":"VEC3","min":[0,1.5,0],"max":[0,1.5,0]},
-                {"bufferView":1,"componentType":5123,"count":1,"type":"VEC4"},
-                {"bufferView":2,"componentType":5126,"count":1,"type":"VEC4"},
-                {"bufferView":3,"componentType":5126,"count":2,"type":"MAT4"}
-              ],
-              "meshes":[{"primitives":[{"attributes":{"POSITION":0,"JOINTS_0":1,"WEIGHTS_0":2}}]}],
-              "nodes":[
-                {"name":"Nexa_Body","mesh":0,"skin":0},
-                {"name":"Hips","children":[2]},
-                {"name":"Head","translation":[0,1,0]}
-              ],
-              "skins":[{"name":"Nexa_Rig","joints":[1,2],"inverseBindMatrices":3,"skeleton":1}],
-              "scenes":[{"nodes":[0,1]}],"scene":0
-            }"#,
-        )
-        .unwrap();
-
-        let rig = load_skin_rig(&gltf_path).unwrap();
+        let rig = load_skin_rig(crate::test_fixtures::skinned_rig_gltf(directory.path())).unwrap();
         assert_eq!(rig.hierarchy.node_count(), 3);
         assert_eq!(rig.hierarchy.parent(2), Some(1));
         assert_eq!(rig.skins.len(), 1);

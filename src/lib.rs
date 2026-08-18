@@ -14,3 +14,6 @@ pub mod viseme;
 
 #[cfg(feature = "viewer")]
 pub mod viewer;
+
+#[cfg(test)]
+mod test_fixtures;

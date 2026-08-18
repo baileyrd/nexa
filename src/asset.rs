@@ -6,7 +6,10 @@ use std::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::animation::{Channel, ChannelValues};
+use crate::{
+    animation::{Channel, ChannelValues},
+    skin::VertexSkin,
+};
 
 #[derive(Debug, Error)]
 pub enum AssetError {
@@ -38,6 +41,13 @@ pub struct StaticGeometry {
     pub vertices: Vec<StaticVertex>,
     pub indices: Vec<u32>,
     pub morph_position_deltas: Vec<Vec<[f32; 3]>>,
+    /// One entry per vertex, always parallel to `vertices`. Vertices from
+    /// unskinned primitives carry zero weights.
+    pub vertex_skins: Vec<VertexSkin>,
+    /// The glTF skin driving `vertex_skins`. Assets with several skinned meshes
+    /// need a palette per draw call, which this single-buffer debug viewer does
+    /// not do, so only the first skin encountered is recorded.
+    pub skin_index: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -412,7 +422,19 @@ fn append_node(
     );
     let world_transform = parent_transform * local_transform;
     if let Some(mesh) = node.mesh() {
-        let normal_transform = world_transform.inverse().transpose();
+        // Skinned vertices stay in the mesh node's local space: the joint
+        // palette maps them straight to scene space, so baking the node's world
+        // transform in would apply it twice.
+        let skin = node.skin();
+        let vertex_transform = if skin.is_some() {
+            glam::Mat4::IDENTITY
+        } else {
+            world_transform
+        };
+        let normal_transform = vertex_transform.inverse().transpose();
+        if let Some(skin) = &skin {
+            geometry.skin_index.get_or_insert(skin.index());
+        }
         for primitive in mesh.primitives() {
             let color = primitive
                 .material()
@@ -448,7 +470,7 @@ fn append_node(
                     local
                         .and_then(|delta| delta.get(index))
                         .map(|delta| {
-                            world_transform
+                            vertex_transform
                                 .transform_vector3(glam::Vec3::from(*delta))
                                 .to_array()
                         })
@@ -459,7 +481,7 @@ fn append_node(
                 Some(normals) => geometry.vertices.extend(positions.iter().zip(normals).map(
                     |(position, normal)| {
                         StaticVertex {
-                            position: world_transform
+                            position: vertex_transform
                                 .transform_point3(glam::Vec3::from(*position))
                                 .to_array(),
                             normal: normal_transform
@@ -473,7 +495,7 @@ fn append_node(
                 )),
                 None => geometry.vertices.extend(positions.iter().map(|position| {
                     StaticVertex {
-                        position: world_transform
+                        position: vertex_transform
                             .transform_point3(glam::Vec3::from(*position))
                             .to_array(),
                         normal: [0.0, 1.0, 0.0],
@@ -482,6 +504,26 @@ fn append_node(
                     }
                 })),
             }
+            let joints = reader
+                .read_joints(0)
+                .map(|joints| joints.into_u16().collect::<Vec<_>>());
+            let weights = reader
+                .read_weights(0)
+                .map(|weights| weights.into_f32().collect::<Vec<_>>());
+            geometry
+                .vertex_skins
+                .extend((0..positions.len()).map(|index| {
+                    match (&joints, &weights) {
+                        (Some(joints), Some(weights)) => VertexSkin {
+                            joints: joints
+                                .get(index)
+                                .map(|joints| joints.map(u32::from))
+                                .unwrap_or_default(),
+                            weights: weights.get(index).copied().unwrap_or_default(),
+                        },
+                        _ => VertexSkin::default(),
+                    }
+                }));
             if let Some(indices) = reader.read_indices() {
                 geometry
                     .indices
@@ -502,7 +544,54 @@ fn append_node(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::load_animation_clip;
+    use crate::{animation::load_animation_clip, test_fixtures::skinned_rig_gltf};
+
+    #[test]
+    fn skinned_vertices_import_unbaked_with_their_joint_bindings() {
+        let directory = tempfile::tempdir().unwrap();
+        let geometry = load_static_geometry(skinned_rig_gltf(directory.path())).unwrap();
+        assert_eq!(geometry.skin_index, Some(0));
+        assert_eq!(geometry.vertex_skins.len(), geometry.vertices.len());
+        // The mesh node sits at x=10, but the joint palette will place these
+        // vertices, so the node transform must not be baked into them.
+        assert_eq!(geometry.vertices[0].position, [0.0, 1.5, 0.0]);
+        let skin = geometry.vertex_skins[0];
+        assert!(skin.is_skinned());
+        assert_eq!(skin.joints, [1, 0, 0, 0]);
+        assert_eq!(skin.weights, [1.0, 0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn unskinned_vertices_stay_baked_to_world_space_and_carry_no_weights() {
+        let directory = tempfile::tempdir().unwrap();
+        let gltf_path = directory.path().join("static.gltf");
+        std::fs::write(directory.path().join("static.bin"), {
+            let mut bytes = Vec::new();
+            for value in [0.0_f32, 1.5, 0.0] {
+                bytes.extend(value.to_le_bytes());
+            }
+            bytes
+        })
+        .unwrap();
+        std::fs::write(
+            &gltf_path,
+            r#"{
+              "asset":{"version":"2.0"},
+              "buffers":[{"uri":"static.bin","byteLength":12}],
+              "bufferViews":[{"buffer":0,"byteOffset":0,"byteLength":12}],
+              "accessors":[{"bufferView":0,"componentType":5126,"count":1,"type":"VEC3","min":[0,1.5,0],"max":[0,1.5,0]}],
+              "meshes":[{"primitives":[{"attributes":{"POSITION":0}}]}],
+              "nodes":[{"name":"Prop","mesh":0,"translation":[10,0,0]}],
+              "scenes":[{"nodes":[0]}],"scene":0
+            }"#,
+        )
+        .unwrap();
+
+        let geometry = load_static_geometry(&gltf_path).unwrap();
+        assert_eq!(geometry.skin_index, None);
+        assert_eq!(geometry.vertices[0].position, [10.0, 1.5, 0.0]);
+        assert!(!geometry.vertex_skins[0].is_skinned());
+    }
 
     #[test]
     fn bounds_cover_every_static_vertex() {
@@ -521,8 +610,7 @@ mod tests {
                     emission: [0.0; 3],
                 },
             ],
-            indices: vec![],
-            morph_position_deltas: vec![],
+            ..Default::default()
         };
         let bounds = geometry.bounds().unwrap();
         assert_eq!(bounds.center(), glam::Vec3::new(1.0, 2.5, 1.0));
