@@ -102,6 +102,53 @@ impl<R: AvatarRenderer> AvatarPort for NexaAvatarAdapter<R> {
         ])
     }
 
+    fn preview(&self, request: &AvatarRequest) -> AvatarReport {
+        match request {
+            AvatarRequest::Cancel {
+                message_id,
+                cancellation,
+            } => AvatarReport::cancelled(*message_id, cancellation.behavior_id),
+            AvatarRequest::Submit {
+                message_id,
+                command,
+            } => {
+                let missing = missing_required_capabilities(command, &self.capabilities());
+                if let Some(capability) = missing.iter().next() {
+                    return AvatarReport::degraded(
+                        *message_id,
+                        command.behavior_id,
+                        SemanticKey::new("avatar.capability.unsupported")
+                            .expect("static semantic key is valid"),
+                        format!("{capability:?} is unsupported; semantic command was not applied"),
+                    );
+                }
+                let unresolved_gaze = command.gaze.as_ref().is_some_and(|gaze| {
+                    gaze.target_type == GazeTarget::CanvasObject
+                        && gaze
+                            .target_id
+                            .as_ref()
+                            .is_none_or(|target| !self.canvas_targets.contains_key(target))
+                });
+                if unresolved_gaze {
+                    AvatarReport::degraded(
+                        *message_id,
+                        command.behavior_id,
+                        SemanticKey::new("avatar.gaze.target_unresolved")
+                            .expect("static semantic key is valid"),
+                        "the semantic gaze target is not registered; command was not applied"
+                            .into(),
+                    )
+                } else {
+                    AvatarReport::completed(
+                        *message_id,
+                        SemanticKey::new("nexa-3d-runtime").expect("static semantic key is valid"),
+                        command,
+                    )
+                }
+            }
+        }
+    }
+
     fn submit(&mut self, message_id: MessageId, command: BehaviorCommand) -> AvatarReport {
         let missing = missing_required_capabilities(&command, &self.capabilities());
         if let Some(capability) = missing.iter().next() {
@@ -291,7 +338,7 @@ mod tests {
         let report = unresolved.submit(message_id, command.clone());
         assert_eq!(report.terminal_status(), RuntimeStatus::Degraded);
         assert_eq!(
-            report.error.unwrap().code.as_str(),
+            report.error().unwrap().code.as_str(),
             "avatar.gaze.target_unresolved"
         );
         let recorder = unresolved.into_inner();

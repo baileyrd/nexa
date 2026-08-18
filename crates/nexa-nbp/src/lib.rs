@@ -54,11 +54,51 @@ pub enum AvatarCapability {
     Cancellation,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct RuntimeCapabilities {
     pub avatar_id: SemanticKey,
-    /// Sorted and de-duplicated by the producer for stable negotiation.
-    pub supported: Vec<AvatarCapability>,
+    /// Kept canonical at construction and on the wire for stable negotiation.
+    supported: Vec<AvatarCapability>,
+}
+
+impl RuntimeCapabilities {
+    pub fn new(
+        avatar_id: SemanticKey,
+        supported: impl IntoIterator<Item = AvatarCapability>,
+    ) -> Self {
+        let supported = supported
+            .into_iter()
+            .collect::<std::collections::BTreeSet<_>>();
+        Self {
+            avatar_id,
+            supported: supported.into_iter().collect(),
+        }
+    }
+
+    pub fn supported(&self) -> &[AvatarCapability] {
+        &self.supported
+    }
+}
+
+impl<'de> Deserialize<'de> for RuntimeCapabilities {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct Wire {
+            avatar_id: SemanticKey,
+            supported: Vec<AvatarCapability>,
+        }
+
+        let wire = Wire::deserialize(deserializer)?;
+        if !wire.supported.windows(2).all(|pair| pair[0] < pair[1]) {
+            return Err(de::Error::custom(
+                "supported capabilities must be sorted and de-duplicated",
+            ));
+        }
+        Ok(Self {
+            avatar_id: wire.avatar_id,
+            supported: wire.supported,
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]

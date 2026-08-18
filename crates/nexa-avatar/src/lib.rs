@@ -30,10 +30,7 @@ impl AvatarCapabilities {
         self.supported.iter().copied()
     }
     pub fn as_nbp(&self, avatar_id: SemanticKey) -> RuntimeCapabilities {
-        RuntimeCapabilities {
-            avatar_id,
-            supported: self.iter().collect(),
-        }
+        RuntimeCapabilities::new(avatar_id, self.iter())
     }
 }
 
@@ -96,15 +93,69 @@ impl TryFrom<&NbpMessage> for AvatarRequest {
 
 /// Renderer-neutral lifecycle result emitted synchronously by the core port.
 /// `Accepted` means ownership was taken; it never implies completion.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct AvatarReport {
     pub message_id: MessageId,
     pub behavior_id: BehaviorId,
-    pub lifecycle: Vec<RuntimeStatus>,
+    lifecycle: Vec<RuntimeStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub state: Option<RuntimeState>,
+    state: Option<RuntimeState>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<RuntimeError>,
+    error: Option<RuntimeError>,
+}
+
+impl<'de> Deserialize<'de> for AvatarReport {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct Wire {
+            message_id: MessageId,
+            behavior_id: BehaviorId,
+            lifecycle: Vec<RuntimeStatus>,
+            state: Option<RuntimeState>,
+            error: Option<RuntimeError>,
+        }
+        let wire = Wire::deserialize(deserializer)?;
+        let valid_shape = matches!(
+            wire.lifecycle.as_slice(),
+            [
+                RuntimeStatus::Accepted,
+                RuntimeStatus::Started,
+                RuntimeStatus::Completed
+            ] | [RuntimeStatus::Cancelled]
+                | [RuntimeStatus::Degraded]
+                | [RuntimeStatus::Rejected]
+                | [
+                    RuntimeStatus::Accepted,
+                    RuntimeStatus::Started,
+                    RuntimeStatus::Failed
+                ]
+        );
+        let terminal = wire.lifecycle.last().copied();
+        let error_required = matches!(
+            terminal,
+            Some(RuntimeStatus::Degraded | RuntimeStatus::Rejected | RuntimeStatus::Failed)
+        );
+        let state_valid = if terminal == Some(RuntimeStatus::Completed) {
+            wire.state.is_some() && wire.error.is_none()
+        } else {
+            wire.state.is_none() && (wire.error.is_some() == error_required)
+        };
+        let identities_valid = wire.state.as_ref().is_none_or(|state| {
+            state.message_id == wire.message_id && state.behavior_id == Some(wire.behavior_id)
+        }) && wire.error.as_ref().is_none_or(|error| {
+            error.message_id == wire.message_id && error.behavior_id == Some(wire.behavior_id)
+        });
+        if !(valid_shape && state_valid && identities_valid) {
+            return Err(serde::de::Error::custom("invalid avatar report lifecycle"));
+        }
+        Ok(Self {
+            message_id: wire.message_id,
+            behavior_id: wire.behavior_id,
+            lifecycle: wire.lifecycle,
+            state: wire.state,
+            error: wire.error,
+        })
+    }
 }
 impl AvatarReport {
     fn with_statuses(
@@ -205,7 +256,16 @@ impl AvatarReport {
         value
     }
     pub fn terminal_status(&self) -> RuntimeStatus {
-        *self.lifecycle.last().expect("reports have a lifecycle")
+        self.lifecycle[self.lifecycle.len() - 1]
+    }
+    pub fn lifecycle(&self) -> &[RuntimeStatus] {
+        &self.lifecycle
+    }
+    pub fn state(&self) -> Option<&RuntimeState> {
+        self.state.as_ref()
+    }
+    pub fn error(&self) -> Option<&RuntimeError> {
+        self.error.as_ref()
     }
 
     /// Converts each semantic lifecycle fact to a governed NBP output. IDs and the first
@@ -247,7 +307,12 @@ impl AvatarReport {
                     message_id,
                     input.timestamp,
                     input.session_id,
-                    Sequence::new(first_sequence.get() + index as u64),
+                    Sequence::new(
+                        first_sequence
+                            .get()
+                            .checked_add(index as u64)
+                            .ok_or(OutputConversionError::SequenceOverflow)?,
+                    ),
                     source.clone(),
                     Some(input.source.clone()),
                     input.correlation_id,
@@ -264,6 +329,8 @@ impl AvatarReport {
 pub enum OutputConversionError {
     #[error("not enough message identities supplied for avatar outputs")]
     InsufficientMessageIds,
+    #[error("avatar output sequence exceeds u64::MAX")]
+    SequenceOverflow,
     #[error(transparent)]
     Protocol(#[from] nexa_nbp::NbpError),
 }
@@ -273,6 +340,11 @@ pub trait AvatarPort {
     fn capabilities(&self) -> AvatarCapabilities;
     fn submit(&mut self, message_id: MessageId, command: BehaviorCommand) -> AvatarReport;
     fn cancel(&mut self, message_id: MessageId, cancellation: BehaviorCancel) -> AvatarReport;
+
+    /// Determines the synchronous outcome without performing the command. Implementations must
+    /// return the same report from `handle`; composition roots use this to validate identities
+    /// before allowing externally visible adapter mutation.
+    fn preview(&self, request: &AvatarRequest) -> AvatarReport;
 
     fn handle(&mut self, request: AvatarRequest) -> AvatarReport {
         match request {
@@ -328,6 +400,11 @@ impl FakeAvatarAdapter {
 impl AvatarPort for FakeAvatarAdapter {
     fn capabilities(&self) -> AvatarCapabilities {
         self.capabilities.clone()
+    }
+
+    fn preview(&self, request: &AvatarRequest) -> AvatarReport {
+        let mut preview = self.clone();
+        preview.handle(request.clone())
     }
 
     fn submit(&mut self, message_id: MessageId, command: BehaviorCommand) -> AvatarReport {

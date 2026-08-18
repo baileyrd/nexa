@@ -109,12 +109,42 @@ fn extension_keys_follow_the_wire_grammar() {
 #[test]
 fn capability_report_is_sorted_renderer_neutral_nbp_output() {
     let mut message = fixture();
-    message.payload = Payload::RuntimeCapabilities(RuntimeCapabilities {
-        avatar_id: "nexa-avatar-primary".parse().unwrap(),
-        supported: vec![AvatarCapability::BehaviorState, AvatarCapability::Gaze],
-    });
+    message.payload = Payload::RuntimeCapabilities(RuntimeCapabilities::new(
+        "nexa-avatar-primary".parse().unwrap(),
+        [AvatarCapability::BehaviorState, AvatarCapability::Gaze],
+    ));
     let json = serde_json::to_string(&message).unwrap();
     assert!(json.contains("runtime.capabilities"));
     assert_eq!(serde_json::from_str::<NbpMessage>(&json).unwrap(), message);
     assert_eq!(message.message_type(), MessageType::RuntimeCapabilities);
+}
+
+#[test]
+fn runtime_capabilities_enforce_canonical_wire_order() {
+    let avatar_id = SemanticKey::new("avatar.primary").unwrap();
+    let canonical = RuntimeCapabilities::new(
+        avatar_id.clone(),
+        [
+            AvatarCapability::Gesture,
+            AvatarCapability::BehaviorState,
+            AvatarCapability::Gesture,
+        ],
+    );
+    assert_eq!(
+        canonical.supported(),
+        &[AvatarCapability::BehaviorState, AvatarCapability::Gesture]
+    );
+    let encoded = serde_json::to_string(&canonical).unwrap();
+    assert_eq!(
+        serde_json::from_str::<RuntimeCapabilities>(&encoded).unwrap(),
+        canonical
+    );
+
+    for supported in [
+        serde_json::json!(["gesture", "behavior_state"]),
+        serde_json::json!(["gesture", "gesture"]),
+    ] {
+        let value = serde_json::json!({ "avatar_id": avatar_id, "supported": supported });
+        assert!(serde_json::from_value::<RuntimeCapabilities>(value).is_err());
+    }
 }

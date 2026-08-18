@@ -76,7 +76,7 @@ fn supported_command_completes_with_correlated_outputs_events_and_stable_fixture
     );
     let result = execute(&mut adapter, &input, identity()).unwrap();
     assert_eq!(
-        result.report.lifecycle,
+        result.report.lifecycle(),
         [
             RuntimeStatus::Accepted,
             RuntimeStatus::Started,
@@ -148,7 +148,7 @@ fn optional_capability_and_unresolved_semantic_target_degrade_truthfully() {
     .unwrap();
     assert_eq!(result.report.terminal_status(), RuntimeStatus::Degraded);
     assert_eq!(
-        result.report.error.unwrap().code.as_str(),
+        result.report.error().unwrap().code.as_str(),
         "avatar.gaze.target_unresolved"
     );
 }
@@ -199,4 +199,49 @@ impl AvatarRenderer for Recorder {
     fn set_gaze(&mut self, _: GazeCommand) {}
     fn play_gesture(&mut self, _: GestureCommand) {}
     fn set_animation_time(&mut self, _: f32) {}
+}
+
+#[test]
+fn insufficient_identities_do_not_dispatch_the_adapter() {
+    let input = input(Payload::BehaviorCommand(command(false)), 2);
+    let mut adapter = FakeAvatarAdapter::new(
+        SemanticKey::new("headless-avatar").unwrap(),
+        AvatarCapabilities::new([AvatarCapability::BehaviorState]),
+    );
+    let mut insufficient = identity();
+    insufficient.output_message_ids.clear();
+    assert!(execute(&mut adapter, &input, insufficient).is_err());
+    assert!(adapter.requests().is_empty());
+}
+
+#[test]
+fn rejection_needs_no_event_identity_and_creates_no_sequence_gap() {
+    let input = input(Payload::BehaviorCommand(command(false)), 2);
+    let mut adapter = FakeAvatarAdapter::new(
+        SemanticKey::new("headless-avatar").unwrap(),
+        AvatarCapabilities::new([AvatarCapability::BehaviorState]),
+    )
+    .with_submit_outcome(nexa_avatar::FakeSubmitOutcome::Reject);
+    let mut ids = identity();
+    ids.event_ids.clear();
+    let result = execute(&mut adapter, &input, ids).unwrap();
+    assert!(result.events.is_empty());
+    assert_eq!(result.report.terminal_status(), RuntimeStatus::Rejected);
+}
+
+#[test]
+fn event_sequence_overflow_is_structured_and_does_not_dispatch() {
+    let input = input(Payload::BehaviorCommand(command(false)), 2);
+    let mut adapter = FakeAvatarAdapter::new(
+        SemanticKey::new("headless-avatar").unwrap(),
+        AvatarCapabilities::new([AvatarCapability::BehaviorState]),
+    );
+    let mut ids = identity();
+    ids.first_event_sequence = Sequence::new(u64::MAX);
+    let error = execute(&mut adapter, &input, ids).unwrap_err();
+    assert!(matches!(
+        error,
+        nexa_3d_runtime::integration::FlowError::EventSequenceOverflow
+    ));
+    assert!(adapter.requests().is_empty());
 }
