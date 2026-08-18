@@ -423,7 +423,7 @@ fn build_morph_channel(
             cubic_tangents: None,
         });
     }
-    if !raw_weights.len().is_multiple_of(row) {
+    if raw_weights.len() % row != 0 {
         return Err(AssetError::InvalidAnimationData {
             detail: format!(
                 "morph weight output count {} does not divide into {keyframes} keyframes",
@@ -468,7 +468,7 @@ type SplitCubicValues = (
 );
 
 fn split_cubic_values(raw_values: Vec<ChannelValues>) -> Result<SplitCubicValues, AssetError> {
-    if !raw_values.len().is_multiple_of(3) {
+    if raw_values.len() % 3 != 0 {
         return Err(AssetError::InvalidAnimationData {
             detail: "cubic-spline output count is not three values per keyframe".into(),
         });

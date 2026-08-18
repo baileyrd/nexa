@@ -26,3 +26,22 @@ if rg -n --glob 'Cargo.toml' --glob '*.rs' \
   echo "nexa-avatar references a forbidden renderer/platform/provider/runtime dependency" >&2
   exit 1
 fi
+
+# Renderer and OS-window dependencies belong exclusively to the viewer composition root.
+if cargo tree -p nexa-3d --no-default-features --edges normal | rg -q '\b(wgpu|winit|pollster)\b'; then
+  echo "nexa-3d headless dependency graph contains viewer dependencies" >&2
+  exit 1
+fi
+if cargo tree -p nexa-3d-validate --edges normal | rg -q '\b(wgpu|winit|pollster)\b'; then
+  echo "nexa-3d-validate dependency graph contains viewer dependencies" >&2
+  exit 1
+fi
+
+for crate in nexa-domain nexa-events nexa-nbp nexa-avatar; do
+  if cargo tree -p "$crate" --edges normal | rg -q '\b(wgpu|winit|gltf|pollster)\b'; then
+    echo "$crate dependency graph contains a renderer dependency" >&2
+    exit 1
+  fi
+done
+
+echo "3D renderer boundary passed"

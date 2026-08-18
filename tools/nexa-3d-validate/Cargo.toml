@@ -1,0 +1,16 @@
+[package]
+name = "nexa-3d-validate"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "CI-safe, headless Nexa 3D asset and manifest validator."
+
+[[bin]]
+name = "nexa-3d-validate"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+nexa-3d = { path = "../../crates/nexa-3d" }
+serde_json.workspace = true

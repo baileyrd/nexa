@@ -1,0 +1,23 @@
+[package]
+name = "nexa-3d-viewer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Interactive wgpu/winit composition root for the Nexa 3D runtime."
+
+[[bin]]
+name = "nexa-3d-viewer"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+bytemuck.workspace = true
+glam.workspace = true
+nexa-3d = { path = "../../crates/nexa-3d" }
+pollster.workspace = true
+wgpu.workspace = true
+winit.workspace = true
+
+[dev-dependencies]
+naga.workspace = true

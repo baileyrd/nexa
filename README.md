@@ -34,7 +34,9 @@ Speech, canvas, tools, and avatar adapters
 | `content/` | Courses, knowledge, assessments, and labs |
 | `assets/` | Avatars, scenes, and speech assets |
 | `docs/` | Architecture, specifications, ADRs, governance, and provenance |
-| `src/` | Existing 3D validation runtime pending controlled workspace migration |
+| `crates/nexa-3d/` | Renderer-independent 3D runtime, validation, and avatar adapter |
+| `apps/nexa-3d-viewer/` | `wgpu`/`winit` interactive viewer composition root |
+| `tools/nexa-3d-validate/` | GPU-free asset and manifest validation CLI |
 
 A directory containing only `.gitkeep` reserves a planned boundary; it does not indicate that the capability is implemented.
 
@@ -50,7 +52,7 @@ A directory containing only `.gitkeep` reserves a planned boundary; it does not 
 
 ## Current implementation
 
-The first implemented slice is `nexa-3d-runtime`: a renderer-independent GLB validation library, headless acceptance tool, and minimal `wgpu`/`winit` debug viewer.
+The first implemented slice is split across `nexa-3d`, `nexa-3d-validate`, and `nexa-3d-viewer`: a renderer-independent GLB validation library, headless acceptance tool, and minimal `wgpu`/`winit` debug viewer. The library retains the `nexa_3d_runtime` Rust import name for migration compatibility. See [ADR-0009](docs/adr/0009-controlled-3d-workspace-migration.md) for ownership and the complete old-to-new path map.
 
 It currently validates and exercises:
 
@@ -61,12 +63,13 @@ It currently validates and exercises:
 - semantic runtime manifests
 - headless CI-safe asset acceptance
 
-The runtime remains at the repository root temporarily. ADR-0001 requires its later split into `crates/nexa-3d` and `apps/nexa-3d-viewer` only after the migration can preserve tests and behavior.
+Renderer-neutral contracts remain in `nexa-avatar`; GPU, window, and OS input composition exists only in the viewer application.
 
 ## Run the implemented 3D slice
 
 ```powershell
-cargo test
+cargo test --workspace
+cargo check -p nexa-3d --no-default-features
 cargo run --bin nexa-3d-validate -- path\to\Nexa.glb path\to\nexa.runtime.json
 cargo run --bin nexa-3d-viewer -- path\to\Nexa.glb path\to\nexa.runtime.json
 ```

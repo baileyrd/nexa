@@ -1,10 +1,10 @@
-use crate::{
+use anyhow::Context;
+use nexa_3d_runtime::{
     animation::{load_animation_clip, AnimationClip},
     asset::{load_static_geometry, skeleton_lines, AssetReport, StaticVertex},
     control::{InspectorPanel, RuntimeControls},
     skin::{load_skin_rig, SkinBinding, VertexSkin},
 };
-use anyhow::Context;
 use std::time::Instant;
 use wgpu::SurfaceError;
 use winit::{
@@ -342,7 +342,7 @@ struct Viewer<'a> {
 impl<'a> Viewer<'a> {
     async fn new(
         window: &'a winit::window::Window,
-        geometry: &crate::asset::StaticGeometry,
+        geometry: &nexa_3d_runtime::asset::StaticGeometry,
         skeleton: &[StaticVertex],
         skin: Option<&SkinBinding>,
     ) -> anyhow::Result<Self> {
@@ -588,7 +588,7 @@ impl<'a> Viewer<'a> {
     }
     fn render(
         &mut self,
-        camera: &crate::control::OrbitCamera,
+        camera: &nexa_3d_runtime::control::OrbitCamera,
         show_skeleton: bool,
         morph_weights: &[f32],
     ) -> Result<(), SurfaceError> {
