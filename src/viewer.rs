@@ -226,10 +226,38 @@ fn create_skeleton_pipeline(
             topology: wgpu::PrimitiveTopology::LineList,
             ..Default::default()
         },
-        depth_stencil: None,
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: wgpu::TextureFormat::Depth24Plus,
+            depth_write_enabled: false,
+            depth_compare: wgpu::CompareFunction::LessEqual,
+            stencil: Default::default(),
+            bias: Default::default(),
+        }),
         multisample: Default::default(),
         multiview: None,
     })
+}
+
+fn create_depth_view(
+    device: &wgpu::Device,
+    config: &wgpu::SurfaceConfiguration,
+) -> wgpu::TextureView {
+    device
+        .create_texture(&wgpu::TextureDescriptor {
+            label: Some("Nexa depth buffer"),
+            size: wgpu::Extent3d {
+                width: config.width,
+                height: config.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth24Plus,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        })
+        .create_view(&Default::default())
 }
 
 struct Viewer<'a> {
@@ -237,6 +265,7 @@ struct Viewer<'a> {
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
+    depth_view: wgpu::TextureView,
     pipeline: wgpu::RenderPipeline,
     skeleton_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
@@ -289,6 +318,7 @@ impl<'a> Viewer<'a> {
             desired_maximum_frame_latency: 2,
         };
         surface.configure(&device, &config);
+        let depth_view = create_depth_view(&device, &config);
         use wgpu::util::DeviceExt;
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Nexa camera"),
@@ -363,7 +393,7 @@ impl<'a> Viewer<'a> {
                 entry_point: "fs_main",
                 targets: &[Some(wgpu::ColorTargetState {
                     format,
-                    blend: Some(wgpu::BlendState::REPLACE),
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
@@ -372,7 +402,13 @@ impl<'a> Viewer<'a> {
                 cull_mode: Some(wgpu::Face::Back),
                 ..Default::default()
             },
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth24Plus,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
             multisample: Default::default(),
             multiview: None,
         });
@@ -400,6 +436,7 @@ impl<'a> Viewer<'a> {
             device,
             queue,
             config,
+            depth_view,
             pipeline,
             skeleton_pipeline,
             vertex_buffer,
@@ -418,6 +455,7 @@ impl<'a> Viewer<'a> {
         self.config.width = width.max(1);
         self.config.height = height.max(1);
         self.surface.configure(&self.device, &self.config);
+        self.depth_view = create_depth_view(&self.device, &self.config);
     }
     fn render(
         &mut self,
@@ -461,7 +499,14 @@ impl<'a> Viewer<'a> {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
