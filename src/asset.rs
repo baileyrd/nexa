@@ -6,6 +6,8 @@ use std::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::animation::{Channel, ChannelValues};
+
 #[derive(Debug, Error)]
 pub enum AssetError {
     #[error("could not import glTF/GLB `{path}`: {source}")]
@@ -252,7 +254,47 @@ pub fn load_skeleton_debug_geometry(
         .or_else(|| document.scenes().next())
     {
         for node in scene.nodes() {
-            append_skeleton_lines(&mut vertices, &joints, node, glam::Mat4::IDENTITY, None);
+            append_skeleton_lines(
+                &mut vertices,
+                &joints,
+                node,
+                glam::Mat4::IDENTITY,
+                None,
+                None,
+            );
+        }
+    }
+    Ok(vertices)
+}
+
+/// Load joint lines after applying a sampled animation pose. This remains a
+/// diagnostic-only path: mesh skinning stays renderer-specific.
+pub fn load_animated_skeleton_debug_geometry(
+    path: impl AsRef<Path>,
+    channels: &[Channel],
+    time_seconds: f32,
+) -> Result<Vec<StaticVertex>, AssetError> {
+    let path = path.as_ref().to_path_buf();
+    let (document, _buffers, _images) =
+        gltf::import(&path).map_err(|source| AssetError::Import { path, source })?;
+    let joints: HashSet<usize> = document
+        .skins()
+        .flat_map(|skin| skin.joints().map(|joint| joint.index()))
+        .collect();
+    let mut vertices = Vec::new();
+    if let Some(scene) = document
+        .default_scene()
+        .or_else(|| document.scenes().next())
+    {
+        for node in scene.nodes() {
+            append_skeleton_lines(
+                &mut vertices,
+                &joints,
+                node,
+                glam::Mat4::IDENTITY,
+                None,
+                Some((channels, time_seconds)),
+            );
         }
     }
     Ok(vertices)
@@ -264,15 +306,9 @@ fn append_skeleton_lines(
     node: gltf::Node<'_>,
     parent_transform: glam::Mat4,
     closest_parent_joint: Option<glam::Vec3>,
+    animation: Option<(&[Channel], f32)>,
 ) {
-    let matrix = node.transform().matrix();
-    let world_transform = parent_transform
-        * glam::Mat4::from_cols(
-            glam::Vec4::from_array(matrix[0]),
-            glam::Vec4::from_array(matrix[1]),
-            glam::Vec4::from_array(matrix[2]),
-            glam::Vec4::from_array(matrix[3]),
-        );
+    let world_transform = parent_transform * animated_local_transform(&node, animation);
     let position = world_transform.transform_point3(glam::Vec3::ZERO);
     let is_joint = joints.contains(&node.index());
     if is_joint {
@@ -298,8 +334,39 @@ fn append_skeleton_lines(
         closest_parent_joint
     };
     for child in node.children() {
-        append_skeleton_lines(vertices, joints, child, world_transform, parent_joint);
+        append_skeleton_lines(
+            vertices,
+            joints,
+            child,
+            world_transform,
+            parent_joint,
+            animation,
+        );
     }
+}
+
+fn animated_local_transform(
+    node: &gltf::Node<'_>,
+    animation: Option<(&[Channel], f32)>,
+) -> glam::Mat4 {
+    let (translation, rotation, scale) = node.transform().decomposed();
+    let mut translation = glam::Vec3::from(translation);
+    let mut rotation = glam::Quat::from_array(rotation);
+    let mut scale = glam::Vec3::from(scale);
+    if let Some((channels, time_seconds)) = animation {
+        for channel in channels
+            .iter()
+            .filter(|channel| channel.node_index == node.index())
+        {
+            match channel.sample(time_seconds) {
+                Some(ChannelValues::Translation(value)) => translation = value,
+                Some(ChannelValues::Rotation(value)) => rotation = value,
+                Some(ChannelValues::Scale(value)) => scale = value,
+                Some(ChannelValues::MorphWeight(_)) | None => {}
+            }
+        }
+    }
+    glam::Mat4::from_scale_rotation_translation(scale, rotation, translation)
 }
 
 fn append_node(

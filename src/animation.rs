@@ -231,4 +231,42 @@ mod tests {
         assert!(facing.x.abs() > 0.9999, "facing was {facing:?}");
         assert!(facing.y.abs() < 0.0001 && facing.z.abs() < 0.0001);
     }
+
+    #[test]
+    fn gltf_translation_channel_crosses_the_import_boundary() {
+        let directory = tempfile::tempdir().unwrap();
+        let gltf_path = directory.path().join("animated.gltf");
+        let bin_path = directory.path().join("animated.bin");
+        let mut bytes = Vec::new();
+        for value in [0.0_f32, 1.0] {
+            bytes.extend(value.to_le_bytes());
+        }
+        for value in [0.0_f32, 0.0, 0.0, 2.0, 0.0, 0.0] {
+            bytes.extend(value.to_le_bytes());
+        }
+        std::fs::write(bin_path, bytes).unwrap();
+        std::fs::write(
+            &gltf_path,
+            r#"{
+              "asset":{"version":"2.0"},
+              "buffers":[{"uri":"animated.bin","byteLength":32}],
+              "bufferViews":[
+                {"buffer":0,"byteOffset":0,"byteLength":8},
+                {"buffer":0,"byteOffset":8,"byteLength":24}
+              ],
+              "accessors":[
+                {"bufferView":0,"componentType":5126,"count":2,"type":"SCALAR","min":[0],"max":[1]},
+                {"bufferView":1,"componentType":5126,"count":2,"type":"VEC3"}
+              ],
+              "nodes":[{"name":"Nexa_Head"}],
+              "animations":[{"samplers":[{"input":0,"output":1,"interpolation":"LINEAR"}],"channels":[{"sampler":0,"target":{"node":0,"path":"translation"}}]}]
+            }"#,
+        )
+        .unwrap();
+
+        let channels = load_supported_channels(&gltf_path, 0).unwrap();
+        assert_eq!(channels.len(), 1);
+        let pose = sample_pose(&channels, 0.25);
+        assert_eq!(pose.nodes[&0].translation, Vec3::new(0.5, 0.0, 0.0));
+    }
 }

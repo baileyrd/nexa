@@ -1,5 +1,9 @@
 use crate::{
-    asset::{load_skeleton_debug_geometry, load_static_geometry, AssetReport, StaticVertex},
+    animation::load_supported_channels,
+    asset::{
+        load_animated_skeleton_debug_geometry, load_skeleton_debug_geometry, load_static_geometry,
+        AssetReport, StaticVertex,
+    },
     control::{InspectorPanel, RuntimeControls},
 };
 use anyhow::Context;
@@ -24,6 +28,9 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
     ));
     let geometry = load_static_geometry(&report.source)?;
     let skeleton = load_skeleton_debug_geometry(&report.source)?;
+    let animation_channels: Vec<_> = (0..report.animations.len())
+        .map(|index| load_supported_channels(&report.source, index))
+        .collect::<Result<_, _>>()?;
     let mut controls = RuntimeControls::default();
     if let Some(bounds) = geometry.bounds() {
         controls.camera.frame_bounds(bounds);
@@ -119,6 +126,15 @@ pub fn run(report: AssetReport) -> anyhow::Result<()> {
                     .unwrap_or(0.0);
                 controls.advance_looping((now - last_update).as_secs_f32(), duration);
                 last_update = now;
+                if let Some(channels) = animation_channels.get(controls.selected_animation) {
+                    if let Ok(posed_skeleton) = load_animated_skeleton_debug_geometry(
+                        &report.source,
+                        channels,
+                        controls.animation_time_seconds,
+                    ) {
+                        viewer.update_skeleton(&posed_skeleton);
+                    }
+                }
                 window.set_title(&title(&report, &controls));
                 window.request_redraw();
             }
@@ -434,7 +450,7 @@ impl<'a> Viewer<'a> {
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Nexa skeleton debug vertices"),
                 contents: bytemuck::cast_slice(skeleton),
-                usage: wgpu::BufferUsages::VERTEX,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             })
         });
         Ok(Self {
@@ -462,6 +478,15 @@ impl<'a> Viewer<'a> {
         self.config.height = height.max(1);
         self.surface.configure(&self.device, &self.config);
         self.depth_view = create_depth_view(&self.device, &self.config);
+    }
+    fn update_skeleton(&mut self, skeleton: &[StaticVertex]) {
+        if skeleton.len() as u32 != self.skeleton_vertex_count {
+            return;
+        }
+        if let Some(buffer) = &self.skeleton_vertex_buffer {
+            self.queue
+                .write_buffer(buffer, 0, bytemuck::cast_slice(skeleton));
+        }
     }
     fn render(
         &mut self,
