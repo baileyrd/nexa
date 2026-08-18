@@ -474,6 +474,7 @@ fn append_node(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::animation::load_supported_channels;
 
     #[test]
     fn bounds_cover_every_static_vertex() {
@@ -506,5 +507,49 @@ mod tests {
             validate_render_geometry(&StaticGeometry::default()),
             Err(AssetError::MissingGeometry)
         ));
+    }
+
+    #[test]
+    fn animated_skeleton_lines_follow_the_sampled_joint_pose() {
+        let directory = tempfile::tempdir().unwrap();
+        let gltf_path = directory.path().join("rig.gltf");
+        let bin_path = directory.path().join("rig.bin");
+        let mut bytes = Vec::new();
+        for value in [0.0_f32, 1.0] {
+            bytes.extend(value.to_le_bytes());
+        }
+        for value in [0.0_f32, 0.0, 0.0, 2.0, 0.0, 0.0] {
+            bytes.extend(value.to_le_bytes());
+        }
+        std::fs::write(bin_path, bytes).unwrap();
+        std::fs::write(
+            &gltf_path,
+            r#"{
+              "asset":{"version":"2.0"},
+              "buffers":[{"uri":"rig.bin","byteLength":32}],
+              "bufferViews":[
+                {"buffer":0,"byteOffset":0,"byteLength":8},
+                {"buffer":0,"byteOffset":8,"byteLength":24}
+              ],
+              "accessors":[
+                {"bufferView":0,"componentType":5126,"count":2,"type":"SCALAR","min":[0],"max":[1]},
+                {"bufferView":1,"componentType":5126,"count":2,"type":"VEC3"}
+              ],
+              "nodes":[
+                {"name":"Root","children":[1]},
+                {"name":"Head","translation":[0,1,0]}
+              ],
+              "skins":[{"joints":[0,1],"skeleton":0}],
+              "scenes":[{"nodes":[0]}],"scene":0,
+              "animations":[{"samplers":[{"input":0,"output":1}],"channels":[{"sampler":0,"target":{"node":0,"path":"translation"}}]}]
+            }"#,
+        )
+        .unwrap();
+
+        let channels = load_supported_channels(&gltf_path, 0).unwrap();
+        let lines = load_animated_skeleton_debug_geometry(&gltf_path, &channels, 0.5).unwrap();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0].position, [1.0, 0.0, 0.0]);
+        assert_eq!(lines[1].position, [1.0, 1.0, 0.0]);
     }
 }
