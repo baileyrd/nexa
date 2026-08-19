@@ -83,6 +83,8 @@ uuid_id!(
     KnowledgeArtifactId,
     KnowledgeChunkId,
     IngestionJobId,
+    EmbeddingRecordId,
+    EmbeddingProfileId,
     RetrievalQueryId,
     RetrievalResultId,
     CitationId

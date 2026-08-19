@@ -1,4 +1,4 @@
-# Phase 4 traceability — governed ingestion and lexical retrieval increments
+# Phase 4 traceability — governed ingestion, lexical, and vector retrieval increments
 
 | Requirement | Contract/evidence | Status |
 |---|---|---|
@@ -13,9 +13,14 @@
 | Repository-neutral corpus reading | `KnowledgeRetrievalReader`, validated `InMemoryRetrievalSnapshot` | Implemented slice |
 | Deterministic tokenization and scoring | ADR-0016; exact term evidence and stable tie-breaking tests | Implemented slice |
 | Course/lesson retrieval scope | exact optional filter matching and exclusions | Implemented slice |
-| Vector/hybrid retrieval and reranking | Explicitly deferred by ADR-0016 | Not implemented |
+| Governed embedding identities, profiles, fingerprinting, and chunk binding | `EmbeddingProfile`, `ChunkEmbedding`; ADR-0017 | Implemented slice |
+| Exact deterministic vector arithmetic and evidence | signed `i16` vectors, checked ordered `i64` dot product, stable UUID tie-breaking | Implemented slice |
+| Repository-neutral vector corpus and immutable validation | `VectorRetrievalReader`, `InMemoryVectorSnapshot` | Implemented slice |
+| Governance, scope, missing embedding, and result-limit exclusions | `VectorExclusionReason`; pre-ranking policy tests | Implemented slice |
+| Reference-only vector query/result contracts and redaction | `VectorRetrievalQuery`, `VectorRetrievalResult`; wire/privacy tests | Implemented slice |
+| Hybrid fusion and reranking | Explicitly deferred by ADR-0017 | Not implemented |
 | Context assembly, packing, and token budgeting | Explicitly deferred by ADR-0016 | Not implemented |
 | Citation resolution and tutor behavior | Explicitly deferred by ADR-0016 | Not implemented |
-| Model providers, networking, and durable adapters | Explicitly deferred by ADR-0016 | Not implemented |
+| Model providers, networking, vector databases, and durable adapters | Explicitly deferred by ADR-0017 | Not implemented |
 
-Phase 4 is **in progress**. Embeddings, vector/hybrid retrieval, reranking, authority/freshness ranking, context assembly, context packing, token budgeting, citation resolution, tutor intelligence, model-provider integration, networking, and durable adapters remain unimplemented. The reconstructed knowledge and tutor specifications retain their registry authority; these increments do not promote them.
+Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministic vector retrieval are implemented. Hybrid fusion, reranking, authority/freshness ranking, context assembly, context packing, token budgeting, citations, tutor intelligence and tutor-response generation, provider integration, networking, vector databases, and durable adapters remain unimplemented. The reconstructed knowledge and tutor specifications retain their registry authority; these increments do not promote them.
