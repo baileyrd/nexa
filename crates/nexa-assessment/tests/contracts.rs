@@ -154,6 +154,32 @@ fn duplicate_dangling_and_mapping_contracts_are_rejected() {
         }]
     )
     .is_err());
+
+    let uncovered = Rubric::new(
+        id(8),
+        vec![RubricCriterion {
+            id: id(7),
+            description: "criterion".into(),
+            weight: score(1.0),
+            competency_id: c,
+        }],
+    )
+    .unwrap();
+    assert!(Assessment::new(
+        id(1),
+        ProtocolVersion::new(1, 0),
+        "x",
+        AssessmentMode::Practice,
+        SCORING_POLICY_V1,
+        score(0.5),
+        vec![q(
+            1,
+            Evaluation::Rubric { rubric_id: id(8) },
+            vec![c, id(10)],
+        )],
+        vec![uncovered],
+    )
+    .is_err());
 }
 #[test]
 fn score_boundaries_and_exact_evaluation() {
@@ -255,6 +281,16 @@ fn rubric_weights_and_multi_question_scores_aggregate() {
     );
     assert_eq!(s.result.score.get(), 0.625);
     assert_eq!(s.evidence.len(), 2);
+    assert_eq!(s.evidence[0].competency_id, c1);
+    assert_eq!(
+        s.evidence[0].outcome,
+        nexa_student::EvidenceOutcome::Success
+    );
+    assert_eq!(s.evidence[1].competency_id, c2);
+    assert_eq!(
+        s.evidence[1].outcome,
+        nexa_student::EvidenceOutcome::PartialSuccess
+    );
     let s2 = submit(
         &a,
         &s.attempt,

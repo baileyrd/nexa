@@ -282,13 +282,16 @@ impl TryFrom<AssessmentWire> for Assessment {
                     .ok_or(AssessmentError::InvalidContract(
                         "dangling rubric reference",
                     ))?;
-                if rubric
+                let rubric_competencies = rubric
                     .criteria
                     .iter()
-                    .any(|c| !q.competency_ids.contains(&c.competency_id))
-                {
+                    .map(|criterion| criterion.competency_id)
+                    .collect::<BTreeSet<_>>();
+                let question_competencies =
+                    q.competency_ids.iter().copied().collect::<BTreeSet<_>>();
+                if rubric_competencies != question_competencies {
                     return Err(AssessmentError::InvalidContract(
-                        "rubric criterion maps outside question competencies",
+                        "rubric criteria must exactly cover question competencies",
                     ));
                 }
             }

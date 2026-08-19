@@ -297,14 +297,80 @@ pub enum AssessmentEvaluationOutcome {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "AssessmentResponseEvaluatedWire")]
 pub struct AssessmentResponseEvaluated {
     pub attempt_id: AttemptId,
     pub assessment_id: AssessmentId,
     pub item_instance_id: AssessmentItemInstanceId,
     pub response_id: ResponseId,
     pub score: MasteryScore,
-    pub outcome: AssessmentEvaluationOutcome,
+    outcome: AssessmentEvaluationOutcome,
     pub policy_version: ProtocolVersion,
+}
+#[derive(Deserialize)]
+struct AssessmentResponseEvaluatedWire {
+    attempt_id: AttemptId,
+    assessment_id: AssessmentId,
+    item_instance_id: AssessmentItemInstanceId,
+    response_id: ResponseId,
+    score: MasteryScore,
+    outcome: AssessmentEvaluationOutcome,
+    policy_version: ProtocolVersion,
+}
+
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
+#[error("assessment event derived fields are inconsistent with their scores")]
+pub struct InvalidAssessmentEvent;
+
+fn evaluation_outcome(score: MasteryScore) -> AssessmentEvaluationOutcome {
+    if score.get() == 1.0 {
+        AssessmentEvaluationOutcome::Correct
+    } else if score.get() == 0.0 {
+        AssessmentEvaluationOutcome::Incorrect
+    } else {
+        AssessmentEvaluationOutcome::Partial
+    }
+}
+
+impl TryFrom<AssessmentResponseEvaluatedWire> for AssessmentResponseEvaluated {
+    type Error = InvalidAssessmentEvent;
+    fn try_from(w: AssessmentResponseEvaluatedWire) -> Result<Self, Self::Error> {
+        if w.outcome != evaluation_outcome(w.score) {
+            return Err(InvalidAssessmentEvent);
+        }
+        Ok(Self {
+            attempt_id: w.attempt_id,
+            assessment_id: w.assessment_id,
+            item_instance_id: w.item_instance_id,
+            response_id: w.response_id,
+            score: w.score,
+            outcome: w.outcome,
+            policy_version: w.policy_version,
+        })
+    }
+}
+impl AssessmentResponseEvaluated {
+    pub fn new(
+        attempt_id: AttemptId,
+        assessment_id: AssessmentId,
+        item_instance_id: AssessmentItemInstanceId,
+        response_id: ResponseId,
+        score: MasteryScore,
+        policy_version: ProtocolVersion,
+    ) -> Self {
+        Self {
+            attempt_id,
+            assessment_id,
+            item_instance_id,
+            response_id,
+            score,
+            outcome: evaluation_outcome(score),
+            policy_version,
+        }
+    }
+    pub const fn outcome(&self) -> AssessmentEvaluationOutcome {
+        self.outcome
+    }
 }
 impl DomainEvent for AssessmentResponseEvaluated {
     const KIND: EventKind = EventKind::AssessmentResponseEvaluated;
@@ -318,7 +384,7 @@ pub struct AssessmentCompleted {
     pub assessment_id: AssessmentId,
     pub score: MasteryScore,
     pub passing_score: MasteryScore,
-    pub passed: bool,
+    passed: bool,
     pub policy_version: ProtocolVersion,
 }
 #[derive(Deserialize)]
@@ -331,10 +397,10 @@ struct AssessmentCompletedWire {
     policy_version: ProtocolVersion,
 }
 impl TryFrom<AssessmentCompletedWire> for AssessmentCompleted {
-    type Error = &'static str;
+    type Error = InvalidAssessmentEvent;
     fn try_from(w: AssessmentCompletedWire) -> Result<Self, Self::Error> {
         if w.passed != (w.score.get() >= w.passing_score.get()) {
-            return Err("passed must agree with score and passing_score");
+            return Err(InvalidAssessmentEvent);
         }
         Ok(Self {
             attempt_id: w.attempt_id,
@@ -344,6 +410,27 @@ impl TryFrom<AssessmentCompletedWire> for AssessmentCompleted {
             passed: w.passed,
             policy_version: w.policy_version,
         })
+    }
+}
+impl AssessmentCompleted {
+    pub fn new(
+        attempt_id: AttemptId,
+        assessment_id: AssessmentId,
+        score: MasteryScore,
+        passing_score: MasteryScore,
+        policy_version: ProtocolVersion,
+    ) -> Self {
+        Self {
+            attempt_id,
+            assessment_id,
+            score,
+            passing_score,
+            passed: score.get() >= passing_score.get(),
+            policy_version,
+        }
+    }
+    pub const fn passed(&self) -> bool {
+        self.passed
     }
 }
 impl DomainEvent for AssessmentCompleted {
