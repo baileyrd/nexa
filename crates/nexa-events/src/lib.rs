@@ -2,9 +2,9 @@
 #![forbid(unsafe_code)]
 
 use nexa_domain::{
-    BehaviorId, CompetencyId, CorrelationId, EndpointId, EventId, EvidenceId, LessonId,
-    LessonStepId, LessonTransitionId, MasteryScore, MessageId, ProtocolVersion, SemanticKey,
-    Sequence, SessionId, StudentId, SubjectId, Timestamp, TraceId,
+    AssessmentId, AttemptId, BehaviorId, CompetencyId, CorrelationId, EndpointId, EventId,
+    EvidenceId, LessonId, LessonStepId, LessonTransitionId, MasteryScore, MessageId,
+    ProtocolVersion, SemanticKey, Sequence, SessionId, StudentId, SubjectId, Timestamp, TraceId,
 };
 use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
@@ -63,6 +63,10 @@ pub enum EventKind {
     LessonLifecycleChanged,
     #[serde(rename = "lesson.transition.applied")]
     LessonTransitionApplied,
+    #[serde(rename = "assessment.response.evaluated")]
+    AssessmentResponseEvaluated,
+    #[serde(rename = "assessment.completed")]
+    AssessmentCompleted,
 }
 
 /// Operational, non-domain envelope metadata. Never place secrets here.
@@ -280,6 +284,32 @@ pub struct CompetencyUpdated {
 }
 impl DomainEvent for CompetencyUpdated {
     const KIND: EventKind = EventKind::CompetencyUpdated;
+}
+
+/// Privacy-minimal deterministic evaluation fact; response content and answer keys are excluded.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AssessmentResponseEvaluated {
+    pub attempt_id: AttemptId,
+    pub assessment_id: AssessmentId,
+    pub score: MasteryScore,
+    pub outcome: SemanticKey,
+    pub policy_version: ProtocolVersion,
+}
+impl DomainEvent for AssessmentResponseEvaluated {
+    const KIND: EventKind = EventKind::AssessmentResponseEvaluated;
+}
+
+/// Privacy-minimal terminal assessment fact.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AssessmentCompleted {
+    pub attempt_id: AttemptId,
+    pub assessment_id: AssessmentId,
+    pub score: MasteryScore,
+    pub passed: bool,
+    pub policy_version: ProtocolVersion,
+}
+impl DomainEvent for AssessmentCompleted {
+    const KIND: EventKind = EventKind::AssessmentCompleted;
 }
 
 /// Privacy-minimal pedagogy routing fact. Vocabulary remains semantic to avoid a crate cycle.

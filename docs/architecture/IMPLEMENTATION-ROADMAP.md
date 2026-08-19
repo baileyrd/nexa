@@ -40,23 +40,24 @@ Exit: the 3D implementation consumes NBP/avatar contracts and all existing tests
 ## Phase 3 — Build the learning core
 
 **Status:** In progress. The governed student-model/evidence-ledger, deterministic pedagogy policy,
-and headless curriculum/lesson-transition slices are implemented; the Phase 3 exit gate is not satisfied.
+headless curriculum/lesson-transition, and deterministic assessment slices are implemented; the Phase 3 exit gate is not satisfied.
 
 Implement:
 
 - [x] governed student model, immutable evidence ledger, versioned replay policy, and persistence ports
 - [x] pure, versioned, explainable pedagogy policy over read-only mastery projections
 - [x] governed curriculum contracts and pure, versioned headless lesson transitions
-- assessment engine
+- [x] dependency-light assessment contracts, deterministic scoring, lifecycle, and evidence creation
 - governed persistence ports
 
 Exit: a headless deterministic lesson can adapt, assess, and update student state without an LLM or avatar.
 
 See [ADR-0010](../adr/0010-learning-state-evidence-and-persistence.md),
 [ADR-0011](../adr/0011-pedagogy-policy-ownership-and-versioning.md),
-[ADR-0012](../adr/0012-governed-curriculum-and-lesson-transitions.md), and the
-[Phase 3 traceability matrix](PHASE-3-TRACEABILITY.md). The next recommended increment is the
-headless assessment contract for scoring and immutable evidence creation.
+[ADR-0012](../adr/0012-governed-curriculum-and-lesson-transitions.md),
+[ADR-0013](../adr/0013-assessment-contract-scoring-and-evidence.md), and the
+[Phase 3 traceability matrix](PHASE-3-TRACEABILITY.md). The next recommended increment is headless composition of the implemented learning-core contracts
+behind governed persistence ports; durable adapter semantics remain unresolved.
 
 ## Phase 4 — Add knowledge and tutor intelligence
 

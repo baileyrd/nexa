@@ -1103,6 +1103,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "nexa-assessment"
+version = "0.1.0"
+dependencies = [
+ "nexa-domain",
+ "nexa-student",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "nexa-avatar"
 version = "0.1.0"
 dependencies = [
