@@ -89,7 +89,9 @@ uuid_id!(
     RetrievalResultId,
     HybridRetrievalResultId,
     ContextPackageId,
-    CitationId
+    CitationSetId,
+    CitationId,
+    ClaimId
 );
 
 /// A finite mastery estimate in the inclusive range `[0, 1]`.

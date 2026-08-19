@@ -35,6 +35,7 @@ This registry is the navigation and governance authority for Nexa system specifi
 | ADR-0017 | [Governed embeddings and deterministic vector retrieval](adr/0017-governed-vector-retrieval.md) | Accepted | Phase 4 embedding profiles, exact integer vectors, validated snapshots, governance filtering, and stable vector ranking |
 | ADR-0018 | [Exact hybrid fusion and provider-free reranking](adr/0018-deterministic-hybrid-fusion.md) | Accepted | Phase 4 exact rank fusion, governance reconciliation, evidence, and stable reranking |
 | ADR-0019 | [Governed deterministic context assembly](adr/0019-governed-context-assembly.md) | Accepted | Phase 4 governed material reconciliation, exact token accounting, whole-chunk packing, and replay evidence |
+| ADR-0020 | [Governed deterministic citation resolution](adr/0020-governed-deterministic-citation-resolution.md) | Accepted | Phase 4 claim-to-context evidence, closed source locators, deterministic resolution, and standalone replay |
 | ADR-0014 | [Learning-core composition and atomicity](adr/0014-learning-core-composition-and-atomicity.md) | Accepted | Phase 3 policy composition, unit of work, idempotency, and deferred durable adapters |
 | ADR-0008 | [Controlled 3D workspace migration and ownership](adr/0008-controlled-3d-workspace-migration.md) | Accepted | 3D library, viewer, and validator ownership after migration |
 
@@ -48,7 +49,7 @@ This registry is the navigation and governance authority for Nexa system specifi
 | 02 | NEXA-STU-001 | Student model | Implemented Phase 3 slice | `nexa-student` |
 | 03 | NEXA-PED-001 | Adaptive pedagogy | Implemented Phase 3 slice | `nexa-pedagogy` |
 | 04 | NEXA-TUTOR-001 | Tutor intelligence | Baseline Draft | `nexa-tutor` |
-| 05 | NEXA-KNOW-001 | Knowledge and RAG | Implemented ingestion/provenance, retrieval, hybrid fusion, and deterministic context-assembly slices; Phase 4 in progress | `nexa-knowledge` |
+| 05 | NEXA-KNOW-001 | Knowledge and RAG | Implemented ingestion/provenance, retrieval, hybrid fusion, deterministic context assembly, and citation-resolution slices; Phase 4 in progress | `nexa-knowledge` |
 | 06 | NEXA-LESSON-001 | Curriculum and lessons | Implemented Phase 3 slice | `nexa-lessons` |
 | 07 | NEXA-ASMT-001 | Assessment | Implemented Phase 3 slice | `nexa-assessment` |
 | 08 | NEXA-LAB-001 | Labs and sandboxes | Baseline Draft | `nexa-labs` |
