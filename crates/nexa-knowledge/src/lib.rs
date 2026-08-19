@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error;
+
+mod retrieval;
+pub use retrieval::*;
 pub const MAX_ARTIFACT_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_METADATA_ENTRIES: usize = 64;
 pub const MAX_FIELD_BYTES: usize = 1024;
@@ -961,5 +964,15 @@ impl KnowledgeUnitOfWork for InMemoryKnowledgeRepository {
         n.jobs.insert(previous_job, restored);
         *self = n;
         Ok(())
+    }
+}
+
+impl KnowledgeRetrievalReader for InMemoryKnowledgeRepository {
+    fn load_retrieval_corpus(&self) -> Result<RetrievalCorpusRecords, RetrievalError> {
+        Ok(RetrievalCorpusRecords {
+            sources: self.sources.values().cloned().collect(),
+            artifacts: self.artifacts.values().cloned().collect(),
+            chunks: self.chunks.values().cloned().collect(),
+        })
     }
 }

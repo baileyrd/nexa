@@ -61,9 +61,10 @@ See [ADR-0010](../adr/0010-learning-state-evidence-and-persistence.md),
 
 ## Phase 4 — Add knowledge and tutor intelligence
 
-**Status:** In progress. Only the dependency-light ingestion, integrity, structural provenance, visibility, and atomic staging contract slice is implemented (ADR-0015). Lexical retrieval, vector embeddings, hybrid ranking, reranking, context packing, citation resolution, tutor intelligence, provider integration, and durable adapters remain unimplemented.
+**Status:** In progress. The dependency-light ingestion, integrity, structural provenance, visibility, atomic staging (ADR-0015), and deterministic governed lexical retrieval (ADR-0016) slices are implemented. Embeddings, vector/hybrid retrieval, reranking, context assembly and packing, token budgeting, citation resolution, tutor intelligence, model-provider integration, and durable adapters remain unimplemented.
 
 - Source ingestion and provenance
+- [x] deterministic governed lexical retrieval
 - hybrid retrieval and reranking
 - context assembly and token budgeting
 - structured tutor response contracts
