@@ -1,4 +1,4 @@
-# Phase 4 traceability — governed ingestion, lexical, and vector retrieval increments
+# Phase 4 traceability — governed ingestion and retrieval increments
 
 | Requirement | Contract/evidence | Status |
 |---|---|---|
@@ -18,9 +18,9 @@
 | Repository-neutral vector corpus and immutable validation | `VectorRetrievalReader`, `InMemoryVectorSnapshot` | Implemented slice |
 | Governance, scope, missing embedding, and result-limit exclusions | `VectorExclusionReason`; pre-ranking policy tests | Implemented slice |
 | Reference-only vector query/result contracts and redaction | `VectorRetrievalQuery`, `VectorRetrievalResult`; wire/privacy tests | Implemented slice |
-| Hybrid fusion and reranking | Explicitly deferred by ADR-0017 | Not implemented |
+| Exact hybrid fusion and provider-free reranking | `HybridFusionRequest`, exact reduced `HybridScore`, governed reconciliation, reference-only evidence; ADR-0018 | Implemented slice |
 | Context assembly, packing, and token budgeting | Explicitly deferred by ADR-0016 | Not implemented |
 | Citation resolution and tutor behavior | Explicitly deferred by ADR-0016 | Not implemented |
 | Model providers, networking, vector databases, and durable adapters | Explicitly deferred by ADR-0017 | Not implemented |
 
-Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministic vector retrieval are implemented. Hybrid fusion, reranking, authority/freshness ranking, context assembly, context packing, token budgeting, citations, tutor intelligence and tutor-response generation, provider integration, networking, vector databases, and durable adapters remain unimplemented. The reconstructed knowledge and tutor specifications retain their registry authority; these increments do not promote them.
+Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministic vector retrieval are implemented. Learned/cross-encoder reranking, authority/freshness ranking, context assembly, context packing, token budgeting, citations, tutor intelligence and tutor-response generation, provider integration, networking, vector databases, and durable adapters remain unimplemented. The reconstructed knowledge and tutor specifications retain their registry authority; these increments do not promote them.

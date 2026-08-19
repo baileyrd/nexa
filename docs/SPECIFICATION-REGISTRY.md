@@ -33,6 +33,7 @@ This registry is the navigation and governance authority for Nexa system specifi
 | ADR-0015 | [Governed knowledge ingestion and provenance](adr/0015-governed-knowledge-ingestion.md) | Accepted | Phase 4 artifact integrity, provenance, visibility, lifecycle, and atomic staging |
 | ADR-0016 | [Deterministic governed lexical retrieval](adr/0016-deterministic-lexical-retrieval.md) | Accepted | Phase 4 lexical query contracts, corpus validation, governance filtering, scoring, and stable ordering |
 | ADR-0017 | [Governed embeddings and deterministic vector retrieval](adr/0017-governed-vector-retrieval.md) | Accepted | Phase 4 embedding profiles, exact integer vectors, validated snapshots, governance filtering, and stable vector ranking |
+| ADR-0018 | [Exact hybrid fusion and provider-free reranking](adr/0018-deterministic-hybrid-fusion.md) | Accepted | Phase 4 exact rank fusion, governance reconciliation, evidence, and stable reranking |
 | ADR-0014 | [Learning-core composition and atomicity](adr/0014-learning-core-composition-and-atomicity.md) | Accepted | Phase 3 policy composition, unit of work, idempotency, and deferred durable adapters |
 | ADR-0008 | [Controlled 3D workspace migration and ownership](adr/0008-controlled-3d-workspace-migration.md) | Accepted | 3D library, viewer, and validator ownership after migration |
 

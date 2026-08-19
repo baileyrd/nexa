@@ -13,6 +13,8 @@ mod retrieval;
 pub use retrieval::*;
 mod vector;
 pub use vector::*;
+mod hybrid;
+pub use hybrid::*;
 pub const MAX_ARTIFACT_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_METADATA_ENTRIES: usize = 64;
 pub const MAX_FIELD_BYTES: usize = 1024;
