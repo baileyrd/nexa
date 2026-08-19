@@ -151,3 +151,68 @@ fn pedagogy_event_golden_round_trip_and_malformed_rationales() {
         assert!(serde_json::from_value::<Event<PedagogyDecisionMade>>(malformed).is_err());
     }
 }
+
+#[test]
+fn assessment_payloads_have_closed_round_trip_contracts() {
+    let evaluated = AssessmentResponseEvaluated::new(
+        "018f6f3e-8c5d-7a20-8000-000000000010".parse().unwrap(),
+        "018f6f3e-8c5d-7a20-8000-000000000011".parse().unwrap(),
+        "018f6f3e-8c5d-7a20-8000-000000000012".parse().unwrap(),
+        "018f6f3e-8c5d-7a20-8000-000000000013".parse().unwrap(),
+        MasteryScore::new(0.5).unwrap(),
+        ProtocolVersion::new(1, 0),
+    );
+    let golden = r#"{
+  "attempt_id": "018f6f3e-8c5d-7a20-8000-000000000010",
+  "assessment_id": "018f6f3e-8c5d-7a20-8000-000000000011",
+  "item_instance_id": "018f6f3e-8c5d-7a20-8000-000000000012",
+  "response_id": "018f6f3e-8c5d-7a20-8000-000000000013",
+  "score": 0.5,
+  "outcome": "partial",
+  "policy_version": "1.0"
+}"#;
+    assert_eq!(serde_json::to_string_pretty(&evaluated).unwrap(), golden);
+    let encoded = serde_json::to_value(&evaluated).unwrap();
+    assert_eq!(encoded["outcome"], "partial");
+    assert_eq!(
+        serde_json::from_value::<AssessmentResponseEvaluated>(encoded.clone()).unwrap(),
+        evaluated
+    );
+    let mut malformed = encoded.clone();
+    malformed["outcome"] = "mostly_right".into();
+    assert!(serde_json::from_value::<AssessmentResponseEvaluated>(malformed).is_err());
+    for (score, outcome) in [(0.0, "correct"), (0.2, "incorrect"), (1.0, "partial")] {
+        let mut inconsistent = encoded.clone();
+        inconsistent["score"] = score.into();
+        inconsistent["outcome"] = outcome.into();
+        assert!(serde_json::from_value::<AssessmentResponseEvaluated>(inconsistent).is_err());
+    }
+
+    let completed = AssessmentCompleted::new(
+        evaluated.attempt_id,
+        evaluated.assessment_id,
+        MasteryScore::new(0.8).unwrap(),
+        MasteryScore::new(0.6).unwrap(),
+        ProtocolVersion::new(1, 0),
+    );
+    assert!(completed.passed());
+    let encoded = serde_json::to_value(&completed).unwrap();
+    assert_eq!(
+        serde_json::to_string_pretty(&completed).unwrap(),
+        r#"{
+  "attempt_id": "018f6f3e-8c5d-7a20-8000-000000000010",
+  "assessment_id": "018f6f3e-8c5d-7a20-8000-000000000011",
+  "score": 0.8,
+  "passing_score": 0.6,
+  "passed": true,
+  "policy_version": "1.0"
+}"#
+    );
+    assert_eq!(
+        serde_json::from_value::<AssessmentCompleted>(encoded.clone()).unwrap(),
+        completed
+    );
+    let mut contradictory = encoded;
+    contradictory["passed"] = false.into();
+    assert!(serde_json::from_value::<AssessmentCompleted>(contradictory).is_err());
+}

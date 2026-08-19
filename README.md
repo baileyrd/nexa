@@ -38,6 +38,7 @@ Speech, canvas, tools, and avatar adapters
 | `crates/nexa-student/` | Headless student model, immutable evidence ledger, and replayable mastery policy |
 | `crates/nexa-pedagogy/` | Pure, versioned, explainable policy over read-only mastery projections |
 | `crates/nexa-lessons/` | Validated authored curriculum and pure, versioned headless lesson transitions |
+| `crates/nexa-assessment/` | Validated assessment contracts, deterministic scoring, attempt lifecycle, and evidence creation |
 | `apps/nexa-3d-viewer/` | `wgpu`/`winit` interactive viewer composition root |
 | `tools/nexa-3d-validate/` | GPU-free asset and manifest validation CLI |
 
@@ -74,10 +75,11 @@ version. The pure pedagogy policy reads projections without mutation and returns
 options with stable rationale codes. Only ports and deterministic test adapters exist; no database or async
 runtime has been selected. The lesson slice validates immutable authored graphs and consumes only
 explicitly authored pedagogy routes into atomic progress transitions. Phase 3 remains incomplete
-pending the assessment engine.
+pending end-to-end composition and governed durable persistence.
 See [ADR-0010](docs/adr/0010-learning-state-evidence-and-persistence.md),
 [ADR-0011](docs/adr/0011-pedagogy-policy-ownership-and-versioning.md),
-[ADR-0012](docs/adr/0012-governed-curriculum-and-lesson-transitions.md), and the
+[ADR-0012](docs/adr/0012-governed-curriculum-and-lesson-transitions.md),
+[ADR-0013](docs/adr/0013-assessment-contract-scoring-and-evidence.md), and the
 [Phase 3 traceability matrix](docs/architecture/PHASE-3-TRACEABILITY.md).
 
 ## Run the implemented 3D slice

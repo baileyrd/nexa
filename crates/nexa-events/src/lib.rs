@@ -2,9 +2,10 @@
 #![forbid(unsafe_code)]
 
 use nexa_domain::{
-    BehaviorId, CompetencyId, CorrelationId, EndpointId, EventId, EvidenceId, LessonId,
-    LessonStepId, LessonTransitionId, MasteryScore, MessageId, ProtocolVersion, SemanticKey,
-    Sequence, SessionId, StudentId, SubjectId, Timestamp, TraceId,
+    AssessmentId, AssessmentItemInstanceId, AttemptId, BehaviorId, CompetencyId, CorrelationId,
+    EndpointId, EventId, EvidenceId, LessonId, LessonStepId, LessonTransitionId, MasteryScore,
+    MessageId, ProtocolVersion, ResponseId, SemanticKey, Sequence, SessionId, StudentId, SubjectId,
+    Timestamp, TraceId,
 };
 use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
@@ -63,6 +64,10 @@ pub enum EventKind {
     LessonLifecycleChanged,
     #[serde(rename = "lesson.transition.applied")]
     LessonTransitionApplied,
+    #[serde(rename = "assessment.response.evaluated")]
+    AssessmentResponseEvaluated,
+    #[serde(rename = "assessment.completed")]
+    AssessmentCompleted,
 }
 
 /// Operational, non-domain envelope metadata. Never place secrets here.
@@ -280,6 +285,156 @@ pub struct CompetencyUpdated {
 }
 impl DomainEvent for CompetencyUpdated {
     const KIND: EventKind = EventKind::CompetencyUpdated;
+}
+
+/// Privacy-minimal deterministic evaluation fact; response content and answer keys are excluded.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AssessmentEvaluationOutcome {
+    Correct,
+    Partial,
+    Incorrect,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "AssessmentResponseEvaluatedWire")]
+pub struct AssessmentResponseEvaluated {
+    pub attempt_id: AttemptId,
+    pub assessment_id: AssessmentId,
+    pub item_instance_id: AssessmentItemInstanceId,
+    pub response_id: ResponseId,
+    pub score: MasteryScore,
+    outcome: AssessmentEvaluationOutcome,
+    pub policy_version: ProtocolVersion,
+}
+#[derive(Deserialize)]
+struct AssessmentResponseEvaluatedWire {
+    attempt_id: AttemptId,
+    assessment_id: AssessmentId,
+    item_instance_id: AssessmentItemInstanceId,
+    response_id: ResponseId,
+    score: MasteryScore,
+    outcome: AssessmentEvaluationOutcome,
+    policy_version: ProtocolVersion,
+}
+
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
+#[error("assessment event derived fields are inconsistent with their scores")]
+pub struct InvalidAssessmentEvent;
+
+fn evaluation_outcome(score: MasteryScore) -> AssessmentEvaluationOutcome {
+    if score.get() == 1.0 {
+        AssessmentEvaluationOutcome::Correct
+    } else if score.get() == 0.0 {
+        AssessmentEvaluationOutcome::Incorrect
+    } else {
+        AssessmentEvaluationOutcome::Partial
+    }
+}
+
+impl TryFrom<AssessmentResponseEvaluatedWire> for AssessmentResponseEvaluated {
+    type Error = InvalidAssessmentEvent;
+    fn try_from(w: AssessmentResponseEvaluatedWire) -> Result<Self, Self::Error> {
+        if w.outcome != evaluation_outcome(w.score) {
+            return Err(InvalidAssessmentEvent);
+        }
+        Ok(Self {
+            attempt_id: w.attempt_id,
+            assessment_id: w.assessment_id,
+            item_instance_id: w.item_instance_id,
+            response_id: w.response_id,
+            score: w.score,
+            outcome: w.outcome,
+            policy_version: w.policy_version,
+        })
+    }
+}
+impl AssessmentResponseEvaluated {
+    pub fn new(
+        attempt_id: AttemptId,
+        assessment_id: AssessmentId,
+        item_instance_id: AssessmentItemInstanceId,
+        response_id: ResponseId,
+        score: MasteryScore,
+        policy_version: ProtocolVersion,
+    ) -> Self {
+        Self {
+            attempt_id,
+            assessment_id,
+            item_instance_id,
+            response_id,
+            score,
+            outcome: evaluation_outcome(score),
+            policy_version,
+        }
+    }
+    pub const fn outcome(&self) -> AssessmentEvaluationOutcome {
+        self.outcome
+    }
+}
+impl DomainEvent for AssessmentResponseEvaluated {
+    const KIND: EventKind = EventKind::AssessmentResponseEvaluated;
+}
+
+/// Privacy-minimal terminal assessment fact.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "AssessmentCompletedWire")]
+pub struct AssessmentCompleted {
+    pub attempt_id: AttemptId,
+    pub assessment_id: AssessmentId,
+    pub score: MasteryScore,
+    pub passing_score: MasteryScore,
+    passed: bool,
+    pub policy_version: ProtocolVersion,
+}
+#[derive(Deserialize)]
+struct AssessmentCompletedWire {
+    attempt_id: AttemptId,
+    assessment_id: AssessmentId,
+    score: MasteryScore,
+    passing_score: MasteryScore,
+    passed: bool,
+    policy_version: ProtocolVersion,
+}
+impl TryFrom<AssessmentCompletedWire> for AssessmentCompleted {
+    type Error = InvalidAssessmentEvent;
+    fn try_from(w: AssessmentCompletedWire) -> Result<Self, Self::Error> {
+        if w.passed != (w.score.get() >= w.passing_score.get()) {
+            return Err(InvalidAssessmentEvent);
+        }
+        Ok(Self {
+            attempt_id: w.attempt_id,
+            assessment_id: w.assessment_id,
+            score: w.score,
+            passing_score: w.passing_score,
+            passed: w.passed,
+            policy_version: w.policy_version,
+        })
+    }
+}
+impl AssessmentCompleted {
+    pub fn new(
+        attempt_id: AttemptId,
+        assessment_id: AssessmentId,
+        score: MasteryScore,
+        passing_score: MasteryScore,
+        policy_version: ProtocolVersion,
+    ) -> Self {
+        Self {
+            attempt_id,
+            assessment_id,
+            score,
+            passing_score,
+            passed: score.get() >= passing_score.get(),
+            policy_version,
+        }
+    }
+    pub const fn passed(&self) -> bool {
+        self.passed
+    }
+}
+impl DomainEvent for AssessmentCompleted {
+    const KIND: EventKind = EventKind::AssessmentCompleted;
 }
 
 /// Privacy-minimal pedagogy routing fact. Vocabulary remains semantic to avoid a crate cycle.
