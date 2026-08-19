@@ -2,9 +2,10 @@
 #![forbid(unsafe_code)]
 
 use nexa_domain::{
-    AssessmentId, AttemptId, BehaviorId, CompetencyId, CorrelationId, EndpointId, EventId,
-    EvidenceId, LessonId, LessonStepId, LessonTransitionId, MasteryScore, MessageId,
-    ProtocolVersion, SemanticKey, Sequence, SessionId, StudentId, SubjectId, Timestamp, TraceId,
+    AssessmentId, AssessmentItemInstanceId, AttemptId, BehaviorId, CompetencyId, CorrelationId,
+    EndpointId, EventId, EvidenceId, LessonId, LessonStepId, LessonTransitionId, MasteryScore,
+    MessageId, ProtocolVersion, ResponseId, SemanticKey, Sequence, SessionId, StudentId, SubjectId,
+    Timestamp, TraceId,
 };
 use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
@@ -287,12 +288,22 @@ impl DomainEvent for CompetencyUpdated {
 }
 
 /// Privacy-minimal deterministic evaluation fact; response content and answer keys are excluded.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AssessmentEvaluationOutcome {
+    Correct,
+    Partial,
+    Incorrect,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AssessmentResponseEvaluated {
     pub attempt_id: AttemptId,
     pub assessment_id: AssessmentId,
+    pub item_instance_id: AssessmentItemInstanceId,
+    pub response_id: ResponseId,
     pub score: MasteryScore,
-    pub outcome: SemanticKey,
+    pub outcome: AssessmentEvaluationOutcome,
     pub policy_version: ProtocolVersion,
 }
 impl DomainEvent for AssessmentResponseEvaluated {
@@ -301,12 +312,39 @@ impl DomainEvent for AssessmentResponseEvaluated {
 
 /// Privacy-minimal terminal assessment fact.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "AssessmentCompletedWire")]
 pub struct AssessmentCompleted {
     pub attempt_id: AttemptId,
     pub assessment_id: AssessmentId,
     pub score: MasteryScore,
+    pub passing_score: MasteryScore,
     pub passed: bool,
     pub policy_version: ProtocolVersion,
+}
+#[derive(Deserialize)]
+struct AssessmentCompletedWire {
+    attempt_id: AttemptId,
+    assessment_id: AssessmentId,
+    score: MasteryScore,
+    passing_score: MasteryScore,
+    passed: bool,
+    policy_version: ProtocolVersion,
+}
+impl TryFrom<AssessmentCompletedWire> for AssessmentCompleted {
+    type Error = &'static str;
+    fn try_from(w: AssessmentCompletedWire) -> Result<Self, Self::Error> {
+        if w.passed != (w.score.get() >= w.passing_score.get()) {
+            return Err("passed must agree with score and passing_score");
+        }
+        Ok(Self {
+            attempt_id: w.attempt_id,
+            assessment_id: w.assessment_id,
+            score: w.score,
+            passing_score: w.passing_score,
+            passed: w.passed,
+            policy_version: w.policy_version,
+        })
+    }
 }
 impl DomainEvent for AssessmentCompleted {
     const KIND: EventKind = EventKind::AssessmentCompleted;

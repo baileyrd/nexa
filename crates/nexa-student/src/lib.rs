@@ -182,6 +182,7 @@ pub enum EvidenceOutcome {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EvidenceDifficulty {
+    Unknown,
     VeryEasy,
     Easy,
     Moderate,
@@ -191,6 +192,7 @@ pub enum EvidenceDifficulty {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum IndependenceLevel {
+    Unknown,
     Independent,
     MinorHint,
     ModerateHint,
@@ -430,6 +432,7 @@ impl MasteryUpdatePolicy for BoundedWeightedV1 {
             EvidenceOutcome::Ambiguous => p.mastery.get(),
         };
         let difficulty = match e.difficulty {
+            EvidenceDifficulty::Unknown => 1.0,
             EvidenceDifficulty::VeryEasy => 0.6,
             EvidenceDifficulty::Easy => 0.8,
             EvidenceDifficulty::Moderate => 1.0,
@@ -437,6 +440,7 @@ impl MasteryUpdatePolicy for BoundedWeightedV1 {
             EvidenceDifficulty::Advanced => 1.2,
         };
         let independence = match e.independence {
+            IndependenceLevel::Unknown => 0.5,
             IndependenceLevel::Independent => 1.0,
             IndependenceLevel::MinorHint => 0.85,
             IndependenceLevel::ModerateHint => 0.65,

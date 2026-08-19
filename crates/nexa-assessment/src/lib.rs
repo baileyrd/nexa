@@ -2,9 +2,8 @@
 #![forbid(unsafe_code)]
 
 use nexa_domain::{
-    AssessmentId, AssessmentItemInstanceId, AttemptId, CompetencyId, Confidence, EvidenceId,
-    ProtocolVersion, QuestionId, ResponseId, RubricCriterionId, RubricId, SemanticKey, StudentId,
-    Timestamp,
+    AssessmentId, AssessmentItemInstanceId, AttemptId, CompetencyId, EvidenceId, ProtocolVersion,
+    QuestionId, ResponseId, RubricCriterionId, RubricId, SemanticKey, StudentId, Timestamp,
 };
 use nexa_student::{
     EvidenceDifficulty, EvidenceOutcome, EvidenceSource, EvidenceType, IndependenceLevel,
@@ -458,6 +457,14 @@ impl TryFrom<AttemptWire> for AssessmentAttempt {
                 "attempt collections are inconsistent or unordered",
             ));
         }
+        let frozen: BTreeSet<_> = w.items.iter().map(|x| x.question_id).collect();
+        if w.responses.iter().any(|r| !frozen.contains(&r.question_id))
+            || w.results.iter().any(|r| !frozen.contains(&r.question_id))
+        {
+            return Err(AssessmentError::InvalidContract(
+                "responses and results must belong to frozen items",
+            ));
+        }
         Ok(Self {
             id: w.id,
             assessment_id: w.assessment_id,
@@ -514,6 +521,11 @@ impl ScoringPolicyV1 {
                 "item identifiers must exactly cover questions",
             ));
         }
+        if item_ids.values().collect::<BTreeSet<_>>().len() != item_ids.len() {
+            return Err(AssessmentError::InvalidContract(
+                "item instance identifiers must be unique",
+            ));
+        }
         let items = assessment
             .questions
             .iter()
@@ -540,10 +552,12 @@ impl ScoringPolicyV1 {
     }
     pub fn transition(
         &self,
+        assessment: &Assessment,
         attempt: &AssessmentAttempt,
         to: AttemptState,
         at: Timestamp,
     ) -> Result<AssessmentAttempt, AssessmentError> {
+        self.validate_frozen(assessment, attempt, false)?;
         if attempt.policy_version != Self::VERSION {
             return Err(AssessmentError::PolicyMismatch {
                 expected: Self::VERSION,
@@ -570,7 +584,10 @@ impl ScoringPolicyV1 {
         if !allowed {
             return Err(AssessmentError::InvalidState);
         }
-        if to == AttemptState::Submitted && attempt.responses.len() != attempt.items.len() {
+        if matches!(to, AttemptState::Submitted | AttemptState::Completed)
+            && (attempt.responses.len() != attempt.items.len()
+                || attempt.results.len() != attempt.items.len())
+        {
             return Err(AssessmentError::InvalidState);
         }
         let mut next = attempt.clone();
@@ -588,9 +605,8 @@ impl ScoringPolicyV1 {
         response: AssessmentResponse,
         evidence_ids: BTreeMap<CompetencyId, EvidenceId>,
     ) -> Result<Submission, AssessmentError> {
-        if attempt.assessment_id != assessment.id
-            || attempt.assessment_version != assessment.version
-            || response.assessment_id != attempt.assessment_id
+        self.validate_frozen(assessment, attempt, false)?;
+        if response.assessment_id != attempt.assessment_id
             || response.student_id != attempt.student_id
         {
             return Err(AssessmentError::ScopeMismatch);
@@ -605,9 +621,6 @@ impl ScoringPolicyV1 {
         }
         if attempt.state != AttemptState::Active {
             return Err(AssessmentError::InvalidState);
-        }
-        if response.submitted_at < attempt.updated_at {
-            return Err(AssessmentError::TimestampRegression);
         }
         if let Some(old) = attempt.responses.iter().find(|x| x.id == response.id) {
             if old == &response {
@@ -625,6 +638,9 @@ impl ScoringPolicyV1 {
             }
             return Err(AssessmentError::ConflictingReplay);
         }
+        if response.submitted_at < attempt.updated_at {
+            return Err(AssessmentError::TimestampRegression);
+        }
         if attempt
             .responses
             .iter()
@@ -637,6 +653,9 @@ impl ScoringPolicyV1 {
             .iter()
             .find(|q| q.id == response.question_id)
             .ok_or(AssessmentError::UnknownQuestion)?;
+        if !attempt.items.iter().any(|item| item.question_id == q.id) {
+            return Err(AssessmentError::UnknownQuestion);
+        }
         let expected: BTreeSet<_> = q.competency_ids.iter().copied().collect();
         if evidence_ids.keys().copied().collect::<BTreeSet<_>>() != expected
             || evidence_ids.values().collect::<BTreeSet<_>>().len() != evidence_ids.len()
@@ -666,8 +685,12 @@ impl ScoringPolicyV1 {
         };
         let mut next = attempt.clone();
         next.updated_at = response.submitted_at;
-        next.responses.push(response);
-        next.results.push(result.clone());
+        let position = next
+            .responses
+            .binary_search_by_key(&response.question_id, |r| r.question_id)
+            .unwrap_err();
+        next.responses.insert(position, response.clone());
+        next.results.insert(position, result.clone());
         let evidence = q
             .competency_ids
             .iter()
@@ -676,14 +699,22 @@ impl ScoringPolicyV1 {
                 student_id: attempt.student_id,
                 competency_id: *competency_id,
                 evidence_type: purpose_type(q.purpose),
-                outcome: match outcome {
-                    EvaluationOutcome::Correct => EvidenceOutcome::Success,
-                    EvaluationOutcome::Partial => EvidenceOutcome::PartialSuccess,
-                    EvaluationOutcome::Incorrect => EvidenceOutcome::Failure,
+                outcome: match competency_score(
+                    q,
+                    &assessment.rubrics,
+                    &response.value,
+                    *competency_id,
+                )
+                .unwrap_or(score)
+                .get()
+                {
+                    1.0 => EvidenceOutcome::Success,
+                    0.0 => EvidenceOutcome::Failure,
+                    _ => EvidenceOutcome::PartialSuccess,
                 },
-                difficulty: EvidenceDifficulty::Moderate,
-                independence: IndependenceLevel::Independent,
-                confidence: Some(Confidence::new(1.0).expect("valid")),
+                difficulty: EvidenceDifficulty::Unknown,
+                independence: IndependenceLevel::Unknown,
+                confidence: None,
                 source: EvidenceSource::Assessment(attempt.id),
                 observed_at: next.updated_at,
             })
@@ -700,9 +731,7 @@ impl ScoringPolicyV1 {
         assessment: &Assessment,
         attempt: &AssessmentAttempt,
     ) -> Result<AssessmentOutcome, AssessmentError> {
-        if attempt.assessment_id != assessment.id {
-            return Err(AssessmentError::ScopeMismatch);
-        }
+        self.validate_frozen(assessment, attempt, true)?;
         if attempt.state != AttemptState::Completed {
             return Err(AssessmentError::InvalidState);
         }
@@ -718,6 +747,88 @@ impl ScoringPolicyV1 {
             completed_at: attempt.completed_at.expect("validated terminal"),
         })
     }
+
+    fn validate_frozen(
+        &self,
+        assessment: &Assessment,
+        attempt: &AssessmentAttempt,
+        require_complete: bool,
+    ) -> Result<(), AssessmentError> {
+        if attempt.assessment_id != assessment.id
+            || attempt.assessment_version != assessment.version
+        {
+            return Err(AssessmentError::ScopeMismatch);
+        }
+        if attempt.policy_version != Self::VERSION
+            || assessment.scoring_policy_version != Self::VERSION
+        {
+            return Err(AssessmentError::PolicyMismatch {
+                expected: Self::VERSION,
+                actual: attempt.policy_version,
+            });
+        }
+        let expected: Vec<_> = assessment
+            .questions
+            .iter()
+            .map(|q| (q.id, q.version))
+            .collect();
+        let actual: Vec<_> = attempt
+            .items
+            .iter()
+            .map(|i| (i.question_id, i.question_version))
+            .collect();
+        if actual != expected {
+            return Err(AssessmentError::InvalidContract(
+                "frozen items do not match assessment",
+            ));
+        }
+        let item_questions: Vec<_> = attempt.items.iter().map(|i| i.question_id).collect();
+        if attempt
+            .responses
+            .iter()
+            .any(|r| !item_questions.contains(&r.question_id))
+            || attempt
+                .results
+                .iter()
+                .any(|r| !item_questions.contains(&r.question_id))
+            || (require_complete
+                && (attempt.responses.len() != item_questions.len()
+                    || attempt.results.len() != item_questions.len()))
+        {
+            return Err(AssessmentError::InvalidContract(
+                "attempt coverage does not match frozen items",
+            ));
+        }
+        Ok(())
+    }
+}
+
+fn competency_score(
+    q: &Question,
+    rubrics: &[Rubric],
+    answer: &ResponseValue,
+    competency: CompetencyId,
+) -> Option<Score> {
+    let (Evaluation::Rubric { rubric_id }, ResponseValue::Rubric { levels }) =
+        (&q.evaluation, answer)
+    else {
+        return None;
+    };
+    let rubric = rubrics.iter().find(|r| r.id == *rubric_id)?;
+    let criteria: Vec<_> = rubric
+        .criteria
+        .iter()
+        .filter(|c| c.competency_id == competency)
+        .collect();
+    let total: f64 = criteria.iter().map(|c| c.weight.get()).sum();
+    Score::new(
+        criteria
+            .iter()
+            .map(|c| levels[&c.id].get() * c.weight.get())
+            .sum::<f64>()
+            / total,
+    )
+    .ok()
 }
 fn evaluate(
     q: &Question,

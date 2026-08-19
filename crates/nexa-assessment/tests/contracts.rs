@@ -54,7 +54,7 @@ fn started(a: &Assessment) -> AssessmentAttempt {
         .start(a, id(2), id(3), ids, ts("2026-08-19T10:00:00Z"))
         .unwrap();
     ScoringPolicyV1
-        .transition(&x, AttemptState::Active, ts("2026-08-19T10:00:01Z"))
+        .transition(a, &x, AttemptState::Active, ts("2026-08-19T10:00:01Z"))
         .unwrap()
 }
 fn submit(
@@ -264,13 +264,19 @@ fn rubric_weights_and_multi_question_scores_aggregate() {
     );
     let sub = ScoringPolicyV1
         .transition(
+            &a,
             &s2.attempt,
             AttemptState::Submitted,
             ts("2026-08-19T10:00:04Z"),
         )
         .unwrap();
     let done = ScoringPolicyV1
-        .transition(&sub, AttemptState::Completed, ts("2026-08-19T10:00:05Z"))
+        .transition(
+            &a,
+            &sub,
+            AttemptState::Completed,
+            ts("2026-08-19T10:00:05Z"),
+        )
         .unwrap();
     let out = ScoringPolicyV1.result(&a, &done).unwrap();
     assert_eq!(out.score.get(), 0.8125);
@@ -309,6 +315,97 @@ fn deterministic_ordering_and_replay() {
     assert_eq!(replay.attempt, first.attempt);
     assert!(replay.evidence.is_empty());
 }
+
+#[test]
+fn out_of_order_answers_remain_canonical_and_delayed_replays_are_noops() {
+    let a = assessment(
+        vec![
+            q(1, Evaluation::Boolean { correct: true }, vec![id(11)]),
+            q(2, Evaluation::Boolean { correct: true }, vec![id(12)]),
+        ],
+        vec![],
+    );
+    let x = started(&a);
+    let second = submit(
+        &a,
+        &x,
+        2,
+        ResponseValue::Boolean { value: true },
+        "2026-08-19T10:00:03Z",
+    );
+    let first = submit(
+        &a,
+        &second.attempt,
+        1,
+        ResponseValue::Boolean { value: true },
+        "2026-08-19T10:00:04Z",
+    );
+    assert_eq!(
+        first
+            .attempt
+            .responses()
+            .iter()
+            .map(|r| r.question_id)
+            .collect::<Vec<_>>(),
+        vec![id(1), id(2)]
+    );
+    let restored: AssessmentAttempt =
+        serde_json::from_value(serde_json::to_value(&first.attempt).unwrap()).unwrap();
+    let old_response = second.attempt.responses()[0].clone();
+    let replay = ScoringPolicyV1
+        .submit(
+            &a,
+            &restored,
+            old_response,
+            BTreeMap::from([(id(12), id(522))]),
+        )
+        .unwrap();
+    assert!(replay.replayed);
+}
+
+#[test]
+fn duplicate_instances_and_malformed_imported_coverage_are_rejected() {
+    let a = assessment(
+        vec![
+            q(1, Evaluation::Boolean { correct: true }, vec![id(11)]),
+            q(2, Evaluation::Boolean { correct: true }, vec![id(12)]),
+        ],
+        vec![],
+    );
+    assert!(ScoringPolicyV1
+        .start(
+            &a,
+            id(2),
+            id(3),
+            BTreeMap::from([(id(1), id(101)), (id(2), id(101))]),
+            ts("2026-08-19T10:00:00Z")
+        )
+        .is_err());
+    let x = started(&a);
+    let mut wire = serde_json::to_value(&x).unwrap();
+    wire["items"][0]["question_id"] = serde_json::to_value(id::<QuestionId>(99)).unwrap();
+    assert!(serde_json::from_value::<AssessmentAttempt>(wire).is_err());
+
+    let mut wrong_version = x.clone();
+    let mut wire = serde_json::to_value(&wrong_version).unwrap();
+    wire["items"][0]["question_version"] = "2.0".into();
+    wrong_version = serde_json::from_value(wire).unwrap();
+    assert!(ScoringPolicyV1
+        .submit(
+            &a,
+            &wrong_version,
+            AssessmentResponse {
+                id: id(201),
+                student_id: x.student_id,
+                assessment_id: x.assessment_id,
+                question_id: id(1),
+                value: ResponseValue::Boolean { value: true },
+                submitted_at: ts("2026-08-19T10:00:02Z")
+            },
+            BTreeMap::from([(id(11), id(511))])
+        )
+        .is_err());
+}
 #[test]
 fn lifecycle_terminal_and_timestamp_rules_are_atomic() {
     let a = assessment(
@@ -318,20 +415,25 @@ fn lifecycle_terminal_and_timestamp_rules_are_atomic() {
     let x = started(&a);
     let before = x.clone();
     assert_eq!(
-        ScoringPolicyV1.transition(&x, AttemptState::Completed, ts("2026-08-19T10:00:02Z")),
+        ScoringPolicyV1.transition(&a, &x, AttemptState::Completed, ts("2026-08-19T10:00:02Z")),
         Err(AssessmentError::InvalidState)
     );
     assert_eq!(x, before);
     assert_eq!(
-        ScoringPolicyV1.transition(&x, AttemptState::Paused, ts("2026-08-19T09:00:00Z")),
+        ScoringPolicyV1.transition(&a, &x, AttemptState::Paused, ts("2026-08-19T09:00:00Z")),
         Err(AssessmentError::TimestampRegression)
     );
     assert_eq!(x, before);
     let cancelled = ScoringPolicyV1
-        .transition(&x, AttemptState::Cancelled, ts("2026-08-19T10:00:02Z"))
+        .transition(&a, &x, AttemptState::Cancelled, ts("2026-08-19T10:00:02Z"))
         .unwrap();
     assert_eq!(
-        ScoringPolicyV1.transition(&cancelled, AttemptState::Active, ts("2026-08-19T10:00:03Z")),
+        ScoringPolicyV1.transition(
+            &a,
+            &cancelled,
+            AttemptState::Active,
+            ts("2026-08-19T10:00:03Z")
+        ),
         Err(AssessmentError::InvalidState)
     );
 }

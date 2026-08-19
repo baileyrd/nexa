@@ -43,6 +43,12 @@ and conflict semantics remain authoritative. `nexa-events` owns minimal evaluate
 payloads so event contracts do not depend on assessment. Envelope construction and publication remain
 composition concerns.
 
+V1 does not infer measurement conditions it did not observe: generated evidence uses `Unknown`
+difficulty and independence and no confidence value. The student policy treats unknown difficulty as
+neutral and unknown independence conservatively. For rubric questions, each competency's evidence
+outcome is derived only from criteria mapped to that competency rather than from the aggregate item
+score.
+
 No repository port is added: the pure value-in/value-out slice does not require one. Durable atomic
 answer/result/evidence/outbox commits remain an adapter and orchestration concern.
 
