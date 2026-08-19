@@ -129,3 +129,7 @@ let outputs = report.to_nbp_messages(
 ```
 
 The caller supplies output identities and sequences. The core is synchronous and contains no renderer, GPU, window, audio provider, network, persistence, or async-runtime dependency. See [ADR-0009](docs/adr/0009-embodiment-acceptance-and-lifecycle.md) and the [Phase 2 traceability matrix](docs/architecture/PHASE-2-TRACEABILITY.md).
+
+## Phase 4 status
+
+Phase 4 is **in progress**. The first governed slice is `nexa-knowledge`: exact UTF-8 Markdown/plain-text artifacts, versioned SHA-256 integrity, metadata provenance, deterministic structural ranges, lifecycle/visibility policy, and an atomic synchronous persistence port. It does not implement lexical retrieval, embeddings, vector or hybrid search, reranking, context packing, citation resolution, tutor intelligence, model providers, networking, or durable storage. See [ADR-0015](docs/adr/0015-governed-knowledge-ingestion.md) and the [Phase 4 traceability matrix](docs/architecture/PHASE-4-TRACEABILITY.md).

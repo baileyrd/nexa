@@ -8,6 +8,7 @@ members = [
     "crates/nexa-lessons",
     "crates/nexa-assessment",
     "crates/nexa-learning-core",
+    "crates/nexa-knowledge",
     "crates/nexa-nbp",
     "crates/nexa-pedagogy",
     "crates/nexa-student",
@@ -32,6 +33,7 @@ pollster = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+sha2 = "0.10"
 uuid = { version = "1", features = ["serde", "v7"] }
 wgpu = "0.19"
 winit = "0.29"

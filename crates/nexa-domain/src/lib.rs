@@ -78,7 +78,12 @@ uuid_id!(
     MessageId,
     BehaviorId,
     CorrelationId,
-    TraceId
+    TraceId,
+    KnowledgeSourceId,
+    KnowledgeArtifactId,
+    KnowledgeChunkId,
+    IngestionJobId,
+    CitationId
 );
 
 /// A finite mastery estimate in the inclusive range `[0, 1]`.
