@@ -223,6 +223,13 @@ pub struct ContextExclusion {
     pub hybrid_rank: Option<u32>,
     pub reason: ContextExclusionReason,
     pub upstream_reason: Option<HybridExclusionReason>,
+    /// Integrity and accounting evidence retained for replay of ranked decisions.
+    /// This is absent only when governed material was not supplied or when the
+    /// exclusion was made by the upstream hybrid boundary.
+    pub content_fingerprint: Option<ContentHash>,
+    pub exact_token_count: Option<u64>,
+    pub overhead_tokens: Option<u64>,
+    pub total_contribution: Option<u64>,
 }
 impl ContextExclusion {
     fn validate(&self) -> Result<(), ContextError> {
@@ -230,9 +237,32 @@ impl ContextExclusion {
             self.reason,
             ContextExclusionReason::UpstreamGovernance | ContextExclusionReason::UpstreamExclusion
         );
+        let governance = self.upstream_reason == Some(HybridExclusionReason::Governance);
+        let evidence = (
+            self.content_fingerprint.is_some(),
+            self.exact_token_count.is_some(),
+            self.overhead_tokens.is_some(),
+            self.total_contribution.is_some(),
+        );
+        let expected_evidence =
+            if upstream || self.reason == ContextExclusionReason::MissingGovernedMaterial {
+                (false, false, false, false)
+            } else {
+                (true, true, true, true)
+            };
         if self.source_version == 0
             || upstream != self.upstream_reason.is_some()
             || upstream != self.hybrid_rank.is_none()
+            || (self.reason == ContextExclusionReason::UpstreamGovernance) != governance
+            || (self.reason == ContextExclusionReason::UpstreamExclusion)
+                != (upstream && !governance)
+            || evidence != expected_evidence
+            || self
+                .overhead_tokens
+                .zip(self.exact_token_count)
+                .map(|(o, t)| o.checked_add(t))
+                .zip(self.total_contribution)
+                .is_some_and(|(sum, total)| sum != Some(total))
         {
             Err(ContextError::InvalidResult)
         } else {
@@ -240,7 +270,7 @@ impl ContextExclusion {
         }
     }
 }
-wire!(ContextExclusion{chunk_id:KnowledgeChunkId,artifact_id:KnowledgeArtifactId,source_id:KnowledgeSourceId,source_version:u64,hybrid_rank:Option<u32>,reason:ContextExclusionReason,upstream_reason:Option<HybridExclusionReason>});
+wire!(ContextExclusion{chunk_id:KnowledgeChunkId,artifact_id:KnowledgeArtifactId,source_id:KnowledgeSourceId,source_version:u64,hybrid_rank:Option<u32>,reason:ContextExclusionReason,upstream_reason:Option<HybridExclusionReason>,content_fingerprint:Option<ContentHash>,exact_token_count:Option<u64>,overhead_tokens:Option<u64>,total_contribution:Option<u64>});
 
 #[derive(Clone, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -331,11 +361,13 @@ impl ContextPackage {
         let mut ids = BTreeSet::new();
         let mut ranks = BTreeSet::new();
         let mut sum = self.accounting.fixed_package_overhead;
+        let mut last_included_rank = 0;
         for (i, x) in self.included.iter().enumerate() {
             x.validate()?;
             if x.final_context_position as usize != i + 1
                 || !ids.insert(x.chunk_id)
                 || !ranks.insert(x.hybrid_rank)
+                || x.hybrid_rank <= last_included_rank
                 || x.overhead_tokens != self.accounting.per_chunk_contribution(0)?
                 || self
                     .maximum_chunk_tokens
@@ -343,9 +375,77 @@ impl ContextPackage {
             {
                 return Err(ContextError::InvalidResult);
             }
+            last_included_rank = x.hybrid_rank;
             sum = sum
                 .checked_add(x.total_contribution)
                 .ok_or(ContextError::ArithmeticOverflow)?;
+        }
+        // Replay every V1 ranked-greedy decision in authoritative hybrid-rank
+        // order. This binds exclusion labels and all accounting evidence to the
+        // exact policy state at that point in the sequence.
+        let included_by_rank: BTreeMap<_, _> =
+            self.included.iter().map(|x| (x.hybrid_rank, x)).collect();
+        let excluded_by_rank: BTreeMap<_, _> = self
+            .exclusions
+            .iter()
+            .filter_map(|x| x.hybrid_rank.map(|rank| (rank, x)))
+            .collect();
+        let mut replay_used = self.accounting.fixed_package_overhead;
+        let mut replay_count = 0usize;
+        for rank in 1..=u32::try_from(self.hybrid_candidate_count)
+            .map_err(|_| ContextError::InvalidResult)?
+        {
+            if let Some(x) = included_by_rank.get(&rank) {
+                if self
+                    .maximum_chunk_tokens
+                    .is_some_and(|m| x.exact_token_count > m)
+                    || self.maximum_chunks.is_some_and(|m| replay_count >= m)
+                    || replay_used
+                        .checked_add(x.total_contribution)
+                        .ok_or(ContextError::ArithmeticOverflow)?
+                        > self.maximum_tokens
+                {
+                    return Err(ContextError::InvalidResult);
+                }
+                replay_used = replay_used
+                    .checked_add(x.total_contribution)
+                    .ok_or(ContextError::ArithmeticOverflow)?;
+                replay_count += 1;
+            } else if let Some(x) = excluded_by_rank.get(&rank) {
+                let expected = if x.exact_token_count.is_none() {
+                    ContextExclusionReason::MissingGovernedMaterial
+                } else {
+                    let tokens = x.exact_token_count.ok_or(ContextError::InvalidResult)?;
+                    let overhead = x.overhead_tokens.ok_or(ContextError::InvalidResult)?;
+                    let contribution = x.total_contribution.ok_or(ContextError::InvalidResult)?;
+                    if overhead != self.accounting.per_chunk_contribution(0)?
+                        || self.accounting.per_chunk_contribution(tokens)? != contribution
+                    {
+                        return Err(ContextError::InvalidResult);
+                    }
+                    if self.maximum_chunk_tokens.is_some_and(|m| tokens > m) {
+                        ContextExclusionReason::PerChunkLimit
+                    } else if self.maximum_chunks.is_some_and(|m| replay_count >= m) {
+                        ContextExclusionReason::ChunkCountLimit
+                    } else if replay_used
+                        .checked_add(contribution)
+                        .ok_or(ContextError::ArithmeticOverflow)?
+                        > self.maximum_tokens
+                    {
+                        ContextExclusionReason::TokenBudget
+                    } else {
+                        return Err(ContextError::InvalidResult);
+                    }
+                };
+                if x.reason != expected {
+                    return Err(ContextError::InvalidResult);
+                }
+            } else {
+                return Err(ContextError::InvalidResult);
+            }
+        }
+        if replay_used != self.used_tokens || replay_count != self.included.len() {
+            return Err(ContextError::InvalidResult);
         }
         for x in &self.exclusions {
             x.validate()?;
@@ -452,9 +552,16 @@ pub fn assemble_context(
     for c in &hybrid.candidates {
         let rank = c.reranking.final_rank;
         let Some(m) = supplied.remove(&c.chunk_id) else {
-            exclusions.push(ex(c, rank, ContextExclusionReason::MissingGovernedMaterial));
+            exclusions.push(ex(
+                c,
+                rank,
+                ContextExclusionReason::MissingGovernedMaterial,
+                None,
+                overhead,
+            ));
             continue;
         };
+        let decision_evidence = (m.content_fingerprint.clone(), m.exact_token_count);
         let reason = if request
             .maximum_chunk_tokens
             .is_some_and(|x| m.exact_token_count > x)
@@ -499,7 +606,7 @@ pub fn assemble_context(
             }
         };
         if let Some(r) = reason {
-            exclusions.push(ex(c, rank, r))
+            exclusions.push(ex(c, rank, r, Some(decision_evidence), overhead))
         }
     }
     for x in &hybrid.exclusions {
@@ -515,6 +622,10 @@ pub fn assemble_context(
                 ContextExclusionReason::UpstreamExclusion
             },
             upstream_reason: Some(x.reason),
+            content_fingerprint: None,
+            exact_token_count: None,
+            overhead_tokens: None,
+            total_contribution: None,
         })
     }
     let out = ContextPackage {
@@ -542,7 +653,13 @@ pub fn assemble_context(
     out.validate()?;
     Ok(out)
 }
-fn ex(c: &crate::HybridCandidate, rank: u32, reason: ContextExclusionReason) -> ContextExclusion {
+fn ex(
+    c: &crate::HybridCandidate,
+    rank: u32,
+    reason: ContextExclusionReason,
+    material: Option<(ContentHash, u64)>,
+    overhead: u64,
+) -> ContextExclusion {
     ContextExclusion {
         chunk_id: c.chunk_id,
         artifact_id: c.artifact_id,
@@ -551,6 +668,10 @@ fn ex(c: &crate::HybridCandidate, rank: u32, reason: ContextExclusionReason) -> 
         hybrid_rank: Some(rank),
         reason,
         upstream_reason: None,
+        content_fingerprint: material.as_ref().map(|m| m.0.clone()),
+        exact_token_count: material.as_ref().map(|m| m.1),
+        overhead_tokens: material.as_ref().map(|_| overhead),
+        total_contribution: material.and_then(|m| overhead.checked_add(m.1)),
     }
 }
 
@@ -705,5 +826,98 @@ mod tests {
         let mut r = request(20);
         r.accounting.per_chunk_overhead = u64::MAX;
         assert_eq!(r.validate().unwrap_err(), ContextError::ArithmeticOverflow)
+    }
+
+    #[test]
+    fn replay_rejects_coordinated_included_reordering() {
+        let package = assemble_context(
+            &request(100),
+            &hybrid(2, false),
+            vec![material(0, 1, "first"), material(1, 1, "second")],
+        )
+        .unwrap();
+        let mut value = serde_json::to_value(package).unwrap();
+        value["included"].as_array_mut().unwrap().swap(0, 1);
+        value["content"].as_array_mut().unwrap().swap(0, 1);
+        for key in ["included", "content"] {
+            value[key][0]["final_context_position"] = json!(1);
+            value[key][1]["final_context_position"] = json!(2);
+        }
+        assert!(serde_json::from_value::<ContextPackage>(value).is_err());
+    }
+
+    #[test]
+    fn replay_rejects_ranked_decision_evidence_and_reason_tampering() {
+        let package = assemble_context(
+            &request(12),
+            &hybrid(3, false),
+            vec![
+                material(0, 8, "a"),
+                material(1, 2, "b"),
+                material(2, 2, "c"),
+            ],
+        )
+        .unwrap();
+        let encoded = serde_json::to_value(&package).unwrap();
+        for (field, replacement) in [
+            ("exact_token_count", json!(7)),
+            ("overhead_tokens", json!(4)),
+            ("total_contribution", json!(10)),
+            ("reason", json!("per_chunk_limit")),
+        ] {
+            let mut tampered = encoded.clone();
+            tampered["exclusions"][0][field] = replacement;
+            assert!(
+                serde_json::from_value::<ContextPackage>(tampered).is_err(),
+                "{field}"
+            );
+        }
+
+        // Promote the over-budget first decision while coordinating positions,
+        // content, and aggregate accounting. Sequential replay still rejects it.
+        let mut promoted = encoded;
+        let excluded = promoted["exclusions"].as_array_mut().unwrap().remove(0);
+        let promoted_chunk = json!({
+            "chunk_id": excluded["chunk_id"], "artifact_id": excluded["artifact_id"],
+            "source_id": excluded["source_id"], "source_version": excluded["source_version"],
+            "hybrid_rank": excluded["hybrid_rank"], "content_fingerprint": excluded["content_fingerprint"],
+            "exact_token_count": excluded["exact_token_count"], "overhead_tokens": excluded["overhead_tokens"],
+            "total_contribution": excluded["total_contribution"], "final_context_position": 1
+        });
+        promoted["included"]
+            .as_array_mut()
+            .unwrap()
+            .insert(0, promoted_chunk);
+        promoted["content"].as_array_mut().unwrap().insert(
+            0,
+            json!({
+                "chunk_id": excluded["chunk_id"], "final_context_position": 1, "content": "a"
+            }),
+        );
+        for key in ["included", "content"] {
+            for (index, item) in promoted[key].as_array_mut().unwrap().iter_mut().enumerate() {
+                item["final_context_position"] = json!(index + 1);
+            }
+        }
+        promoted["used_tokens"] = json!(23);
+        promoted["remaining_tokens"] = json!(0);
+        assert!(serde_json::from_value::<ContextPackage>(promoted).is_err());
+    }
+
+    #[test]
+    fn replay_binds_upstream_classification_to_reason() {
+        let package = assemble_context(&request(20), &hybrid(0, true), vec![]).unwrap();
+        let governance = serde_json::to_value(package).unwrap();
+        let mut downgrade = governance.clone();
+        downgrade["exclusions"][0]["reason"] = json!("upstream_exclusion");
+        assert!(serde_json::from_value::<ContextPackage>(downgrade).is_err());
+
+        let mut nongovernance = governance;
+        nongovernance["exclusions"][0]["reason"] = json!("upstream_exclusion");
+        nongovernance["exclusions"][0]["upstream_reason"] = json!("result_limit");
+        let valid: ContextPackage = serde_json::from_value(nongovernance).unwrap();
+        let mut upgrade = serde_json::to_value(valid).unwrap();
+        upgrade["exclusions"][0]["reason"] = json!("upstream_governance");
+        assert!(serde_json::from_value::<ContextPackage>(upgrade).is_err());
     }
 }
