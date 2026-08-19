@@ -6,7 +6,7 @@ use nexa_domain::{
     MasteryScore, ProtocolVersion, StudentId, Timestamp,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use thiserror::Error;
 
 #[derive(Clone, Debug, Error, PartialEq)]
@@ -21,6 +21,15 @@ pub enum StudentModelError {
     ConflictingDuplicate(EvidenceId),
     #[error("evidence belongs to another student or competency")]
     ProjectionMismatch,
+    #[error("projection policy version {actual:?} does not match expected version {expected:?}")]
+    PolicyVersionMismatch {
+        expected: ProtocolVersion,
+        actual: ProtocolVersion,
+    },
+    #[error("mastery projection evidence count overflowed")]
+    EvidenceCountOverflow,
+    #[error("invalid mastery projection: {message}")]
+    InvalidMasteryState { message: &'static str },
     #[error("repository operation failed: {message}")]
     Repository { message: String },
 }
@@ -254,16 +263,61 @@ pub enum CompetencyStatus {
     Mastered,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "MasteryStateWire")]
 pub struct MasteryState {
-    pub student_id: StudentId,
-    pub competency_id: CompetencyId,
-    pub mastery: MasteryScore,
-    pub model_confidence: Confidence,
-    pub status: CompetencyStatus,
-    pub evidence_count: u32,
-    pub last_evidence_at: Option<Timestamp>,
-    pub policy_version: ProtocolVersion,
+    student_id: StudentId,
+    competency_id: CompetencyId,
+    mastery: MasteryScore,
+    model_confidence: Confidence,
+    status: CompetencyStatus,
+    evidence_count: u32,
+    last_evidence_at: Option<Timestamp>,
+    policy_version: ProtocolVersion,
 }
+
+#[derive(Deserialize)]
+struct MasteryStateWire {
+    student_id: StudentId,
+    competency_id: CompetencyId,
+    mastery: MasteryScore,
+    model_confidence: Confidence,
+    status: CompetencyStatus,
+    evidence_count: u32,
+    last_evidence_at: Option<Timestamp>,
+    policy_version: ProtocolVersion,
+}
+
+impl TryFrom<MasteryStateWire> for MasteryState {
+    type Error = StudentModelError;
+
+    fn try_from(v: MasteryStateWire) -> Result<Self, Self::Error> {
+        if (v.evidence_count == 0) != v.last_evidence_at.is_none() {
+            return Err(StudentModelError::InvalidMasteryState {
+                message: "evidence_count and last_evidence_at are inconsistent",
+            });
+        }
+        if v.evidence_count == 0
+            && (v.mastery.get() != 0.0
+                || v.model_confidence.get() != 0.0
+                || v.status != CompetencyStatus::Unestablished)
+        {
+            return Err(StudentModelError::InvalidMasteryState {
+                message: "an empty projection must have zero scores and unestablished status",
+            });
+        }
+        Ok(Self {
+            student_id: v.student_id,
+            competency_id: v.competency_id,
+            mastery: v.mastery,
+            model_confidence: v.model_confidence,
+            status: v.status,
+            evidence_count: v.evidence_count,
+            last_evidence_at: v.last_evidence_at,
+            policy_version: v.policy_version,
+        })
+    }
+}
+
 impl MasteryState {
     pub fn empty(
         student_id: StudentId,
@@ -280,6 +334,31 @@ impl MasteryState {
             last_evidence_at: None,
             policy_version,
         }
+    }
+
+    pub fn student_id(&self) -> StudentId {
+        self.student_id
+    }
+    pub fn competency_id(&self) -> CompetencyId {
+        self.competency_id
+    }
+    pub fn mastery(&self) -> MasteryScore {
+        self.mastery
+    }
+    pub fn model_confidence(&self) -> Confidence {
+        self.model_confidence
+    }
+    pub fn status(&self) -> CompetencyStatus {
+        self.status
+    }
+    pub fn evidence_count(&self) -> u32 {
+        self.evidence_count
+    }
+    pub fn last_evidence_at(&self) -> Option<Timestamp> {
+        self.last_evidence_at
+    }
+    pub fn policy_version(&self) -> ProtocolVersion {
+        self.policy_version
     }
 }
 
@@ -303,6 +382,12 @@ impl MasteryUpdatePolicy for BoundedWeightedV1 {
         p: &MasteryState,
         e: &LearningEvidence,
     ) -> Result<MasteryState, StudentModelError> {
+        if p.policy_version != self.version() {
+            return Err(StudentModelError::PolicyVersionMismatch {
+                expected: self.version(),
+                actual: p.policy_version,
+            });
+        }
         if p.student_id != e.student_id || p.competency_id != e.competency_id {
             return Err(StudentModelError::ProjectionMismatch);
         }
@@ -329,7 +414,10 @@ impl MasteryUpdatePolicy for BoundedWeightedV1 {
         let next = (p.mastery.get()
             + 0.25 * difficulty * independence * (observed - p.mastery.get()))
         .clamp(0.0, 1.0);
-        let count = p.evidence_count.saturating_add(1);
+        let count = p
+            .evidence_count
+            .checked_add(1)
+            .ok_or(StudentModelError::EvidenceCountOverflow)?;
         let confidence = (count as f64 / 5.0).min(1.0);
         let status = match next {
             v if count >= 5 && v >= 0.85 => CompetencyStatus::Mastered,
@@ -420,12 +508,16 @@ pub fn replay<P: MasteryUpdatePolicy>(
 ) -> Result<Vec<MasteryState>, StudentModelError> {
     let mut ordered = evidence.to_vec();
     ordered.sort_by_key(|e| (e.observed_at, e.id));
-    let mut seen = BTreeSet::new();
+    let mut seen: BTreeMap<EvidenceId, LearningEvidence> = BTreeMap::new();
     let mut states: BTreeMap<(StudentId, CompetencyId), MasteryState> = BTreeMap::new();
     for e in ordered {
-        if !seen.insert(e.id) {
-            continue;
+        if let Some(first) = seen.get(&e.id) {
+            if first == &e {
+                continue;
+            }
+            return Err(StudentModelError::ConflictingDuplicate(e.id));
         }
+        seen.insert(e.id, e.clone());
         let key = (e.student_id, e.competency_id);
         let previous = states.remove(&key).unwrap_or_else(|| {
             MasteryState::empty(e.student_id, e.competency_id, policy.version())

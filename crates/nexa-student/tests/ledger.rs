@@ -74,10 +74,35 @@ fn replay_and_tie_order_are_deterministic() {
         expected
     );
     assert_eq!(
-        replay(&[a.clone(), a], &BoundedWeightedV1).unwrap()[0].evidence_count,
+        replay(&[a.clone(), a], &BoundedWeightedV1).unwrap()[0].evidence_count(),
         1
     );
-    assert_eq!(expected[0].policy_version, ProtocolVersion::new(1, 0));
+    assert_eq!(expected[0].policy_version(), ProtocolVersion::new(1, 0));
+}
+
+#[test]
+fn replay_rejects_conflicting_duplicates_regardless_of_input_order() {
+    let original = evidence(
+        "0193f249-95c2-79e0-a221-628003c28504",
+        "2026-08-19T10:00:00Z",
+        EvidenceOutcome::Success,
+    );
+    let mut conflict = original.clone();
+    conflict.outcome = EvidenceOutcome::Failure;
+
+    for input in [
+        vec![original.clone(), conflict.clone()],
+        vec![conflict.clone(), original.clone()],
+    ] {
+        assert_eq!(
+            replay(&input, &BoundedWeightedV1),
+            Err(StudentModelError::ConflictingDuplicate(original.id))
+        );
+    }
+    assert_eq!(
+        replay(&[original.clone(), original], &BoundedWeightedV1).unwrap()[0].evidence_count(),
+        1
+    );
 }
 
 #[test]
@@ -103,5 +128,83 @@ fn policy_rejects_cross_projection_evidence() {
     assert_eq!(
         BoundedWeightedV1.update(&state, &item),
         Err(StudentModelError::ProjectionMismatch)
+    );
+}
+
+#[test]
+fn policy_rejects_mismatched_versions_directly_and_from_repository() {
+    let item = evidence(
+        "0193f249-95c2-79e0-a221-628003c28504",
+        "2026-08-19T10:00:00Z",
+        EvidenceOutcome::Success,
+    );
+    let state = MasteryState::empty(
+        item.student_id,
+        item.competency_id,
+        ProtocolVersion::new(2, 0),
+    );
+    let expected = Err(StudentModelError::PolicyVersionMismatch {
+        expected: ProtocolVersion::new(1, 0),
+        actual: ProtocolVersion::new(2, 0),
+    });
+    assert_eq!(BoundedWeightedV1.update(&state, &item), expected);
+
+    let mut repository = InMemoryMasteryRepository::default();
+    repository.put(state).unwrap();
+    let loaded = repository
+        .get(item.student_id, item.competency_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(BoundedWeightedV1.update(&loaded, &item), expected);
+}
+
+#[test]
+fn malformed_mastery_state_invariants_are_rejected() {
+    let item = evidence(
+        "0193f249-95c2-79e0-a221-628003c28504",
+        "2026-08-19T10:00:00Z",
+        EvidenceOutcome::Success,
+    );
+    let empty = MasteryState::empty(
+        item.student_id,
+        item.competency_id,
+        ProtocolVersion::new(1, 0),
+    );
+    let mut value = serde_json::to_value(empty).unwrap();
+
+    value["last_evidence_at"] = serde_json::json!("2026-08-19T10:00:00Z");
+    assert!(serde_json::from_value::<MasteryState>(value.clone()).is_err());
+    value["last_evidence_at"] = serde_json::Value::Null;
+    value["mastery"] = serde_json::json!(0.5);
+    assert!(serde_json::from_value::<MasteryState>(value.clone()).is_err());
+    value["mastery"] = serde_json::json!(0.0);
+    value["model_confidence"] = serde_json::json!(0.5);
+    assert!(serde_json::from_value::<MasteryState>(value.clone()).is_err());
+    value["model_confidence"] = serde_json::json!(0.0);
+    value["status"] = serde_json::json!("mastered");
+    assert!(serde_json::from_value::<MasteryState>(value).is_err());
+}
+
+#[test]
+fn policy_rejects_evidence_count_overflow() {
+    let item = evidence(
+        "0193f249-95c2-79e0-a221-628003c28504",
+        "2026-08-19T10:00:00Z",
+        EvidenceOutcome::Success,
+    );
+    let state = serde_json::from_value::<MasteryState>(serde_json::json!({
+        "student_id": item.student_id,
+        "competency_id": item.competency_id,
+        "mastery": 0.5,
+        "model_confidence": 1.0,
+        "status": "functional",
+        "evidence_count": u32::MAX,
+        "last_evidence_at": "2026-08-18T10:00:00Z",
+        "policy_version": "1.0"
+    }))
+    .unwrap();
+    assert_eq!(
+        BoundedWeightedV1.update(&state, &item),
+        Err(StudentModelError::EvidenceCountOverflow)
     );
 }
