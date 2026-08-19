@@ -169,14 +169,17 @@ fn query_and_result_have_golden_round_trips_and_reject_malformed_wire() {
     let mut second = duplicate["candidates"][0].clone();
     second["score"] = 1.into();
     second["score_evidence"].as_array_mut().unwrap().truncate(1);
+    second["artifact_id"] = "018f0000-0000-7000-9000-000000000002".into();
     duplicate["candidates"].as_array_mut().unwrap().push(second);
     assert!(serde_json::from_value::<RetrievalResult>(duplicate).is_err());
 
     let mut contradictory = serde_json::to_value(&result).unwrap();
     let candidate = &result.candidates[0];
     contradictory["exclusions"] = serde_json::json!([{
-        "chunk_id": candidate.chunk_id, "artifact_id": candidate.artifact_id,
-        "source_id": candidate.source_id, "source_version": candidate.source_version,
+        "chunk_id": candidate.chunk_id,
+        "artifact_id": "018f0000-0000-7000-9000-000000000002",
+        "source_id": "018f0000-0000-7000-8000-000000000002",
+        "source_version": candidate.source_version,
         "reason": "result_limit"
     }]);
     assert!(serde_json::from_value::<RetrievalResult>(contradictory).is_err());

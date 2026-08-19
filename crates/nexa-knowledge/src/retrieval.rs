@@ -420,9 +420,22 @@ impl RetrievalResult {
         }
         let candidate_ids: BTreeSet<_> = self.candidates.iter().map(reference_identity).collect();
         let exclusion_ids: BTreeSet<_> = self.exclusions.iter().map(exclusion_identity).collect();
+        let candidate_chunk_ids: BTreeSet<_> = self
+            .candidates
+            .iter()
+            .map(|candidate| candidate.chunk_id)
+            .collect();
+        let exclusion_chunk_ids: BTreeSet<_> = self
+            .exclusions
+            .iter()
+            .map(|exclusion| exclusion.chunk_id)
+            .collect();
         if candidate_ids.len() != self.candidates.len()
             || exclusion_ids.len() != self.exclusions.len()
             || !candidate_ids.is_disjoint(&exclusion_ids)
+            || candidate_chunk_ids.len() != self.candidates.len()
+            || exclusion_chunk_ids.len() != self.exclusions.len()
+            || !candidate_chunk_ids.is_disjoint(&exclusion_chunk_ids)
         {
             return Err(RetrievalError::InvalidCorpus);
         }
