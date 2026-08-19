@@ -5,7 +5,8 @@ use nexa_domain::{
     KnowledgeArtifactId, KnowledgeChunkId, KnowledgeSourceId, ProtocolVersion, RetrievalQueryId,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, fmt};
+use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 use thiserror::Error;
 
 pub const CITATION_POLICY_V1: ProtocolVersion = V1;
@@ -87,6 +88,44 @@ impl SourceLocator {
             } if start < end && end <= content_length => Ok(()),
             _ => Err(CitationError::MalformedLocator),
         }
+    }
+
+    fn validate_against_content(&self, content: &str) -> Result<(), CitationError> {
+        match self {
+            Self::ByteRange {
+                end,
+                content_length,
+                ..
+            } => {
+                let actual =
+                    u64::try_from(content.len()).map_err(|_| CitationError::InvalidEvidence)?;
+                if *content_length != actual || *end > actual {
+                    return Err(CitationError::InvalidEvidence);
+                }
+            }
+            Self::CharacterRange {
+                end,
+                content_length,
+                ..
+            } => {
+                let actual = u64::try_from(content.chars().count())
+                    .map_err(|_| CitationError::InvalidEvidence)?;
+                if *content_length != actual || *end > actual {
+                    return Err(CitationError::InvalidEvidence);
+                }
+            }
+            // Line ranges are one-based and inclusive. `str::lines` also gives the
+            // intended result for a final line without a trailing newline.
+            Self::LineRange { end, .. } => {
+                let actual = u64::try_from(content.lines().count())
+                    .map_err(|_| CitationError::InvalidEvidence)?;
+                if *end > actual {
+                    return Err(CitationError::InvalidEvidence);
+                }
+            }
+            _ => {}
+        }
+        Ok(())
     }
 }
 impl<'de> Deserialize<'de> for SourceLocator {
@@ -192,6 +231,30 @@ wire!(SourceLocationEvidence {
     locator: SourceLocator
 });
 
+type SupportKey = (
+    KnowledgeChunkId,
+    KnowledgeArtifactId,
+    KnowledgeSourceId,
+    u64,
+    ContentHash,
+    u32,
+    ProtocolVersion,
+    SourceLocator,
+);
+
+fn support_key(e: &SourceLocationEvidence) -> SupportKey {
+    (
+        e.chunk_id,
+        e.artifact_id,
+        e.source_id,
+        e.source_version,
+        e.content_fingerprint.clone(),
+        e.context_position,
+        e.locator_policy_version,
+        e.locator.clone(),
+    )
+}
+
 #[derive(Clone, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ClaimCitationRequest {
@@ -263,30 +326,25 @@ impl CitationRequest {
             return Err(CitationError::InvalidLimit);
         }
         let mut claims = BTreeSet::new();
-        let mut citations = BTreeSet::new();
-        let mut total = 0usize;
-        for claim in &self.claims {
+        let mut citations = BTreeMap::new();
+        for (claim_index, claim) in self.claims.iter().enumerate() {
             claim.validate()?;
             if !claims.insert(claim.claim_id) {
                 return Err(CitationError::IdentityConflict);
             }
-            if claim.evidence.len() > self.maximum_citations_per_claim {
-                return Err(CitationError::InvalidLimit);
-            }
-            total = total
-                .checked_add(claim.evidence.len())
-                .ok_or(CitationError::InvalidLimit)?;
             for evidence in &claim.evidence {
-                if !citations.insert(evidence.citation_id) {
-                    return Err(CitationError::IdentityConflict);
+                let support = support_key(evidence);
+                if let Some((prior_claim, prior_support)) =
+                    citations.insert(evidence.citation_id, (claim_index, support.clone()))
+                {
+                    if prior_claim != claim_index || prior_support != support {
+                        return Err(CitationError::IdentityConflict);
+                    }
                 }
                 if evidence.locator_policy_version != self.locator_policy_version {
                     return Err(CitationError::ProvenanceMismatch);
                 }
             }
-        }
-        if total > self.maximum_citations {
-            return Err(CitationError::InvalidLimit);
         }
         Ok(())
     }
@@ -391,6 +449,54 @@ impl ClaimCitationResult {
 }
 wire!(ClaimCitationResult{claim_id:ClaimId,claim_position:u32,status:CitationResolutionStatus,unresolved_reason:Option<UnresolvedCitationReason>,citations:Vec<ResolvedCitation>});
 
+/// Reference-only anchor for the caller's ordered claims.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ClaimOrderAnchor {
+    pub claim_id: ClaimId,
+    pub claim_position: u32,
+}
+impl ClaimOrderAnchor {
+    fn validate(&self) -> Result<(), CitationError> {
+        (self.claim_position > 0)
+            .then_some(())
+            .ok_or(CitationError::InvalidResult)
+    }
+}
+wire!(ClaimOrderAnchor {
+    claim_id: ClaimId,
+    claim_position: u32
+});
+
+/// Immutable provenance mapping copied from the governed context package.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContextAnchor {
+    pub context_position: u32,
+    pub chunk_id: KnowledgeChunkId,
+    pub artifact_id: KnowledgeArtifactId,
+    pub source_id: KnowledgeSourceId,
+    pub source_version: u64,
+    pub content_fingerprint: ContentHash,
+}
+impl ContextAnchor {
+    fn validate(&self) -> Result<(), CitationError> {
+        if self.context_position == 0 || self.source_version == 0 {
+            Err(CitationError::InvalidResult)
+        } else {
+            Ok(())
+        }
+    }
+}
+wire!(ContextAnchor {
+    context_position: u32,
+    chunk_id: KnowledgeChunkId,
+    artifact_id: KnowledgeArtifactId,
+    source_id: KnowledgeSourceId,
+    source_version: u64,
+    content_fingerprint: ContentHash
+});
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CitationResult {
@@ -405,6 +511,8 @@ pub struct CitationResult {
     pub integrity_profile_version: ProtocolVersion,
     pub maximum_citations: usize,
     pub maximum_citations_per_claim: usize,
+    pub claim_order_anchor: Vec<ClaimOrderAnchor>,
+    pub context_anchor: Vec<ContextAnchor>,
     pub claims: Vec<ClaimCitationResult>,
 }
 impl CitationResult {
@@ -426,6 +534,30 @@ impl CitationResult {
         {
             return Err(CitationError::InvalidResult);
         }
+        if self.claim_order_anchor.len() != self.claims.len() || self.context_anchor.is_empty() {
+            return Err(CitationError::InvalidResult);
+        }
+        let mut anchor_claim_ids = BTreeSet::new();
+        for (i, anchor) in self.claim_order_anchor.iter().enumerate() {
+            anchor.validate()?;
+            if anchor.claim_position as usize != i + 1 || !anchor_claim_ids.insert(anchor.claim_id)
+            {
+                return Err(CitationError::InvalidResult);
+            }
+        }
+        let mut context_by_position = BTreeMap::new();
+        let mut context_chunk_ids = BTreeSet::new();
+        for (i, anchor) in self.context_anchor.iter().enumerate() {
+            anchor.validate()?;
+            if anchor.context_position as usize != i + 1
+                || context_by_position
+                    .insert(anchor.context_position, anchor)
+                    .is_some()
+                || !context_chunk_ids.insert(anchor.chunk_id)
+            {
+                return Err(CitationError::InvalidResult);
+            }
+        }
         let mut claim_ids = BTreeSet::new();
         let mut citation_ids = BTreeSet::new();
         let mut total = 0;
@@ -433,6 +565,7 @@ impl CitationResult {
             claim.validate()?;
             if claim.claim_position as usize != i + 1
                 || !claim_ids.insert(claim.claim_id)
+                || self.claim_order_anchor[i].claim_id != claim.claim_id
                 || claim.citations.len() > self.maximum_citations_per_claim
             {
                 return Err(CitationError::InvalidResult);
@@ -440,6 +573,24 @@ impl CitationResult {
             total += claim.citations.len();
             for c in &claim.citations {
                 if !citation_ids.insert(c.citation_id) {
+                    return Err(CitationError::InvalidResult);
+                }
+                let Some(anchor) = context_by_position.get(&c.context_position) else {
+                    return Err(CitationError::InvalidResult);
+                };
+                if (
+                    c.chunk_id,
+                    c.artifact_id,
+                    c.source_id,
+                    c.source_version,
+                    &c.content_fingerprint,
+                ) != (
+                    anchor.chunk_id,
+                    anchor.artifact_id,
+                    anchor.source_id,
+                    anchor.source_version,
+                    &anchor.content_fingerprint,
+                ) {
                     return Err(CitationError::InvalidResult);
                 }
             }
@@ -450,7 +601,7 @@ impl CitationResult {
         Ok(())
     }
 }
-wire!(CitationResult{contract_version:ProtocolVersion,citation_set_id:CitationSetId,context_package_id:ContextPackageId,hybrid_result_id:HybridRetrievalResultId,query_id:RetrievalQueryId,citation_policy_version:ProtocolVersion,locator_policy_version:ProtocolVersion,governance_policy_version:ProtocolVersion,integrity_profile_version:ProtocolVersion,maximum_citations:usize,maximum_citations_per_claim:usize,claims:Vec<ClaimCitationResult>});
+wire!(CitationResult{contract_version:ProtocolVersion,citation_set_id:CitationSetId,context_package_id:ContextPackageId,hybrid_result_id:HybridRetrievalResultId,query_id:RetrievalQueryId,citation_policy_version:ProtocolVersion,locator_policy_version:ProtocolVersion,governance_policy_version:ProtocolVersion,integrity_profile_version:ProtocolVersion,maximum_citations:usize,maximum_citations_per_claim:usize,claim_order_anchor:Vec<ClaimOrderAnchor>,context_anchor:Vec<ContextAnchor>,claims:Vec<ClaimCitationResult>});
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum CitationError {
@@ -491,11 +642,16 @@ pub fn resolve_citations(
         return Err(CitationError::ProvenanceMismatch);
     }
     let mut claims = Vec::with_capacity(request.claims.len());
+    let mut resolved_total = 0usize;
     for (claim_index, claim) in request.claims.iter().enumerate() {
-        let mut evidence = claim.evidence.clone();
-        evidence.sort_by_key(|e| (e.context_position, e.locator.clone(), e.citation_id));
-        for e in &evidence {
+        let mut unique_support = BTreeMap::<SupportKey, SourceLocationEvidence>::new();
+        for e in &claim.evidence {
             let Some(chunk) = package.included.iter().find(|x| x.chunk_id == e.chunk_id) else {
+                return Err(CitationError::ProvenanceMismatch);
+            };
+            let Some(content) = package.content.iter().find(|x| {
+                x.chunk_id == e.chunk_id && x.final_context_position == e.context_position
+            }) else {
                 return Err(CitationError::ProvenanceMismatch);
             };
             if (
@@ -513,7 +669,28 @@ pub fn resolve_citations(
             ) {
                 return Err(CitationError::ProvenanceMismatch);
             }
+            e.locator.validate_against_content(&content.content)?;
+            let key = support_key(e);
+            unique_support
+                .entry(key)
+                .and_modify(|survivor| {
+                    if e.citation_id < survivor.citation_id {
+                        survivor.citation_id = e.citation_id;
+                    }
+                })
+                .or_insert_with(|| e.clone());
         }
+        if unique_support.len() > request.maximum_citations_per_claim {
+            return Err(CitationError::InvalidLimit);
+        }
+        resolved_total = resolved_total
+            .checked_add(unique_support.len())
+            .ok_or(CitationError::InvalidLimit)?;
+        if resolved_total > request.maximum_citations {
+            return Err(CitationError::InvalidLimit);
+        }
+        let mut evidence = unique_support.into_values().collect::<Vec<_>>();
+        evidence.sort_by_key(|e| (e.context_position, e.locator.clone(), e.citation_id));
         let citations = evidence
             .into_iter()
             .enumerate()
@@ -559,6 +736,27 @@ pub fn resolve_citations(
         integrity_profile_version: request.integrity_profile_version,
         maximum_citations: request.maximum_citations,
         maximum_citations_per_claim: request.maximum_citations_per_claim,
+        claim_order_anchor: request
+            .claims
+            .iter()
+            .enumerate()
+            .map(|(i, claim)| ClaimOrderAnchor {
+                claim_id: claim.claim_id,
+                claim_position: (i + 1) as u32,
+            })
+            .collect(),
+        context_anchor: package
+            .included
+            .iter()
+            .map(|chunk| ContextAnchor {
+                context_position: chunk.final_context_position,
+                chunk_id: chunk.chunk_id,
+                artifact_id: chunk.artifact_id,
+                source_id: chunk.source_id,
+                source_version: chunk.source_version,
+                content_fingerprint: chunk.content_fingerprint.clone(),
+            })
+            .collect(),
         claims,
     };
     result.validate()?;
@@ -618,7 +816,7 @@ mod tests {
             json!({"kind":"document_page","page":1}),
             json!({"kind":"section_path","path":["Intro"]}),
             json!({"kind":"block","block_id":"p-1"}),
-            json!({"kind":"line_range","start":1,"end":2}),
+            json!({"kind":"line_range","start":1,"end":1}),
             json!({"kind":"byte_range","start":0,"end":1,"content_length":1}),
             json!({"kind":"character_range","start":0,"end":1,"content_length":1}),
         ] {
@@ -697,5 +895,99 @@ mod tests {
             evidence: duplicate.claims[0].evidence.clone(),
         });
         assert_eq!(duplicate.validate(), Err(CitationError::IdentityConflict));
+    }
+
+    #[test]
+    fn binds_ranges_to_short_multibyte_context_content() {
+        let mut package = package();
+        let content = "é\n猫";
+        let fingerprint = ContentHash::sha256(content.as_bytes());
+        package.content[0].content = content.into();
+        package.included[0].content_fingerprint = fingerprint.clone();
+
+        for locator in [
+            json!({"kind":"byte_range","start":0,"end":7,"content_length":100}),
+            json!({"kind":"byte_range","start":0,"end":6,"content_length":7}),
+            json!({"kind":"character_range","start":0,"end":4,"content_length":100}),
+            json!({"kind":"character_range","start":0,"end":3,"content_length":4}),
+            json!({"kind":"line_range","start":1,"end":3}),
+        ] {
+            let mut ev = evidence(CIT1, CHUNK1, ART1, 1, locator);
+            ev["content_fingerprint"] = serde_json::to_value(&fingerprint).unwrap();
+            let request = request(json!([{"claim_id":CLAIM1,"evidence":[ev]}]));
+            assert_eq!(
+                resolve_citations(&request, &package),
+                Err(CitationError::InvalidEvidence)
+            );
+        }
+        for locator in [
+            json!({"kind":"byte_range","start":0,"end":6,"content_length":6}),
+            json!({"kind":"character_range","start":0,"end":3,"content_length":3}),
+            json!({"kind":"line_range","start":1,"end":2}),
+        ] {
+            let mut ev = evidence(CIT1, CHUNK1, ART1, 1, locator);
+            ev["content_fingerprint"] = serde_json::to_value(&fingerprint).unwrap();
+            assert!(resolve_citations(
+                &request(json!([{"claim_id":CLAIM1,"evidence":[ev]}])),
+                &package
+            )
+            .is_ok());
+        }
+    }
+
+    #[test]
+    fn deduplicates_support_deterministically_and_rejects_conflicting_ids() {
+        let locator = json!({"kind":"document_page","page":1});
+        let first = evidence(CIT1, CHUNK1, ART1, 1, locator.clone());
+        let second = evidence(CIT2, CHUNK1, ART1, 1, locator);
+        let forward = request(
+            json!([{"claim_id":CLAIM1,"evidence":[first.clone(),second.clone(),first.clone()]}]),
+        );
+        let reverse = request(json!([{"claim_id":CLAIM1,"evidence":[second,first]}]));
+        let a = resolve_citations(&forward, &package()).unwrap();
+        let b = resolve_citations(&reverse, &package()).unwrap();
+        assert_eq!(a, b);
+        assert_eq!(a.claims[0].citations.len(), 1);
+        assert_eq!(a.claims[0].citations[0].citation_id, CIT1.parse().unwrap());
+
+        let mut conflicting = reverse.clone();
+        let mut reused = conflicting.claims[0].evidence[0].clone();
+        reused.chunk_id = CHUNK2.parse().unwrap();
+        reused.artifact_id = ART2.parse().unwrap();
+        reused.context_position = 2;
+        reused.content_fingerprint = ContentHash::sha256(b"b");
+        conflicting.claims[0].evidence.push(reused);
+        assert_eq!(conflicting.validate(), Err(CitationError::IdentityConflict));
+    }
+
+    #[test]
+    fn standalone_anchors_reject_coordinated_claim_and_provenance_tampering() {
+        let request = request(json!([
+            {"claim_id":CLAIM1,"evidence":[evidence(CIT1,CHUNK1,ART1,1,json!({"kind":"document_page","page":1}))]},
+            {"claim_id":CLAIM2,"evidence":[evidence(CIT2,CHUNK2,ART2,2,json!({"kind":"document_page","page":1}))]}
+        ]));
+        let base = serde_json::to_value(resolve_citations(&request, &package()).unwrap()).unwrap();
+
+        let mut swapped = base.clone();
+        swapped["claims"].as_array_mut().unwrap().swap(0, 1);
+        swapped["claims"][0]["claim_position"] = json!(1);
+        swapped["claims"][1]["claim_position"] = json!(2);
+        assert!(serde_json::from_value::<CitationResult>(swapped).is_err());
+
+        for (field, replacement) in [
+            ("context_position", json!(2)),
+            ("chunk_id", json!(CHUNK2)),
+            ("artifact_id", json!(ART2)),
+            ("source_id", json!("00000000-0000-0000-0000-000000000099")),
+            ("source_version", json!(2)),
+            ("content_fingerprint", hash("b")),
+        ] {
+            let mut tampered = base.clone();
+            tampered["claims"][0]["citations"][0][field] = replacement;
+            assert!(
+                serde_json::from_value::<CitationResult>(tampered).is_err(),
+                "{field}"
+            );
+        }
     }
 }
