@@ -39,6 +39,7 @@ Speech, canvas, tools, and avatar adapters
 | `crates/nexa-pedagogy/` | Pure, versioned, explainable policy over read-only mastery projections |
 | `crates/nexa-lessons/` | Validated authored curriculum and pure, versioned headless lesson transitions |
 | `crates/nexa-assessment/` | Validated assessment contracts, deterministic scoring, attempt lifecycle, and evidence creation |
+| `crates/nexa-learning-core/` | Synchronous atomic composition of the Phase 3 learning-core policies |
 | `apps/nexa-3d-viewer/` | `wgpu`/`winit` interactive viewer composition root |
 | `tools/nexa-3d-validate/` | GPU-free asset and manifest validation CLI |
 
@@ -74,12 +75,14 @@ duplicate ingestion is idempotent, and mastery is a derived projection replayed 
 version. The pure pedagogy policy reads projections without mutation and returns only available routing
 options with stable rationale codes. Only ports and deterministic test adapters exist; no database or async
 runtime has been selected. The lesson slice validates immutable authored graphs and consumes only
-explicitly authored pedagogy routes into atomic progress transitions. Phase 3 remains incomplete
-pending end-to-end composition and governed durable persistence.
+explicitly authored pedagogy routes into atomic progress transitions. The `nexa-learning-core` boundary now proves the Phase 3 headless path and atomic rollback contract
+with a deterministic in-memory unit of work. Durable database, authorization, retention, concurrency,
+and outbox adapter decisions remain explicitly deferred.
 See [ADR-0010](docs/adr/0010-learning-state-evidence-and-persistence.md),
 [ADR-0011](docs/adr/0011-pedagogy-policy-ownership-and-versioning.md),
 [ADR-0012](docs/adr/0012-governed-curriculum-and-lesson-transitions.md),
-[ADR-0013](docs/adr/0013-assessment-contract-scoring-and-evidence.md), and the
+[ADR-0013](docs/adr/0013-assessment-contract-scoring-and-evidence.md),
+[ADR-0014](docs/adr/0014-learning-core-composition-and-atomicity.md), and the
 [Phase 3 traceability matrix](docs/architecture/PHASE-3-TRACEABILITY.md).
 
 ## Run the implemented 3D slice

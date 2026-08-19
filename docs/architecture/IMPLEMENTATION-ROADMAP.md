@@ -39,8 +39,8 @@ Exit: the 3D implementation consumes NBP/avatar contracts and all existing tests
 
 ## Phase 3 — Build the learning core
 
-**Status:** In progress. The governed student-model/evidence-ledger, deterministic pedagogy policy,
-headless curriculum/lesson-transition, and deterministic assessment slices are implemented; the Phase 3 exit gate is not satisfied.
+**Status:** Complete for the headless deterministic exit gate. Durable production adapters remain a
+later infrastructure increment and are not implied by this status.
 
 Implement:
 
@@ -48,16 +48,16 @@ Implement:
 - [x] pure, versioned, explainable pedagogy policy over read-only mastery projections
 - [x] governed curriculum contracts and pure, versioned headless lesson transitions
 - [x] dependency-light assessment contracts, deterministic scoring, lifecycle, and evidence creation
-- governed persistence ports
+- [x] synchronous learning-core composition and explicit atomic unit-of-work port
 
-Exit: a headless deterministic lesson can adapt, assess, and update student state without an LLM or avatar.
+Exit: **demonstrated** by the `nexa-learning-core` end-to-end conformance and failure-injection tests: a headless deterministic lesson adapts, assesses, appends evidence, replays mastery, routes governed progress, and commits atomically without an LLM or avatar.
 
 See [ADR-0010](../adr/0010-learning-state-evidence-and-persistence.md),
 [ADR-0011](../adr/0011-pedagogy-policy-ownership-and-versioning.md),
 [ADR-0012](../adr/0012-governed-curriculum-and-lesson-transitions.md),
-[ADR-0013](../adr/0013-assessment-contract-scoring-and-evidence.md), and the
-[Phase 3 traceability matrix](PHASE-3-TRACEABILITY.md). The next recommended increment is headless composition of the implemented learning-core contracts
-behind governed persistence ports; durable adapter semantics remain unresolved.
+[ADR-0013](../adr/0013-assessment-contract-scoring-and-evidence.md),
+[ADR-0014](../adr/0014-learning-core-composition-and-atomicity.md), and the
+[Phase 3 traceability matrix](PHASE-3-TRACEABILITY.md). Durable adapter semantics remain unresolved and are recorded rather than silently selected.
 
 ## Phase 4 — Add knowledge and tutor intelligence
 
