@@ -57,6 +57,8 @@ pub enum EventKind {
     CompetencyEvidenceAdded,
     #[serde(rename = "competency.updated")]
     CompetencyUpdated,
+    #[serde(rename = "pedagogy.decision.made")]
+    PedagogyDecisionMade,
 }
 
 /// Operational, non-domain envelope metadata. Never place secrets here.
@@ -274,6 +276,19 @@ pub struct CompetencyUpdated {
 }
 impl DomainEvent for CompetencyUpdated {
     const KIND: EventKind = EventKind::CompetencyUpdated;
+}
+
+/// Privacy-minimal pedagogy routing fact. Vocabulary remains semantic to avoid a crate cycle.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PedagogyDecisionMade {
+    pub student_id: StudentId,
+    pub competency_id: CompetencyId,
+    pub selected_option: SemanticKey,
+    pub rationale_codes: Vec<SemanticKey>,
+    pub policy_version: ProtocolVersion,
+}
+impl DomainEvent for PedagogyDecisionMade {
+    const KIND: EventKind = EventKind::PedagogyDecisionMade;
 }
 
 /// A subscriber callback failure. Other subscribers are still called.
