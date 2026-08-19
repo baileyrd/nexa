@@ -133,14 +133,14 @@ pub struct KnowledgeScope {
     pub course_id: Option<CourseId>,
     pub lesson_id: Option<LessonId>,
 }
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct MetadataEntry {
     pub value: String,
     pub provenance: MetadataProvenance,
     pub recorded_at: Timestamp,
 }
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct KnowledgeSource {
     pub contract_version: ProtocolVersion,
@@ -166,6 +166,65 @@ impl KnowledgeSource {
         metadata(&self.inferred_metadata, MetadataProvenance::SystemInferred)
     }
 }
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SourceWire {
+    contract_version: ProtocolVersion,
+    source_id: KnowledgeSourceId,
+    source_version: u64,
+    source_type: SourceType,
+    authority: SourceAuthority,
+    trust: SourceTrust,
+    origin: SourceOrigin,
+    status: SourceStatus,
+    visibility: KnowledgeVisibility,
+    scope: KnowledgeScope,
+    source_metadata: BTreeMap<String, MetadataEntry>,
+    inferred_metadata: BTreeMap<String, MetadataEntry>,
+    registered_at: Timestamp,
+}
+impl<'de> Deserialize<'de> for KnowledgeSource {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let w = SourceWire::deserialize(d)?;
+        let value = Self {
+            contract_version: w.contract_version,
+            source_id: w.source_id,
+            source_version: w.source_version,
+            source_type: w.source_type,
+            authority: w.authority,
+            trust: w.trust,
+            origin: w.origin,
+            status: w.status,
+            visibility: w.visibility,
+            scope: w.scope,
+            source_metadata: w.source_metadata,
+            inferred_metadata: w.inferred_metadata,
+            registered_at: w.registered_at,
+        };
+        value.validate().map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
+}
+impl<'de> Deserialize<'de> for MetadataEntry {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Wire {
+            value: String,
+            provenance: MetadataProvenance,
+            recorded_at: Timestamp,
+        }
+        let w = Wire::deserialize(d)?;
+        if w.value.len() > MAX_FIELD_BYTES {
+            return Err(serde::de::Error::custom(KnowledgeError::InvalidMetadata));
+        }
+        Ok(Self {
+            value: w.value,
+            provenance: w.provenance,
+            recorded_at: w.recorded_at,
+        })
+    }
+}
 fn metadata(
     m: &BTreeMap<String, MetadataEntry>,
     p: MetadataProvenance,
@@ -183,7 +242,7 @@ fn metadata(
         Ok(())
     }
 }
-#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct KnowledgeArtifact {
     pub contract_version: ProtocolVersion,
@@ -260,6 +319,39 @@ impl KnowledgeArtifact {
         self.content_hash.verify(&self.bytes)
     }
 }
+impl<'de> Deserialize<'de> for KnowledgeArtifact {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Wire {
+            contract_version: ProtocolVersion,
+            artifact_id: KnowledgeArtifactId,
+            source_id: KnowledgeSourceId,
+            source_version: u64,
+            media_type: String,
+            encoding: String,
+            byte_length: u64,
+            content_hash: ContentHash,
+            bytes: Vec<u8>,
+            created_at: Timestamp,
+        }
+        let w = Wire::deserialize(d)?;
+        let value = Self {
+            contract_version: w.contract_version,
+            artifact_id: w.artifact_id,
+            source_id: w.source_id,
+            source_version: w.source_version,
+            media_type: w.media_type,
+            encoding: w.encoding,
+            byte_length: w.byte_length,
+            content_hash: w.content_hash,
+            bytes: w.bytes,
+            created_at: w.created_at,
+        };
+        value.validate().map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
+}
 closed!(IngestionState {
     Registered,
     Parsing,
@@ -271,7 +363,7 @@ closed!(IngestionState {
     Superseded,
     RolledBack
 });
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct IngestionJob {
     pub contract_version: ProtocolVersion,
@@ -285,12 +377,31 @@ pub struct IngestionJob {
     pub updated_at: Timestamp,
 }
 impl IngestionJob {
+    pub fn validate(&self) -> Result<(), KnowledgeError> {
+        let revision_valid = match self.state {
+            IngestionState::Registered => self.revision == 0,
+            IngestionState::Parsing => self.revision == 1,
+            IngestionState::Chunking => self.revision == 2,
+            IngestionState::Staged => self.revision == 3,
+            IngestionState::Active => self.revision >= 4,
+            IngestionState::Failed => self.revision >= 1,
+            IngestionState::Stale | IngestionState::Superseded | IngestionState::RolledBack => {
+                self.revision >= 5
+            }
+        };
+        if self.contract_version != V1 || self.source_version == 0 || !revision_valid {
+            Err(KnowledgeError::InvalidTransition)
+        } else {
+            Ok(())
+        }
+    }
     pub fn transition(&self, n: IngestionState, at: Timestamp) -> Result<Self, KnowledgeError> {
+        self.validate()?;
         if n == self.state
             || at < self.updated_at
             || matches!(
                 self.state,
-                IngestionState::Failed | IngestionState::Superseded | IngestionState::RolledBack
+                IngestionState::Failed | IngestionState::RolledBack
             )
         {
             return Err(KnowledgeError::InvalidTransition);
@@ -303,8 +414,9 @@ impl IngestionJob {
                 | (IngestionState::Staged, IngestionState::Active)
                 | (
                     IngestionState::Active,
-                    IngestionState::Stale | IngestionState::Superseded
+                    IngestionState::Stale | IngestionState::Superseded | IngestionState::RolledBack
                 )
+                | (IngestionState::Superseded, IngestionState::Active)
                 | (
                     IngestionState::Stale,
                     IngestionState::Active | IngestionState::RolledBack
@@ -321,19 +433,80 @@ impl IngestionJob {
         Ok(x)
     }
 }
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+impl<'de> Deserialize<'de> for IngestionJob {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Wire {
+            contract_version: ProtocolVersion,
+            job_id: IngestionJobId,
+            source_id: KnowledgeSourceId,
+            source_version: u64,
+            artifact_id: KnowledgeArtifactId,
+            artifact_hash: ContentHash,
+            state: IngestionState,
+            revision: u64,
+            updated_at: Timestamp,
+        }
+        let w = Wire::deserialize(d)?;
+        let value = Self {
+            contract_version: w.contract_version,
+            job_id: w.job_id,
+            source_id: w.source_id,
+            source_version: w.source_version,
+            artifact_id: w.artifact_id,
+            artifact_hash: w.artifact_hash,
+            state: w.state,
+            revision: w.revision,
+            updated_at: w.updated_at,
+        };
+        value.validate().map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
+}
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ByteRange {
     pub start: u64,
     pub end: u64,
 }
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LineRange {
     pub start: u64,
     pub end: u64,
 }
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RangeWire {
+    start: u64,
+    end: u64,
+}
+impl<'de> Deserialize<'de> for ByteRange {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let w = RangeWire::deserialize(d)?;
+        if w.start >= w.end {
+            return Err(serde::de::Error::custom(KnowledgeError::InvalidChunk));
+        }
+        Ok(Self {
+            start: w.start,
+            end: w.end,
+        })
+    }
+}
+impl<'de> Deserialize<'de> for LineRange {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let w = RangeWire::deserialize(d)?;
+        if w.start == 0 || w.start > w.end {
+            return Err(serde::de::Error::custom(KnowledgeError::InvalidChunk));
+        }
+        Ok(Self {
+            start: w.start,
+            end: w.end,
+        })
+    }
+}
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct KnowledgeChunk {
     pub contract_version: ProtocolVersion,
@@ -353,6 +526,49 @@ impl KnowledgeChunk {
     pub fn content<'a>(&self, a: &'a KnowledgeArtifact) -> Result<&'a [u8], KnowledgeError> {
         check_chunk(self, a)?;
         Ok(&a.bytes[self.byte_range.start as usize..self.byte_range.end as usize])
+    }
+}
+impl<'de> Deserialize<'de> for KnowledgeChunk {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Wire {
+            contract_version: ProtocolVersion,
+            chunk_id: KnowledgeChunkId,
+            source_id: KnowledgeSourceId,
+            source_version: u64,
+            artifact_id: KnowledgeArtifactId,
+            ordinal: u32,
+            heading_path: Vec<String>,
+            byte_range: ByteRange,
+            line_range: LineRange,
+            original_content_hash: ContentHash,
+            chunk_content_hash: ContentHash,
+            chunking_policy_version: ProtocolVersion,
+        }
+        let w = Wire::deserialize(d)?;
+        if w.contract_version != V1
+            || w.chunking_policy_version != V1
+            || w.source_version == 0
+            || w.heading_path.len() > 6
+            || w.heading_path.iter().any(|h| h.len() > MAX_FIELD_BYTES)
+        {
+            return Err(serde::de::Error::custom(KnowledgeError::InvalidChunk));
+        }
+        Ok(Self {
+            contract_version: w.contract_version,
+            chunk_id: w.chunk_id,
+            source_id: w.source_id,
+            source_version: w.source_version,
+            artifact_id: w.artifact_id,
+            ordinal: w.ordinal,
+            heading_path: w.heading_path,
+            byte_range: w.byte_range,
+            line_range: w.line_range,
+            original_content_hash: w.original_content_hash,
+            chunk_content_hash: w.chunk_content_hash,
+            chunking_policy_version: w.chunking_policy_version,
+        })
     }
 }
 /// Returns exact original byte ranges; CRLF is retained and therefore has distinct hashes/offsets from LF.
@@ -404,6 +620,38 @@ pub fn structural_ranges(
         let mut i = *start;
         while i < end {
             let begin = lines[i].0;
+            // A physical line is never allowed to defeat the chunk bound. Split an
+            // overlong line at the largest UTF-8 boundary that fits.
+            if lines[i].1 - begin > MAX_CHUNK_BYTES {
+                let mut part = begin;
+                while part < lines[i].1 {
+                    let mut finish = (part + MAX_CHUNK_BYTES).min(lines[i].1);
+                    while finish > part && !t.is_char_boundary(finish) {
+                        finish -= 1;
+                    }
+                    if finish == part {
+                        return Err(KnowledgeError::InvalidChunk);
+                    }
+                    out.push((
+                        paths
+                            .range(..=i)
+                            .next_back()
+                            .map(|x| x.1.clone())
+                            .unwrap_or_default(),
+                        ByteRange {
+                            start: part as u64,
+                            end: finish as u64,
+                        },
+                        LineRange {
+                            start: (i + 1) as u64,
+                            end: (i + 1) as u64,
+                        },
+                    ));
+                    part = finish;
+                }
+                i += 1;
+                continue;
+            }
             let mut j = i + 1;
             while j < end && lines[j].1 - begin <= MAX_CHUNK_BYTES {
                 j += 1
@@ -431,14 +679,26 @@ pub fn structural_ranges(
     }
     Ok(out)
 }
-pub fn validate_chunks(cs: &[KnowledgeChunk], a: &KnowledgeArtifact) -> Result<(), KnowledgeError> {
-    let (mut last, mut ids) = (0, BTreeSet::new());
-    for (i, c) in cs.iter().enumerate() {
-        if c.ordinal != i as u32 || c.byte_range.start < last || !ids.insert(c.chunk_id) {
+pub fn validate_chunks(
+    cs: &[KnowledgeChunk],
+    source: &KnowledgeSource,
+    a: &KnowledgeArtifact,
+) -> Result<(), KnowledgeError> {
+    let expected = structural_ranges(source, a)?;
+    if cs.len() != expected.len() {
+        return Err(KnowledgeError::InvalidChunk);
+    }
+    let mut ids = BTreeSet::new();
+    for (i, (c, (heading, bytes, lines))) in cs.iter().zip(expected.iter()).enumerate() {
+        if c.ordinal != i as u32
+            || !ids.insert(c.chunk_id)
+            || &c.heading_path != heading
+            || &c.byte_range != bytes
+            || &c.line_range != lines
+        {
             return Err(KnowledgeError::InvalidChunk);
         }
         check_chunk(c, a)?;
-        last = c.byte_range.end
     }
     Ok(())
 }
@@ -451,6 +711,11 @@ fn check_chunk(c: &KnowledgeChunk, a: &KnowledgeArtifact) -> Result<(), Knowledg
         || c.original_content_hash != a.content_hash
         || s >= e
         || e > a.bytes.len()
+        || e - s > MAX_CHUNK_BYTES
+        || !a.text().is_char_boundary(s)
+        || !a.text().is_char_boundary(e)
+        || c.line_range.start == 0
+        || c.line_range.start > c.line_range.end
         || c.heading_path.len() > 6
         || c.chunk_content_hash != ContentHash::sha256(&a.bytes[s..e])
     {
@@ -499,6 +764,17 @@ pub trait KnowledgeUnitOfWork {
         j: IngestionJob,
         c: Vec<KnowledgeChunk>,
     ) -> Result<CommitOutcome, KnowledgeError>;
+    fn promote(
+        &mut self,
+        source_id: KnowledgeSourceId,
+        source_version: u64,
+        at: Timestamp,
+    ) -> Result<(), KnowledgeError>;
+    fn rollback(
+        &mut self,
+        source_id: KnowledgeSourceId,
+        at: Timestamp,
+    ) -> Result<(), KnowledgeError>;
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CommitOutcome {
@@ -523,7 +799,18 @@ impl KnowledgeUnitOfWork for InMemoryKnowledgeRepository {
     ) -> Result<CommitOutcome, KnowledgeError> {
         s.validate()?;
         a.validate()?;
-        validate_chunks(&cs, &a)?;
+        j.validate()?;
+        validate_chunks(&cs, &s, &a)?;
+        let expected_media = match s.source_type {
+            SourceType::Markdown => "text/markdown",
+            SourceType::PlainText => "text/plain",
+        };
+        if s.status != SourceStatus::Staged
+            || j.state != IngestionState::Staged
+            || a.media_type != expected_media
+        {
+            return Err(KnowledgeError::InvalidTransition);
+        }
         if (
             s.source_id,
             s.source_version,
@@ -553,12 +840,14 @@ impl KnowledgeUnitOfWork for InMemoryKnowledgeRepository {
         {
             return Err(KnowledgeError::IdentifierConflict);
         }
+        let failure = self.fail_after.take();
         let mut n = self.clone();
+        n.fail_after = None;
         let mut stage = 0;
         macro_rules! step {
             () => {{
                 stage += 1;
-                if self.fail_after == Some(stage) {
+                if failure == Some(stage) {
                     return Err(KnowledgeError::PersistenceFailure);
                 }
             }};
@@ -575,5 +864,102 @@ impl KnowledgeUnitOfWork for InMemoryKnowledgeRepository {
         step!();
         *self = n;
         Ok(CommitOutcome::Inserted)
+    }
+
+    fn promote(
+        &mut self,
+        source_id: KnowledgeSourceId,
+        source_version: u64,
+        at: Timestamp,
+    ) -> Result<(), KnowledgeError> {
+        let mut n = self.clone();
+        let active: Vec<_> = n
+            .sources
+            .iter()
+            .filter(|((id, _), s)| *id == source_id && s.status == SourceStatus::Active)
+            .map(|(key, _)| *key)
+            .collect();
+        if active.len() > 1 {
+            return Err(KnowledgeError::ActiveVersionConflict);
+        }
+        let target = n
+            .sources
+            .get_mut(&(source_id, source_version))
+            .ok_or(KnowledgeError::InvalidTransition)?;
+        if target.status != SourceStatus::Staged {
+            return Err(KnowledgeError::InvalidTransition);
+        }
+        let target_job_id = n
+            .jobs
+            .iter()
+            .find(|(_, j)| j.source_id == source_id && j.source_version == source_version)
+            .map(|(id, _)| *id)
+            .ok_or(KnowledgeError::InvalidTransition)?;
+        let promoted = n.jobs[&target_job_id].transition(IngestionState::Active, at)?;
+        target.status = SourceStatus::Active;
+        n.jobs.insert(target_job_id, promoted);
+        if let Some(old_key) = active.first() {
+            let old = n.sources.get_mut(old_key).expect("key collected from map");
+            old.status = SourceStatus::Superseded;
+            let old_job_id = n
+                .jobs
+                .iter()
+                .find(|(_, j)| j.source_id == source_id && j.source_version == old_key.1)
+                .map(|(id, _)| *id)
+                .ok_or(KnowledgeError::InvalidTransition)?;
+            let superseded = n.jobs[&old_job_id].transition(IngestionState::Superseded, at)?;
+            n.jobs.insert(old_job_id, superseded);
+        }
+        *self = n;
+        Ok(())
+    }
+
+    fn rollback(
+        &mut self,
+        source_id: KnowledgeSourceId,
+        at: Timestamp,
+    ) -> Result<(), KnowledgeError> {
+        let mut n = self.clone();
+        let current = n
+            .sources
+            .iter()
+            .find(|((id, _), s)| *id == source_id && s.status == SourceStatus::Active)
+            .map(|(key, _)| *key)
+            .ok_or(KnowledgeError::InvalidTransition)?;
+        let previous = n
+            .sources
+            .iter()
+            .filter(|((id, version), s)| {
+                *id == source_id && *version < current.1 && s.status == SourceStatus::Superseded
+            })
+            .map(|(key, _)| *key)
+            .max_by_key(|key| key.1)
+            .ok_or(KnowledgeError::InvalidTransition)?;
+        let current_job = n
+            .jobs
+            .iter()
+            .find(|(_, j)| j.source_id == source_id && j.source_version == current.1)
+            .map(|(id, _)| *id)
+            .ok_or(KnowledgeError::InvalidTransition)?;
+        let previous_job = n
+            .jobs
+            .iter()
+            .find(|(_, j)| j.source_id == source_id && j.source_version == previous.1)
+            .map(|(id, _)| *id)
+            .ok_or(KnowledgeError::InvalidTransition)?;
+        let rolled_back = n.jobs[&current_job].transition(IngestionState::RolledBack, at)?;
+        let restored = n.jobs[&previous_job].transition(IngestionState::Active, at)?;
+        n.sources
+            .get_mut(&current)
+            .expect("key collected from map")
+            .status = SourceStatus::RolledBack;
+        n.sources
+            .get_mut(&previous)
+            .expect("key collected from map")
+            .status = SourceStatus::Active;
+        n.jobs.insert(current_job, rolled_back);
+        n.jobs.insert(previous_job, restored);
+        *self = n;
+        Ok(())
     }
 }
