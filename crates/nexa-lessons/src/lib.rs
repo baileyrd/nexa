@@ -438,23 +438,48 @@ impl TryFrom<ProgressWire> for LessonProgress {
             });
         }
         let has_cursor = w.current_step_id.is_some();
+        let has_completed_steps = !w.completed_steps.is_empty();
+        let timestamps_are_monotonic = match (w.started_at, w.updated_at) {
+            (Some(started), Some(updated)) => started <= updated,
+            (None, None) => true,
+            _ => false,
+        } && w
+            .completed_at
+            .is_none_or(|completed| w.updated_at == Some(completed));
         let valid = match w.lifecycle {
             LessonLifecycle::NotStarted => {
-                !has_cursor && w.started_at.is_none() && w.completed_at.is_none()
+                !has_cursor
+                    && !has_completed_steps
+                    && w.started_at.is_none()
+                    && w.updated_at.is_none()
+                    && w.completed_at.is_none()
             }
             LessonLifecycle::Active | LessonLifecycle::Waiting => {
-                has_cursor && w.started_at.is_some() && w.completed_at.is_none()
+                has_cursor
+                    && !w
+                        .completed_steps
+                        .contains(&w.current_step_id.expect("cursor is present"))
+                    && w.started_at.is_some()
+                    && w.updated_at.is_some()
+                    && w.completed_at.is_none()
             }
             LessonLifecycle::Completed => {
-                !has_cursor && w.started_at.is_some() && w.completed_at.is_some()
+                !has_cursor
+                    && has_completed_steps
+                    && w.started_at.is_some()
+                    && w.updated_at.is_some()
+                    && w.completed_at.is_some()
             }
             LessonLifecycle::Blocked | LessonLifecycle::Abandoned => {
-                !has_cursor && w.completed_at.is_none()
+                !has_cursor
+                    && w.started_at.is_some()
+                    && w.updated_at.is_some()
+                    && w.completed_at.is_none()
             }
         };
-        if !valid {
+        if !valid || !timestamps_are_monotonic {
             return Err(TransitionError::InvalidState {
-                message: "cursor and timestamps contradict lifecycle",
+                message: "accumulated state or timestamps contradict lifecycle",
             });
         }
         Ok(Self {
@@ -579,7 +604,7 @@ impl LessonPolicyV1 {
                 .ok_or(TransitionError::InvalidState {
                     message: "cursor is dangling",
                 })?;
-        let mapped = l.objective_ids.iter().any(|o| {
+        let mapped = step.objective_ids.iter().any(|o| {
             curriculum.objective_mappings.iter().any(|m| {
                 m.objective_id == *o && m.competency_ids.contains(&decision.competency_id())
             })

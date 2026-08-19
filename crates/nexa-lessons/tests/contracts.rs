@@ -37,6 +37,39 @@ fn malformed_progress_is_rejected_without_panics() {
     assert!(serde_json::from_value::<LessonProgress>(p).is_err());
     assert!(serde_json::from_str::<Curriculum>("{}").is_err());
 }
+
+#[test]
+fn malformed_accumulated_progress_is_rejected_for_each_lifecycle_family() {
+    let base: Value = serde_json::from_str(include_str!("fixtures/progress.json")).unwrap();
+    let step = "00000000-0000-0000-0000-000000000005";
+    let started = "2026-08-19T12:00:00Z";
+    let later = "2026-08-19T12:01:00Z";
+    let malformed = [
+        // A never-started lesson cannot contain accumulated progress or an update time.
+        json!({"lifecycle":"not_started", "completed_steps":[step], "updated_at":later}),
+        // Open cursors cannot point at a step already recorded as complete.
+        json!({"lifecycle":"active", "current_step_id":step, "completed_steps":[step], "started_at":started, "updated_at":later}),
+        // Open state requires a complete and monotonic started/updated timestamp pair.
+        json!({"lifecycle":"waiting", "current_step_id":step, "started_at":later, "updated_at":started}),
+        // Completion must record work and use the completion instant as its last update.
+        json!({"lifecycle":"completed", "completed_steps":[], "started_at":started, "updated_at":started, "completed_at":later}),
+        // Terminal non-completion states can only be reached after starting.
+        json!({"lifecycle":"blocked", "updated_at":later}),
+        // Only completed state may carry a completion timestamp.
+        json!({"lifecycle":"abandoned", "started_at":started, "updated_at":later, "completed_at":later}),
+    ];
+
+    for changes in malformed {
+        let mut candidate = base.clone();
+        for (key, value) in changes.as_object().unwrap() {
+            candidate[key] = value.clone();
+        }
+        assert!(
+            serde_json::from_value::<LessonProgress>(candidate).is_err(),
+            "accepted malformed progress override: {changes}"
+        );
+    }
+}
 #[test]
 fn detects_duplicate_dangling_and_cycles() {
     let base: Value = serde_json::from_str(include_str!("fixtures/curriculum.json")).unwrap();
@@ -110,6 +143,38 @@ fn routing_is_deterministic_structured_and_atomic() {
         LessonPolicyV1::route(&c, &p, &unavailable, &BTreeSet::new(), at()),
         Err(TransitionError::RouteUnavailable { .. })
     ));
+}
+
+#[test]
+fn routing_rejects_competency_mapped_only_to_another_step_objective() {
+    let mut value: Value = serde_json::from_str(include_str!("fixtures/curriculum.json")).unwrap();
+    let other_objective = "00000000-0000-0000-0000-000000000017";
+    let other_competency = "00000000-0000-0000-0000-000000000018";
+    value["lessons"][0]["objective_ids"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!(other_objective));
+    value["lessons"][0]["steps"][1]["objective_ids"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!(other_objective));
+    value["objective_mappings"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"objective_id":other_objective, "competency_ids":[other_competency]}));
+    let curriculum: Curriculum = serde_json::from_value(value).unwrap();
+    let active = LessonPolicyV1::start(&curriculum, &progress(), &BTreeSet::new(), at()).unwrap();
+
+    assert_eq!(
+        LessonPolicyV1::route(
+            &curriculum,
+            &active,
+            &decision("advance", other_competency),
+            &BTreeSet::new(),
+            at(),
+        ),
+        Err(TransitionError::PedagogyCompetencyMismatch)
+    );
 }
 #[test]
 fn prerequisite_order_is_stable_and_unmet_is_rejected() {

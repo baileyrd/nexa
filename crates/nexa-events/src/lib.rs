@@ -354,14 +354,75 @@ impl DomainEvent for PedagogyDecisionMade {
 }
 
 /// Privacy-minimal lesson lifecycle fact; content and student profile data are excluded.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LessonEventLifecycle {
+    NotStarted,
+    Active,
+    Waiting,
+    Completed,
+    Blocked,
+    Abandoned,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "LessonLifecycleChangedWire")]
 pub struct LessonLifecycleChanged {
     pub transition_id: LessonTransitionId,
     pub student_id: StudentId,
     pub lesson_id: LessonId,
-    pub from: SemanticKey,
-    pub to: SemanticKey,
+    pub from: LessonEventLifecycle,
+    pub to: LessonEventLifecycle,
     pub policy_version: ProtocolVersion,
+}
+#[derive(Deserialize)]
+struct LessonLifecycleChangedWire {
+    transition_id: LessonTransitionId,
+    student_id: StudentId,
+    lesson_id: LessonId,
+    from: LessonEventLifecycle,
+    to: LessonEventLifecycle,
+    policy_version: ProtocolVersion,
+}
+impl TryFrom<LessonLifecycleChangedWire> for LessonLifecycleChanged {
+    type Error = InvalidLessonLifecycleChanged;
+
+    fn try_from(w: LessonLifecycleChangedWire) -> Result<Self, Self::Error> {
+        if w.from == w.to {
+            return Err(InvalidLessonLifecycleChanged);
+        }
+        Ok(Self {
+            transition_id: w.transition_id,
+            student_id: w.student_id,
+            lesson_id: w.lesson_id,
+            from: w.from,
+            to: w.to,
+            policy_version: w.policy_version,
+        })
+    }
+}
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
+#[error("lesson lifecycle change must use known, distinct lifecycle states")]
+pub struct InvalidLessonLifecycleChanged;
+
+impl LessonLifecycleChanged {
+    pub fn new(
+        transition_id: LessonTransitionId,
+        student_id: StudentId,
+        lesson_id: LessonId,
+        from: LessonEventLifecycle,
+        to: LessonEventLifecycle,
+        policy_version: ProtocolVersion,
+    ) -> Result<Self, InvalidLessonLifecycleChanged> {
+        Self::try_from(LessonLifecycleChangedWire {
+            transition_id,
+            student_id,
+            lesson_id,
+            from,
+            to,
+            policy_version,
+        })
+    }
 }
 impl DomainEvent for LessonLifecycleChanged {
     const KIND: EventKind = EventKind::LessonLifecycleChanged;
