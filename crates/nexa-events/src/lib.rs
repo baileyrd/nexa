@@ -2,9 +2,9 @@
 #![forbid(unsafe_code)]
 
 use nexa_domain::{
-    BehaviorId, CompetencyId, CorrelationId, EndpointId, EventId, EvidenceId, MasteryScore,
-    MessageId, ProtocolVersion, SemanticKey, Sequence, SessionId, StudentId, SubjectId, Timestamp,
-    TraceId,
+    BehaviorId, CompetencyId, CorrelationId, EndpointId, EventId, EvidenceId, LessonId,
+    LessonStepId, LessonTransitionId, MasteryScore, MessageId, ProtocolVersion, SemanticKey,
+    Sequence, SessionId, StudentId, SubjectId, Timestamp, TraceId,
 };
 use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
@@ -59,6 +59,10 @@ pub enum EventKind {
     CompetencyUpdated,
     #[serde(rename = "pedagogy.decision.made")]
     PedagogyDecisionMade,
+    #[serde(rename = "lesson.lifecycle.changed")]
+    LessonLifecycleChanged,
+    #[serde(rename = "lesson.transition.applied")]
+    LessonTransitionApplied,
 }
 
 /// Operational, non-domain envelope metadata. Never place secrets here.
@@ -347,6 +351,90 @@ impl PedagogyDecisionMade {
 }
 impl DomainEvent for PedagogyDecisionMade {
     const KIND: EventKind = EventKind::PedagogyDecisionMade;
+}
+
+/// Privacy-minimal lesson lifecycle fact; content and student profile data are excluded.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct LessonLifecycleChanged {
+    pub transition_id: LessonTransitionId,
+    pub student_id: StudentId,
+    pub lesson_id: LessonId,
+    pub from: SemanticKey,
+    pub to: SemanticKey,
+    pub policy_version: ProtocolVersion,
+}
+impl DomainEvent for LessonLifecycleChanged {
+    const KIND: EventKind = EventKind::LessonLifecycleChanged;
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "LessonTransitionAppliedWire")]
+pub struct LessonTransitionApplied {
+    pub transition_id: LessonTransitionId,
+    pub student_id: StudentId,
+    pub lesson_id: LessonId,
+    pub from_step_id: Option<LessonStepId>,
+    pub to_step_id: Option<LessonStepId>,
+    rationale_codes: Vec<SemanticKey>,
+    pub policy_version: ProtocolVersion,
+}
+#[derive(Deserialize)]
+struct LessonTransitionAppliedWire {
+    transition_id: LessonTransitionId,
+    student_id: StudentId,
+    lesson_id: LessonId,
+    from_step_id: Option<LessonStepId>,
+    to_step_id: Option<LessonStepId>,
+    rationale_codes: Vec<SemanticKey>,
+    policy_version: ProtocolVersion,
+}
+impl TryFrom<LessonTransitionAppliedWire> for LessonTransitionApplied {
+    type Error = InvalidLessonTransitionEvent;
+    fn try_from(w: LessonTransitionAppliedWire) -> Result<Self, Self::Error> {
+        if w.rationale_codes.is_empty() || !w.rationale_codes.windows(2).all(|x| x[0] < x[1]) {
+            return Err(InvalidLessonTransitionEvent);
+        }
+        Ok(Self {
+            transition_id: w.transition_id,
+            student_id: w.student_id,
+            lesson_id: w.lesson_id,
+            from_step_id: w.from_step_id,
+            to_step_id: w.to_step_id,
+            rationale_codes: w.rationale_codes,
+            policy_version: w.policy_version,
+        })
+    }
+}
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
+#[error("lesson transition rationale_codes must be nonempty, sorted, and unique")]
+pub struct InvalidLessonTransitionEvent;
+impl LessonTransitionApplied {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        transition_id: LessonTransitionId,
+        student_id: StudentId,
+        lesson_id: LessonId,
+        from_step_id: Option<LessonStepId>,
+        to_step_id: Option<LessonStepId>,
+        rationale_codes: Vec<SemanticKey>,
+        policy_version: ProtocolVersion,
+    ) -> Result<Self, InvalidLessonTransitionEvent> {
+        Self::try_from(LessonTransitionAppliedWire {
+            transition_id,
+            student_id,
+            lesson_id,
+            from_step_id,
+            to_step_id,
+            rationale_codes,
+            policy_version,
+        })
+    }
+    pub fn rationale_codes(&self) -> &[SemanticKey] {
+        &self.rationale_codes
+    }
+}
+impl DomainEvent for LessonTransitionApplied {
+    const KIND: EventKind = EventKind::LessonTransitionApplied;
 }
 
 /// A subscriber callback failure. Other subscribers are still called.

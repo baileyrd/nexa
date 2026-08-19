@@ -28,6 +28,7 @@ This registry is the navigation and governance authority for Nexa system specifi
 | ADR-0009 | [Embodiment acceptance and lifecycle](adr/0009-embodiment-acceptance-and-lifecycle.md) | Accepted | Capability wire ownership, acknowledgement, lifecycle events, and synchronous core |
 | ADR-0010 | [Learning state, immutable evidence, and persistence](adr/0010-learning-state-evidence-and-persistence.md) | Accepted | Phase 3 ownership, replay, policy versioning, and persistence ports |
 | ADR-0011 | [Pedagogy policy ownership and versioning](adr/0011-pedagogy-policy-ownership-and-versioning.md) | Accepted | Pedagogy ownership, thresholds, explanations, and lesson separation |
+| ADR-0012 | [Governed curriculum and lesson transitions](adr/0012-governed-curriculum-and-lesson-transitions.md) | Accepted | Authored curriculum, progress, prerequisites, and versioned transitions |
 | ADR-0008 | [Controlled 3D workspace migration and ownership](adr/0008-controlled-3d-workspace-migration.md) | Accepted | 3D library, viewer, and validator ownership after migration |
 
 ## Subsystem specifications
@@ -41,7 +42,7 @@ This registry is the navigation and governance authority for Nexa system specifi
 | 03 | NEXA-PED-001 | Adaptive pedagogy | Implemented Phase 3 slice | `nexa-pedagogy` |
 | 04 | NEXA-TUTOR-001 | Tutor intelligence | Baseline Draft | `nexa-tutor` |
 | 05 | NEXA-KNOW-001 | Knowledge and RAG | Baseline Draft | `nexa-knowledge` |
-| 06 | NEXA-LESSON-001 | Curriculum and lessons | Baseline Draft | `nexa-lessons` |
+| 06 | NEXA-LESSON-001 | Curriculum and lessons | Implemented Phase 3 slice | `nexa-lessons` |
 | 07 | NEXA-ASMT-001 | Assessment | Baseline Draft | `nexa-assessment` |
 | 08 | NEXA-LAB-001 | Labs and sandboxes | Baseline Draft | `nexa-labs` |
 | 09 | NEXA-SPCH-001 | Speech interaction | Baseline Draft | `nexa-speech` |
