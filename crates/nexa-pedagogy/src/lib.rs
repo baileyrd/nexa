@@ -2,7 +2,7 @@
 #![forbid(unsafe_code)]
 
 use nexa_domain::{CompetencyId, ProtocolVersion, StudentId};
-use nexa_student::{CompetencyStatus, MasteryState};
+use nexa_student::{BoundedWeightedV1, CompetencyStatus, MasteryState};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use thiserror::Error;
@@ -49,6 +49,7 @@ pub enum RationaleCode {
     CompetencyMastered,
     PreferredOptionUnavailable,
     ProjectionStatusControls,
+    NoRecentOutcome,
 }
 
 #[derive(Clone, Debug, Error, PartialEq)]
@@ -120,12 +121,11 @@ impl TryFrom<InputWire> for PedagogyInput {
                 message: "consecutive failures require a recent failure",
             });
         }
-        if value.mastery.status() == CompetencyStatus::Mastered
-            && (value.mastery.evidence_count() < PedagogyPolicyV1::MINIMUM_EVIDENCE
-                || value.mastery.mastery().get() < PedagogyPolicyV1::MASTERY_THRESHOLD)
+        if value.mastery.policy_version() == ProtocolVersion::new(1, 0)
+            && BoundedWeightedV1::validate_projection(&value.mastery).is_err()
         {
             return Err(PedagogyError::InvalidInput {
-                message: "mastered status contradicts v1 evidence or mastery boundaries",
+                message: "mastery projection is not producible by the v1 projection policy",
             });
         }
         Ok(Self {
@@ -167,12 +167,64 @@ impl PedagogyInput {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "DecisionWire")]
 pub struct PedagogyDecision {
-    pub policy_version: ProtocolVersion,
-    pub student_id: StudentId,
-    pub competency_id: CompetencyId,
-    pub selected_option: InstructionalOption,
-    pub rationale_codes: Vec<RationaleCode>,
+    policy_version: ProtocolVersion,
+    student_id: StudentId,
+    competency_id: CompetencyId,
+    selected_option: InstructionalOption,
+    rationale_codes: Vec<RationaleCode>,
+}
+
+#[derive(Deserialize)]
+struct DecisionWire {
+    policy_version: ProtocolVersion,
+    student_id: StudentId,
+    competency_id: CompetencyId,
+    selected_option: InstructionalOption,
+    rationale_codes: Vec<RationaleCode>,
+}
+
+impl TryFrom<DecisionWire> for PedagogyDecision {
+    type Error = PedagogyError;
+
+    fn try_from(value: DecisionWire) -> Result<Self, Self::Error> {
+        if value.rationale_codes.is_empty()
+            || !value
+                .rationale_codes
+                .windows(2)
+                .all(|pair| pair[0] < pair[1])
+        {
+            return Err(PedagogyError::InvalidInput {
+                message: "rationale_codes must be nonempty, sorted, and unique",
+            });
+        }
+        Ok(Self {
+            policy_version: value.policy_version,
+            student_id: value.student_id,
+            competency_id: value.competency_id,
+            selected_option: value.selected_option,
+            rationale_codes: value.rationale_codes,
+        })
+    }
+}
+
+impl PedagogyDecision {
+    pub fn policy_version(&self) -> ProtocolVersion {
+        self.policy_version
+    }
+    pub fn student_id(&self) -> StudentId {
+        self.student_id
+    }
+    pub fn competency_id(&self) -> CompetencyId {
+        self.competency_id
+    }
+    pub fn selected_option(&self) -> InstructionalOption {
+        self.selected_option
+    }
+    pub fn rationale_codes(&self) -> &[RationaleCode] {
+        &self.rationale_codes
+    }
 }
 
 /// A dependency-light synchronous policy port. Persistence and execution belong above this crate.
@@ -206,14 +258,8 @@ impl PedagogyPolicyV1 {
             }
             return Ok(*option);
         }
-        // The final stable fallback order is independent of caller insertion order.
         reasons.push(RationaleCode::PreferredOptionUnavailable);
-        input
-            .available_options
-            .iter()
-            .next()
-            .copied()
-            .ok_or(PedagogyError::NoAvailableOption)
+        Err(PedagogyError::NoAvailableOption)
     }
 }
 
@@ -235,6 +281,11 @@ impl PedagogyPolicy for PedagogyPolicyV1 {
                 actual: input.mastery.policy_version(),
             });
         }
+        BoundedWeightedV1::validate_projection(&input.mastery).map_err(|_| {
+            PedagogyError::InvalidInput {
+                message: "mastery projection is not producible by the v1 projection policy",
+            }
+        })?;
 
         let mut reasons = Vec::new();
         let preferences: &[InstructionalOption] =
@@ -330,7 +381,7 @@ impl PedagogyPolicy for PedagogyPolicyV1 {
                     InstructionalOption::Practice,
                 ]
             } else {
-                reasons.push(RationaleCode::InsufficientEvidence);
+                reasons.push(RationaleCode::NoRecentOutcome);
                 &[
                     InstructionalOption::Review,
                     InstructionalOption::Assess,
@@ -340,7 +391,7 @@ impl PedagogyPolicy for PedagogyPolicyV1 {
         let selected_option = Self::choose(input, preferences, &mut reasons)?;
         reasons.sort();
         reasons.dedup();
-        Ok(PedagogyDecision {
+        PedagogyDecision::try_from(DecisionWire {
             policy_version: self.version(),
             student_id: input.mastery.student_id(),
             competency_id: input.mastery.competency_id(),

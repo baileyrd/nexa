@@ -373,6 +373,38 @@ pub trait MasteryUpdatePolicy {
 /// Phase 3 v1 bounded weighted update. Coefficients are part of version 1.0.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct BoundedWeightedV1;
+impl BoundedWeightedV1 {
+    /// Validates that a projection has a shape that this policy can produce.
+    pub fn validate_projection(state: &MasteryState) -> Result<(), StudentModelError> {
+        let expected_version = ProtocolVersion::new(1, 0);
+        if state.policy_version != expected_version {
+            return Err(StudentModelError::PolicyVersionMismatch {
+                expected: expected_version,
+                actual: state.policy_version,
+            });
+        }
+        let expected_confidence = (state.evidence_count as f64 / 5.0).min(1.0);
+        if state.model_confidence.get() != expected_confidence {
+            return Err(StudentModelError::InvalidMasteryState {
+                message: "model confidence contradicts the v1 evidence count",
+            });
+        }
+        let expected_status = match state.mastery.get() {
+            value if state.evidence_count >= 5 && value >= 0.85 => CompetencyStatus::Mastered,
+            value if value >= 0.7 => CompetencyStatus::Proficient,
+            value if value >= 0.5 => CompetencyStatus::Functional,
+            value if value >= 0.3 => CompetencyStatus::Developing,
+            value if value > 0.0 => CompetencyStatus::Emerging,
+            _ => CompetencyStatus::Unestablished,
+        };
+        if state.status != expected_status {
+            return Err(StudentModelError::InvalidMasteryState {
+                message: "status contradicts the v1 mastery and evidence boundaries",
+            });
+        }
+        Ok(())
+    }
+}
 impl MasteryUpdatePolicy for BoundedWeightedV1 {
     fn version(&self) -> ProtocolVersion {
         ProtocolVersion::new(1, 0)

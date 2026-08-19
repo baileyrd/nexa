@@ -1,0 +1,23 @@
+{
+  "event_version": "1.0",
+  "event_id": "0193f24a-9c41-7a4d-b64f-b6fa5b76f001",
+  "event_type": "pedagogy.decision.made",
+  "timestamp": "2026-08-17T23:45:00Z",
+  "session_id": "0193f249-95c2-79e0-a221-628003c28501",
+  "sequence": 1842,
+  "source": "nexa.training_ui",
+  "subject": "student.current",
+  "correlation_id": "0193f249-c239-7434-a223-c1af15431322",
+  "causation_id": "0193f249-ba42-7210-8aca-f69323269d50",
+  "trace_id": "0193f249-dc15-79e2-9879-b96452e04511",
+  "payload": {
+    "student_id": "018f6f3e-8c5d-7a20-8000-000000000001",
+    "competency_id": "018f6f3e-8c5d-7a20-8000-000000000002",
+    "selected_option": "review",
+    "rationale_codes": [
+      "no_recent_outcome",
+      "preferred_option_unavailable"
+    ],
+    "policy_version": "1.0"
+  }
+}

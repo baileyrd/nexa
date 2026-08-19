@@ -280,12 +280,70 @@ impl DomainEvent for CompetencyUpdated {
 
 /// Privacy-minimal pedagogy routing fact. Vocabulary remains semantic to avoid a crate cycle.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "PedagogyDecisionMadeWire")]
 pub struct PedagogyDecisionMade {
     pub student_id: StudentId,
     pub competency_id: CompetencyId,
     pub selected_option: SemanticKey,
-    pub rationale_codes: Vec<SemanticKey>,
+    rationale_codes: Vec<SemanticKey>,
     pub policy_version: ProtocolVersion,
+}
+
+#[derive(Deserialize)]
+struct PedagogyDecisionMadeWire {
+    student_id: StudentId,
+    competency_id: CompetencyId,
+    selected_option: SemanticKey,
+    rationale_codes: Vec<SemanticKey>,
+    policy_version: ProtocolVersion,
+}
+
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
+#[error("rationale_codes must be nonempty, sorted, and unique")]
+pub struct InvalidPedagogyDecisionMade;
+
+impl TryFrom<PedagogyDecisionMadeWire> for PedagogyDecisionMade {
+    type Error = InvalidPedagogyDecisionMade;
+
+    fn try_from(value: PedagogyDecisionMadeWire) -> Result<Self, Self::Error> {
+        if value.rationale_codes.is_empty()
+            || !value
+                .rationale_codes
+                .windows(2)
+                .all(|pair| pair[0] < pair[1])
+        {
+            return Err(InvalidPedagogyDecisionMade);
+        }
+        Ok(Self {
+            student_id: value.student_id,
+            competency_id: value.competency_id,
+            selected_option: value.selected_option,
+            rationale_codes: value.rationale_codes,
+            policy_version: value.policy_version,
+        })
+    }
+}
+
+impl PedagogyDecisionMade {
+    pub fn new(
+        student_id: StudentId,
+        competency_id: CompetencyId,
+        selected_option: SemanticKey,
+        rationale_codes: Vec<SemanticKey>,
+        policy_version: ProtocolVersion,
+    ) -> Result<Self, InvalidPedagogyDecisionMade> {
+        Self::try_from(PedagogyDecisionMadeWire {
+            student_id,
+            competency_id,
+            selected_option,
+            rationale_codes,
+            policy_version,
+        })
+    }
+
+    pub fn rationale_codes(&self) -> &[SemanticKey] {
+        &self.rationale_codes
+    }
 }
 impl DomainEvent for PedagogyDecisionMade {
     const KIND: EventKind = EventKind::PedagogyDecisionMade;

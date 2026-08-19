@@ -37,7 +37,7 @@ fn decide(
 fn golden_round_trip_and_deterministic_replay() {
     let input = PedagogyInput::new(
         ProtocolVersion::new(1, 0),
-        state(0.5, 0.8, "functional", 3, "1.0"),
+        state(0.5, 0.6, "functional", 3, "1.0"),
         Some(RecentOutcome::PartialSuccess),
         2,
         0,
@@ -58,7 +58,7 @@ fn golden_round_trip_and_deterministic_replay() {
         before,
         "policy mutated its input"
     );
-    assert!(!first.rationale_codes.is_empty());
+    assert!(!first.rationale_codes().is_empty());
 }
 
 #[test]
@@ -96,7 +96,7 @@ fn decision_table_and_boundaries() {
             RationaleCode::InsufficientEvidence,
         ),
         (
-            state(0.4, 0.599, "developing", 2, "1.0"),
+            state(0.4, 0.4, "developing", 2, "1.0"),
             Some(RecentOutcome::Success),
             1,
             0,
@@ -104,7 +104,7 @@ fn decision_table_and_boundaries() {
             RationaleCode::LowModelConfidence,
         ),
         (
-            state(0.4, 0.60, "developing", 2, "1.0"),
+            state(0.4, 0.6, "developing", 3, "1.0"),
             Some(RecentOutcome::Failure),
             1,
             1,
@@ -112,7 +112,7 @@ fn decision_table_and_boundaries() {
             RationaleCode::RecentFailure,
         ),
         (
-            state(0.4, 0.8, "developing", 3, "1.0"),
+            state(0.4, 0.6, "developing", 3, "1.0"),
             Some(RecentOutcome::Failure),
             2,
             2,
@@ -120,7 +120,7 @@ fn decision_table_and_boundaries() {
             RationaleCode::RepeatedFailure,
         ),
         (
-            state(0.4, 0.8, "developing", 3, "1.0"),
+            state(0.4, 0.6, "developing", 3, "1.0"),
             Some(RecentOutcome::Failure),
             3,
             3,
@@ -128,7 +128,7 @@ fn decision_table_and_boundaries() {
             RationaleCode::RetryLimitReached,
         ),
         (
-            state(0.5, 0.8, "functional", 3, "1.0"),
+            state(0.5, 0.6, "functional", 3, "1.0"),
             Some(RecentOutcome::PartialSuccess),
             2,
             0,
@@ -136,7 +136,7 @@ fn decision_table_and_boundaries() {
             RationaleCode::RecentPartialSuccess,
         ),
         (
-            state(0.849, 0.8, "proficient", 5, "1.0"),
+            state(0.849, 1.0, "proficient", 5, "1.0"),
             Some(RecentOutcome::Success),
             2,
             0,
@@ -144,7 +144,7 @@ fn decision_table_and_boundaries() {
             RationaleCode::RecentSuccess,
         ),
         (
-            state(0.85, 0.8, "proficient", 5, "1.0"),
+            state(0.85, 0.8, "proficient", 4, "1.0"),
             Some(RecentOutcome::Success),
             2,
             0,
@@ -160,40 +160,81 @@ fn decision_table_and_boundaries() {
             RationaleCode::CompetencyMastered,
         ),
         (
-            state(0.4, 0.8, "developing", 2, "1.0"),
+            state(0.4, 0.6, "developing", 3, "1.0"),
             None,
             0,
             0,
             Review,
-            RationaleCode::InsufficientEvidence,
+            RationaleCode::NoRecentOutcome,
         ),
     ];
     for (s, o, a, f, expected, reason) in cases {
         let d = decide(s, o, a, f, &all).unwrap();
-        assert_eq!(d.selected_option, expected);
-        assert!(d.rationale_codes.contains(&reason));
+        assert_eq!(d.selected_option(), expected);
+        assert!(d.rationale_codes().contains(&reason));
     }
 }
 
 #[test]
-fn unavailable_preference_uses_only_available_stable_fallback() {
-    let d = decide(
-        state(0.9, 1.0, "mastered", 5, "1.0"),
-        Some(RecentOutcome::Success),
-        1,
+fn unavailable_preferences_never_select_an_unsafe_option() {
+    use InstructionalOption::*;
+    for (outcome, attempts, failures, only_unsafe) in [
+        (Some(RecentOutcome::Failure), 1, 1, Advance),
+        (Some(RecentOutcome::Failure), 3, 3, Challenge),
+    ] {
+        assert_eq!(
+            decide(
+                state(0.4, 0.6, "developing", 3, "1.0"),
+                outcome,
+                attempts,
+                failures,
+                &[only_unsafe],
+            ),
+            Err(PedagogyError::NoAvailableOption)
+        );
+    }
+
+    let decision = decide(
+        state(0.4, 0.6, "developing", 3, "1.0"),
+        Some(RecentOutcome::Failure),
+        2,
+        2,
+        &[Retry, Hint],
+    )
+    .unwrap();
+    assert_eq!(decision.selected_option(), Hint);
+}
+
+#[test]
+fn decision_wire_requires_canonical_explanations() {
+    let decision = decide(
+        state(0.5, 0.6, "functional", 3, "1.0"),
+        None,
+        0,
         0,
         &[InstructionalOption::Review],
     )
     .unwrap();
-    assert_eq!(d.selected_option, InstructionalOption::Review);
-    assert!(d
-        .rationale_codes
-        .contains(&RationaleCode::PreferredOptionUnavailable));
+    let encoded = serde_json::to_value(&decision).unwrap();
+    assert_eq!(
+        serde_json::from_value::<PedagogyDecision>(encoded.clone()).unwrap(),
+        decision
+    );
+
+    for rationales in [
+        json!([]),
+        json!(["no_recent_outcome", "no_recent_outcome"]),
+        json!(["no_recent_outcome", "preferred_option_unavailable"]),
+    ] {
+        let mut malformed = encoded.clone();
+        malformed["rationale_codes"] = rationales;
+        assert!(serde_json::from_value::<PedagogyDecision>(malformed).is_err());
+    }
 }
 
 #[test]
 fn versions_and_malformed_inputs_are_structured_errors() {
-    let s = state(0.4, 0.8, "developing", 2, "1.0");
+    let s = state(0.4, 0.6, "developing", 3, "1.0");
     let input = PedagogyInput::new(
         ProtocolVersion::new(2, 0),
         s,
@@ -209,7 +250,7 @@ fn versions_and_malformed_inputs_are_structured_errors() {
     ));
     assert!(matches!(
         decide(
-            state(0.4, 0.8, "developing", 2, "2.0"),
+            state(0.4, 0.6, "developing", 3, "2.0"),
             None,
             0,
             0,
@@ -222,6 +263,13 @@ fn versions_and_malformed_inputs_are_structured_errors() {
         json!({"policy_version":"1.0","mastery":state(0.0,0.0,"unestablished",0,"1.0"),"recent_outcome":"failure","attempt_count":0,"consecutive_failures":1,"available_options":["retry"]}),
         json!({"policy_version":"1.0","mastery":state(0.4,0.8,"developing",2,"1.0"),"recent_outcome":"success","attempt_count":1,"consecutive_failures":1,"available_options":["practice"]}),
         json!({"policy_version":"1.0","mastery":state(0.4,0.8,"mastered",2,"1.0"),"recent_outcome":null,"attempt_count":0,"consecutive_failures":0,"available_options":["advance"]}),
+        json!({"policy_version":"1.0","mastery":state(0.1,0.2,"unestablished",1,"1.0"),"recent_outcome":null,"attempt_count":0,"consecutive_failures":0,"available_options":["review"]}),
+        json!({"policy_version":"1.0","mastery":state(0.3,0.2,"emerging",1,"1.0"),"recent_outcome":null,"attempt_count":0,"consecutive_failures":0,"available_options":["review"]}),
+        json!({"policy_version":"1.0","mastery":state(0.5,0.4,"developing",2,"1.0"),"recent_outcome":null,"attempt_count":0,"consecutive_failures":0,"available_options":["review"]}),
+        json!({"policy_version":"1.0","mastery":state(0.7,0.6,"functional",3,"1.0"),"recent_outcome":null,"attempt_count":0,"consecutive_failures":0,"available_options":["review"]}),
+        json!({"policy_version":"1.0","mastery":state(0.85,1.0,"proficient",5,"1.0"),"recent_outcome":null,"attempt_count":0,"consecutive_failures":0,"available_options":["review"]}),
+        json!({"policy_version":"1.0","mastery":state(0.84,1.0,"mastered",5,"1.0"),"recent_outcome":null,"attempt_count":0,"consecutive_failures":0,"available_options":["advance"]}),
+        json!({"policy_version":"1.0","mastery":state(0.4,0.8,"developing",3,"1.0"),"recent_outcome":null,"attempt_count":0,"consecutive_failures":0,"available_options":["review"]}),
     ] {
         assert!(serde_json::from_value::<PedagogyInput>(malformed).is_err());
     }

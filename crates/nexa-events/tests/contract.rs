@@ -100,3 +100,54 @@ fn fallible_payload_serializer_returns_encoding_error() {
         Err(PublishError::Encoding(_))
     ));
 }
+
+fn pedagogy_fixture() -> Event<PedagogyDecisionMade> {
+    let payload = PedagogyDecisionMade::new(
+        "018f6f3e-8c5d-7a20-8000-000000000001".parse().unwrap(),
+        "018f6f3e-8c5d-7a20-8000-000000000002".parse().unwrap(),
+        "review".parse().unwrap(),
+        vec![
+            "no_recent_outcome".parse().unwrap(),
+            "preferred_option_unavailable".parse().unwrap(),
+        ],
+        ProtocolVersion::new(1, 0),
+    )
+    .unwrap();
+    let original = fixture();
+    Event::new(
+        original.event_version,
+        original.event_id,
+        original.timestamp,
+        original.session_id,
+        original.sequence,
+        original.source,
+        original.subject,
+        original.correlation_id,
+        original.causation_id,
+        original.trace_id,
+        payload,
+        Default::default(),
+    )
+}
+
+#[test]
+fn pedagogy_event_golden_round_trip_and_malformed_rationales() {
+    let expected = include_str!("fixtures/pedagogy-decision-made.json").trim();
+    let encoded = serde_json::to_string_pretty(&pedagogy_fixture()).unwrap();
+    assert_eq!(encoded, expected);
+    assert_eq!(
+        serde_json::from_str::<Event<PedagogyDecisionMade>>(&encoded).unwrap(),
+        pedagogy_fixture()
+    );
+
+    let value = serde_json::to_value(pedagogy_fixture()).unwrap();
+    for rationales in [
+        serde_json::json!([]),
+        serde_json::json!(["no_recent_outcome", "no_recent_outcome"]),
+        serde_json::json!(["preferred_option_unavailable", "no_recent_outcome"]),
+    ] {
+        let mut malformed = value.clone();
+        malformed["payload"]["rationale_codes"] = rationales;
+        assert!(serde_json::from_value::<Event<PedagogyDecisionMade>>(malformed).is_err());
+    }
+}
