@@ -20,7 +20,8 @@
 | Reference-only vector query/result contracts and redaction | `VectorRetrievalQuery`, `VectorRetrievalResult`; wire/privacy tests | Implemented slice |
 | Exact hybrid fusion and provider-free reranking | `HybridFusionRequest`, exact reduced `HybridScore`, governed reconciliation, reference-only evidence; ADR-0018 | Implemented slice |
 | Governed context assembly, whole-chunk packing, and exact token budgeting | `ContextAssemblyRequest`, `ContextPackage`, standalone wire validation; ADR-0019 | Implemented slice |
-| Citation resolution and tutor behavior | Explicitly deferred by ADR-0016 | Not implemented |
+| Governed deterministic citation resolution | `CitationRequest`, `SourceLocationEvidence`, `CitationResult`, standalone wire validation; ADR-0020 | Implemented slice |
+| Semantic citation fidelity and tutor behavior | Explicitly deferred by ADR-0020 | Not implemented |
 | Model providers, networking, vector databases, and durable adapters | Explicitly deferred by ADR-0017 | Not implemented |
 
-Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministic vector retrieval are implemented. Learned/cross-encoder reranking, authority/freshness ranking, partial truncation, provider tokenization, citations, tutor intelligence and tutor-response generation, provider integration, networking, vector databases, and durable adapters remain unimplemented. The reconstructed knowledge and tutor specifications retain their registry authority; these increments do not promote them.
+Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministic vector retrieval are implemented. Learned/cross-encoder reranking, authority/freshness ranking, partial truncation, provider tokenization, semantic citation fidelity, tutor intelligence and tutor-response generation, provider integration, networking, vector databases, and durable adapters remain unimplemented. The reconstructed knowledge and tutor specifications retain their registry authority; these increments do not promote them.

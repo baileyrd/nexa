@@ -61,7 +61,7 @@ See [ADR-0010](../adr/0010-learning-state-evidence-and-persistence.md),
 
 ## Phase 4 — Add knowledge and tutor intelligence
 
-**Status:** In progress. The dependency-light ingestion, integrity, structural provenance, visibility, atomic staging (ADR-0015), deterministic governed lexical retrieval (ADR-0016), governed caller-supplied embedding/vector retrieval (ADR-0017), exact hybrid fusion/provider-free reranking (ADR-0018), and governed deterministic context assembly with exact token packing (ADR-0019) slices are implemented. Learned reranking, partial truncation, provider tokenization, citation resolution, tutor intelligence, provider integration, networking, vector databases, and durable adapters remain unimplemented.
+**Status:** In progress. The dependency-light ingestion, integrity, structural provenance, visibility, atomic staging (ADR-0015), deterministic governed lexical retrieval (ADR-0016), governed caller-supplied embedding/vector retrieval (ADR-0017), exact hybrid fusion/provider-free reranking (ADR-0018), and governed deterministic context assembly with exact token packing (ADR-0019), and governed deterministic citation resolution (ADR-0020) slices are implemented. Learned reranking, partial truncation, provider tokenization, semantic citation fidelity, tutor intelligence, provider integration, networking, vector databases, and durable adapters remain unimplemented.
 
 - Source ingestion and provenance
 - [x] deterministic governed lexical retrieval
