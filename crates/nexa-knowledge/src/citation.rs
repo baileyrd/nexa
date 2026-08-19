@@ -512,6 +512,7 @@ pub struct CitationResult {
     pub maximum_citations: usize,
     pub maximum_citations_per_claim: usize,
     pub claim_order_anchor: Vec<ClaimOrderAnchor>,
+    pub included_anchor_count: usize,
     pub context_anchor: Vec<ContextAnchor>,
     pub claims: Vec<ClaimCitationResult>,
 }
@@ -534,7 +535,10 @@ impl CitationResult {
         {
             return Err(CitationError::InvalidResult);
         }
-        if self.claim_order_anchor.len() != self.claims.len() || self.context_anchor.is_empty() {
+        if self.claim_order_anchor.len() != self.claims.len()
+            || self.included_anchor_count != self.context_anchor.len()
+            || self.included_anchor_count > crate::context::MAX_CONTEXT_CHUNKS
+        {
             return Err(CitationError::InvalidResult);
         }
         let mut anchor_claim_ids = BTreeSet::new();
@@ -601,7 +605,7 @@ impl CitationResult {
         Ok(())
     }
 }
-wire!(CitationResult{contract_version:ProtocolVersion,citation_set_id:CitationSetId,context_package_id:ContextPackageId,hybrid_result_id:HybridRetrievalResultId,query_id:RetrievalQueryId,citation_policy_version:ProtocolVersion,locator_policy_version:ProtocolVersion,governance_policy_version:ProtocolVersion,integrity_profile_version:ProtocolVersion,maximum_citations:usize,maximum_citations_per_claim:usize,claim_order_anchor:Vec<ClaimOrderAnchor>,context_anchor:Vec<ContextAnchor>,claims:Vec<ClaimCitationResult>});
+wire!(CitationResult{contract_version:ProtocolVersion,citation_set_id:CitationSetId,context_package_id:ContextPackageId,hybrid_result_id:HybridRetrievalResultId,query_id:RetrievalQueryId,citation_policy_version:ProtocolVersion,locator_policy_version:ProtocolVersion,governance_policy_version:ProtocolVersion,integrity_profile_version:ProtocolVersion,maximum_citations:usize,maximum_citations_per_claim:usize,claim_order_anchor:Vec<ClaimOrderAnchor>,included_anchor_count:usize,context_anchor:Vec<ContextAnchor>,claims:Vec<ClaimCitationResult>});
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum CitationError {
@@ -745,6 +749,7 @@ pub fn resolve_citations(
                 claim_position: (i + 1) as u32,
             })
             .collect(),
+        included_anchor_count: package.included.len(),
         context_anchor: package
             .included
             .iter()
@@ -989,5 +994,50 @@ mod tests {
                 "{field}"
             );
         }
+    }
+
+    #[test]
+    fn empty_context_round_trips_unresolved_claims_and_rejects_tampering() {
+        let mut empty_package = package();
+        empty_package.hybrid_candidate_count = 0;
+        empty_package.used_tokens = 0;
+        empty_package.remaining_tokens = empty_package.maximum_tokens;
+        empty_package.included.clear();
+        empty_package.content.clear();
+        assert!(empty_package.validate().is_ok());
+
+        let unresolved_request = request(json!([
+            {"claim_id":CLAIM1,"evidence":[]},
+            {"claim_id":CLAIM2,"evidence":[]}
+        ]));
+        let result = resolve_citations(&unresolved_request, &empty_package).unwrap();
+        assert_eq!(result.included_anchor_count, 0);
+        assert!(result.context_anchor.is_empty());
+        assert!(result.claims.iter().all(|claim| {
+            claim.status == CitationResolutionStatus::Unresolved
+                && claim.unresolved_reason == Some(UnresolvedCitationReason::NoSuppliedEvidence)
+                && claim.citations.is_empty()
+        }));
+        let wire = serde_json::to_string(&result).unwrap();
+        assert_eq!(
+            serde_json::from_str::<CitationResult>(&wire).unwrap(),
+            result
+        );
+
+        let base = serde_json::to_value(&result).unwrap();
+        let mut wrong_count = base.clone();
+        wrong_count["included_anchor_count"] = json!(1);
+        assert!(serde_json::from_value::<CitationResult>(wrong_count).is_err());
+
+        let resolved_request = request(json!([
+            {"claim_id":CLAIM1,"evidence":[evidence(CIT1,CHUNK1,ART1,1,json!({"kind":"document_page","page":1}))]}
+        ]));
+        let resolved = resolve_citations(&resolved_request, &package()).unwrap();
+        let mut injected_citation = base;
+        injected_citation["claims"][0]["status"] = json!("resolved");
+        injected_citation["claims"][0]["unresolved_reason"] = Value::Null;
+        injected_citation["claims"][0]["citations"] =
+            serde_json::to_value(&resolved.claims[0].citations).unwrap();
+        assert!(serde_json::from_value::<CitationResult>(injected_citation).is_err());
     }
 }
