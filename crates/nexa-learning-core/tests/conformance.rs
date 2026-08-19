@@ -40,6 +40,44 @@ fn assessment() -> Assessment {
     )
     .unwrap()
 }
+fn multi_competency_assessment() -> Assessment {
+    let rubric_id = id(40);
+    Assessment::new(
+        id(20),
+        ProtocolVersion::new(1, 0),
+        "Multi-competency checkpoint",
+        AssessmentMode::Formative,
+        SCORING_POLICY_V1,
+        Score::new(0.6).unwrap(),
+        vec![Question {
+            id: id(21),
+            version: ProtocolVersion::new(1, 0),
+            prompt: "Apply both competencies".into(),
+            purpose: QuestionPurpose::Apply,
+            competency_ids: vec![id(8), id(10)],
+            evaluation: Evaluation::Rubric { rubric_id },
+        }],
+        vec![Rubric::new(
+            rubric_id,
+            vec![
+                RubricCriterion {
+                    id: id(41),
+                    description: "First competency".into(),
+                    weight: Score::new(0.5).unwrap(),
+                    competency_id: id(8),
+                },
+                RubricCriterion {
+                    id: id(42),
+                    description: "Second competency".into(),
+                    weight: Score::new(0.5).unwrap(),
+                    competency_id: id(10),
+                },
+            ],
+        )
+        .unwrap()],
+    )
+    .unwrap()
+}
 fn request() -> LearningOperation {
     LearningOperation {
         version: COMPOSITION_VERSION,
@@ -105,6 +143,69 @@ fn identical_operation_is_idempotent_and_conflicting_reuse_is_atomic() {
         Err(CompositionError::ConflictingReplay)
     ));
     assert_eq!(uow.state(), &committed);
+}
+
+#[test]
+fn response_identity_is_idempotent_across_operations_and_conflicts_atomically() {
+    let mut uow = InMemoryUnitOfWork::default();
+    let original = LearningCore::apply(&mut uow, &curriculum(), &assessment(), request()).unwrap();
+    let committed = uow.state().clone();
+    let mut retry = request();
+    retry.operation_id = id(35);
+    let replay = LearningCore::apply(&mut uow, &curriculum(), &assessment(), retry).unwrap();
+    assert!(replay.replayed);
+    assert_eq!(replay.mastery, original.mastery);
+    assert_eq!(uow.state(), &committed);
+
+    let mut conflict = request();
+    conflict.operation_id = id(36);
+    conflict.response.value = ResponseValue::Boolean { value: false };
+    assert!(matches!(
+        LearningCore::apply(&mut uow, &curriculum(), &assessment(), conflict),
+        Err(CompositionError::ConflictingReplay)
+    ));
+    assert_eq!(uow.state(), &committed);
+}
+
+#[test]
+fn multi_competency_rubric_updates_each_projection_and_selects_pedagogy_scope() {
+    let mut operation = request();
+    operation.response.value = ResponseValue::Rubric {
+        levels: BTreeMap::from([
+            (id(41), Score::new(1.0).unwrap()),
+            (id(42), Score::new(0.0).unwrap()),
+        ]),
+    };
+    operation.evidence_ids = BTreeMap::from([(id(8), id(33)), (id(10), id(37))]);
+    // The authored lesson owns competency 8, so it is the explicitly selected routing scope.
+    operation.competency_id = id(8);
+    let mut uow = InMemoryUnitOfWork::default();
+    let result = LearningCore::apply(
+        &mut uow,
+        &curriculum(),
+        &multi_competency_assessment(),
+        operation,
+    )
+    .unwrap();
+
+    assert_eq!(result.pedagogy_decision.competency_id(), id(8));
+    assert_eq!(result.event_facts.evidence_added.len(), 2);
+    assert_eq!(result.event_facts.competency_updated.len(), 2);
+    assert_eq!(uow.state().evidence.len(), 2);
+    assert_eq!(uow.state().mastery.len(), 2);
+    let first = uow
+        .state()
+        .mastery
+        .iter()
+        .find(|m| m.competency_id() == id(8))
+        .unwrap();
+    let second = uow
+        .state()
+        .mastery
+        .iter()
+        .find(|m| m.competency_id() == id(10))
+        .unwrap();
+    assert!(first.mastery().get() > second.mastery().get());
 }
 
 #[test]

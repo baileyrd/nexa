@@ -3,7 +3,7 @@
 
 use nexa_assessment::{
     Assessment, AssessmentAttempt, AssessmentError, AssessmentResponse, AttemptState,
-    EvaluationOutcome, ScoringPolicyV1,
+    ScoringPolicyV1,
 };
 use nexa_domain::{
     AssessmentItemInstanceId, CompetencyId, EvidenceId, LessonId, LessonTransitionId, MasteryScore,
@@ -15,10 +15,11 @@ use nexa_events::{
 use nexa_lessons::{Curriculum, LessonLifecycle, LessonPolicyV1, LessonProgress, TransitionError};
 use nexa_pedagogy::{
     InstructionalOption, PedagogyDecision, PedagogyError, PedagogyInput, PedagogyPolicy,
-    PedagogyPolicyV1, RecentOutcome,
+    PedagogyPolicyV1, RationaleCode, RecentOutcome,
 };
 use nexa_student::{
-    replay, AppendOutcome, BoundedWeightedV1, LearningEvidence, MasteryState, StudentModelError,
+    replay, AppendOutcome, BoundedWeightedV1, EvidenceOutcome, EvidenceType, LearningEvidence,
+    MasteryState, StudentModelError,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -137,6 +138,11 @@ impl LearningCore {
                 Err(CompositionError::ConflictingReplay)
             };
         }
+        if let Some(receipt) = response_receipt(&original, &request)? {
+            let mut result = receipt.result.clone();
+            result.replayed = true;
+            return Ok(result);
+        }
         let mut staged = original.clone();
         let lesson_index = scoped_lesson(&staged, request.student_id, request.lesson_id)?;
         let mut progress = lesson_index.map_or_else(
@@ -176,15 +182,7 @@ impl LearningCore {
         )?;
         attempt = submission.attempt;
 
-        let previous_mastery = replay(&staged.evidence, &BoundedWeightedV1)?
-            .into_iter()
-            .find(|m| {
-                m.student_id() == request.student_id && m.competency_id() == request.competency_id
-            })
-            .map_or_else(
-                || MasteryScore::new(0.0).expect("constant"),
-                |m| m.mastery(),
-            );
+        let previous_projections = replay(&staged.evidence, &BoundedWeightedV1)?;
 
         let mut outcomes = Vec::new();
         let mut added = Vec::new();
@@ -209,28 +207,21 @@ impl LearningCore {
 
         let projections = replay(&staged.evidence, &BoundedWeightedV1)?;
         let mastery = projections
-            .into_iter()
+            .iter()
             .find(|m| {
                 m.student_id() == request.student_id && m.competency_id() == request.competency_id
             })
+            .cloned()
             .ok_or(CompositionError::Invalid(
                 "no evidence projection for requested competency",
             ))?;
-        let recent = match submission.result.outcome {
-            EvaluationOutcome::Correct => RecentOutcome::Success,
-            EvaluationOutcome::Partial => RecentOutcome::PartialSuccess,
-            EvaluationOutcome::Incorrect => RecentOutcome::Failure,
-        };
-        let failures = if recent == RecentOutcome::Failure {
-            1
-        } else {
-            0
-        };
+        let (recent, attempt_count, failures) =
+            pedagogy_history(&staged.evidence, request.student_id, request.competency_id)?;
         let input = PedagogyInput::new(
             COMPOSITION_VERSION,
             mastery.clone(),
-            Some(recent),
-            attempt.responses().len() as u32,
+            recent,
+            attempt_count,
             failures,
             request.available_options.iter().copied(),
         )?;
@@ -249,27 +240,27 @@ impl LearningCore {
             attempt_index,
             attempt.clone(),
         );
+        let affected: BTreeSet<_> = request.evidence_ids.keys().copied().collect();
         staged.mastery.retain(|m| {
-            !(m.student_id() == request.student_id && m.competency_id() == request.competency_id)
+            m.student_id() != request.student_id || !affected.contains(&m.competency_id())
         });
-        staged.mastery.push(mastery.clone());
+        staged.mastery.extend(
+            projections
+                .iter()
+                .filter(|m| {
+                    m.student_id() == request.student_id && affected.contains(&m.competency_id())
+                })
+                .cloned(),
+        );
         staged
             .mastery
             .sort_by_key(|m| (m.student_id(), m.competency_id()));
 
-        let option: SemanticKey = format!("{:?}", decision.selected_option())
-            .to_ascii_lowercase()
-            .parse()
-            .expect("enum semantic key");
+        let option = option_key(decision.selected_option());
         let rationale = decision
             .rationale_codes()
             .iter()
-            .map(|r| {
-                format!("{:?}", r)
-                    .to_ascii_lowercase()
-                    .parse()
-                    .expect("enum semantic key")
-            })
+            .map(|r| rationale_key(*r))
             .collect();
         let pedagogy_fact = PedagogyDecisionMade::new(
             request.student_id,
@@ -297,13 +288,27 @@ impl LearningCore {
         let evidence_facts = added.iter().map(evidence_fact).collect();
         let updated_facts = added
             .iter()
-            .map(|e| CompetencyUpdated {
-                evidence_id: e.id,
-                student_id: e.student_id,
-                competency_id: e.competency_id,
-                previous_mastery,
-                new_mastery: mastery.mastery(),
-                policy_version: mastery.policy_version(),
+            .map(|e| {
+                let old = previous_projections.iter().find(|m| {
+                    m.student_id() == e.student_id && m.competency_id() == e.competency_id
+                });
+                let new = projections
+                    .iter()
+                    .find(|m| {
+                        m.student_id() == e.student_id && m.competency_id() == e.competency_id
+                    })
+                    .expect("appended evidence has projection");
+                CompetencyUpdated {
+                    evidence_id: e.id,
+                    student_id: e.student_id,
+                    competency_id: e.competency_id,
+                    previous_mastery: old.map_or_else(
+                        || MasteryScore::new(0.0).expect("constant"),
+                        |m| m.mastery(),
+                    ),
+                    new_mastery: new.mastery(),
+                    policy_version: new.policy_version(),
+                }
             })
             .collect();
         let result = LearningResult {
@@ -342,9 +347,19 @@ fn validate_request(a: &Assessment, r: &LearningOperation) -> Result<(), Composi
     if r.response.student_id != r.student_id || r.response.assessment_id != a.id {
         return Err(CompositionError::Invalid("request scope mismatch"));
     }
-    if r.evidence_ids.len() != 1 || !r.evidence_ids.contains_key(&r.competency_id) {
+    let question = a
+        .questions()
+        .iter()
+        .find(|q| q.id == r.response.question_id)
+        .ok_or(CompositionError::Invalid(
+            "response question is not in assessment",
+        ))?;
+    let expected: BTreeSet<_> = question.competency_ids.iter().copied().collect();
+    if r.evidence_ids.keys().copied().collect::<BTreeSet<_>>() != expected
+        || !expected.contains(&r.competency_id)
+    {
         return Err(CompositionError::Invalid(
-            "operation must target exactly one competency",
+            "evidence mapping must cover the question and include the pedagogy competency",
         ));
     }
     if r.response.submitted_at != r.at {
@@ -362,6 +377,78 @@ fn scoped_lesson(
     Ok(s.lesson_progress
         .iter()
         .position(|p| p.student_id() == student && p.lesson_id() == lesson))
+}
+
+fn response_receipt<'a>(
+    state: &'a LearningState,
+    request: &LearningOperation,
+) -> Result<Option<&'a OperationReceipt>, CompositionError> {
+    let mut matching = None;
+    for receipt in state
+        .receipts
+        .values()
+        .filter(|receipt| receipt.request.response.id == request.response.id)
+    {
+        if receipt.request.response != request.response
+            || receipt.request.student_id != request.student_id
+            || receipt.request.attempt_id != request.attempt_id
+        {
+            return Err(CompositionError::ConflictingReplay);
+        }
+        matching = Some(receipt);
+    }
+    // Attempts are also checked so a corrupt/incomplete adapter cannot bypass response identity.
+    for response in state
+        .assessment_attempts
+        .iter()
+        .flat_map(|attempt| attempt.responses())
+        .filter(|response| response.id == request.response.id)
+    {
+        if response != &request.response {
+            return Err(CompositionError::ConflictingReplay);
+        }
+        if matching.is_none() {
+            return Err(CompositionError::Invalid(
+                "stored response has no composition receipt",
+            ));
+        }
+    }
+    Ok(matching)
+}
+
+/// V1 history is the timestamp/evidence-id ordered evidence stream in one student/competency
+/// projection. Every evidence item is one attempt; failures are the trailing failure run only.
+fn pedagogy_history(
+    evidence: &[LearningEvidence],
+    student_id: StudentId,
+    competency_id: CompetencyId,
+) -> Result<(Option<RecentOutcome>, u32, u32), CompositionError> {
+    let mut scoped: Vec<_> = evidence
+        .iter()
+        .filter(|e| e.student_id == student_id && e.competency_id == competency_id)
+        .collect();
+    scoped.sort_by_key(|e| (e.observed_at, e.id));
+    let attempt_count = u32::try_from(scoped.len())
+        .map_err(|_| CompositionError::Invalid("pedagogy history exceeds v1 count"))?;
+    let recent = scoped.last().map(|e| recent_outcome(e.outcome));
+    let consecutive_failures = scoped
+        .iter()
+        .rev()
+        .take_while(|e| e.outcome == EvidenceOutcome::Failure)
+        .count()
+        .try_into()
+        .map_err(|_| CompositionError::Invalid("pedagogy failure history exceeds v1 count"))?;
+    Ok((recent, attempt_count, consecutive_failures))
+}
+
+fn recent_outcome(outcome: EvidenceOutcome) -> RecentOutcome {
+    match outcome {
+        EvidenceOutcome::Success => RecentOutcome::Success,
+        EvidenceOutcome::PartialSuccess | EvidenceOutcome::Ambiguous => {
+            RecentOutcome::PartialSuccess
+        }
+        EvidenceOutcome::Failure => RecentOutcome::Failure,
+    }
 }
 fn scoped_attempt(
     s: &LearningState,
@@ -416,14 +503,136 @@ fn evidence_fact(e: &LearningEvidence) -> CompetencyEvidenceAdded {
         evidence_id: e.id,
         student_id: e.student_id,
         competency_id: e.competency_id,
-        evidence_type: format!("{:?}", e.evidence_type)
-            .to_ascii_lowercase()
-            .parse()
-            .expect("enum key"),
-        outcome: format!("{:?}", e.outcome)
-            .to_ascii_lowercase()
-            .parse()
-            .expect("enum key"),
+        evidence_type: evidence_type_key(e.evidence_type),
+        outcome: evidence_outcome_key(e.outcome),
+    }
+}
+
+fn key(value: &'static str) -> SemanticKey {
+    value.parse().expect("static semantic key")
+}
+
+fn option_key(value: InstructionalOption) -> SemanticKey {
+    key(match value {
+        InstructionalOption::Introduce => "introduce",
+        InstructionalOption::Explain => "explain",
+        InstructionalOption::Demonstrate => "demonstrate",
+        InstructionalOption::Practice => "practice",
+        InstructionalOption::Hint => "hint",
+        InstructionalOption::Clarify => "clarify",
+        InstructionalOption::Reinforce => "reinforce",
+        InstructionalOption::Review => "review",
+        InstructionalOption::Challenge => "challenge",
+        InstructionalOption::Assess => "assess",
+        InstructionalOption::Retry => "retry",
+        InstructionalOption::Advance => "advance",
+    })
+}
+
+fn rationale_key(value: RationaleCode) -> SemanticKey {
+    key(match value {
+        RationaleCode::NoEvidence => "no_evidence",
+        RationaleCode::InsufficientEvidence => "insufficient_evidence",
+        RationaleCode::LowModelConfidence => "low_model_confidence",
+        RationaleCode::RecentSuccess => "recent_success",
+        RationaleCode::RecentPartialSuccess => "recent_partial_success",
+        RationaleCode::RecentFailure => "recent_failure",
+        RationaleCode::RepeatedFailure => "repeated_failure",
+        RationaleCode::RetryLimitReached => "retry_limit_reached",
+        RationaleCode::MasteryThresholdMet => "mastery_threshold_met",
+        RationaleCode::CompetencyMastered => "competency_mastered",
+        RationaleCode::PreferredOptionUnavailable => "preferred_option_unavailable",
+        RationaleCode::ProjectionStatusControls => "projection_status_controls",
+        RationaleCode::NoRecentOutcome => "no_recent_outcome",
+    })
+}
+
+fn evidence_type_key(value: EvidenceType) -> SemanticKey {
+    key(match value {
+        EvidenceType::Recognition => "recognition",
+        EvidenceType::Recall => "recall",
+        EvidenceType::Explanation => "explanation",
+        EvidenceType::Application => "application",
+        EvidenceType::Demonstration => "demonstration",
+        EvidenceType::Debugging => "debugging",
+        EvidenceType::Transfer => "transfer",
+        EvidenceType::Retention => "retention",
+        EvidenceType::LabPerformance => "lab_performance",
+        EvidenceType::Assessment => "assessment",
+        EvidenceType::InstructorObservation => "instructor_observation",
+    })
+}
+
+fn evidence_outcome_key(value: EvidenceOutcome) -> SemanticKey {
+    key(match value {
+        EvidenceOutcome::Success => "success",
+        EvidenceOutcome::PartialSuccess => "partial_success",
+        EvidenceOutcome::Failure => "failure",
+        EvidenceOutcome::Ambiguous => "ambiguous",
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nexa_student::{EvidenceDifficulty, EvidenceSource, IndependenceLevel};
+    use std::str::FromStr;
+
+    fn id<T: FromStr>(n: u128) -> T
+    where
+        T::Err: std::fmt::Debug,
+    {
+        T::from_str(&format!("00000000-0000-0000-0000-{n:012x}")).unwrap()
+    }
+
+    fn evidence(n: u128, competency: u128, outcome: EvidenceOutcome, at: &str) -> LearningEvidence {
+        LearningEvidence {
+            id: id(n),
+            student_id: id(1),
+            competency_id: id(competency),
+            evidence_type: EvidenceType::Assessment,
+            outcome,
+            difficulty: EvidenceDifficulty::Unknown,
+            independence: IndependenceLevel::Unknown,
+            confidence: None,
+            source: EvidenceSource::Assessment(id(n + 100)),
+            observed_at: at.parse().unwrap(),
+        }
+    }
+
+    #[test]
+    fn v1_history_is_scoped_and_counts_only_trailing_failures() {
+        let history = vec![
+            evidence(1, 8, EvidenceOutcome::Failure, "2026-08-19T10:00:00Z"),
+            evidence(2, 9, EvidenceOutcome::Failure, "2026-08-19T10:30:00Z"),
+            evidence(3, 8, EvidenceOutcome::Success, "2026-08-19T11:00:00Z"),
+            evidence(4, 8, EvidenceOutcome::Failure, "2026-08-19T12:00:00Z"),
+        ];
+        assert_eq!(
+            pedagogy_history(&history, id(1), id(8)).unwrap(),
+            (Some(RecentOutcome::Failure), 3, 1)
+        );
+        assert_eq!(
+            pedagogy_history(&history, id(1), id(9)).unwrap(),
+            (Some(RecentOutcome::Failure), 1, 1)
+        );
+    }
+
+    #[test]
+    fn event_fact_keys_match_governed_golden_vocabulary() {
+        assert_eq!(
+            rationale_key(RationaleCode::PreferredOptionUnavailable).as_str(),
+            "preferred_option_unavailable"
+        );
+        assert_eq!(
+            evidence_type_key(EvidenceType::LabPerformance).as_str(),
+            "lab_performance"
+        );
+        assert_eq!(
+            evidence_outcome_key(EvidenceOutcome::PartialSuccess).as_str(),
+            "partial_success"
+        );
+        assert_eq!(option_key(InstructionalOption::Review).as_str(), "review");
     }
 }
 

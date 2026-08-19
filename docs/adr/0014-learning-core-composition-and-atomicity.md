@@ -16,7 +16,8 @@ it does not own interaction loops, cancellation, providers, tools, scheduling, o
 `nexa-learning-core` is the narrow synchronous composition boundary. It depends inward on the
 assessment, student, pedagogy, lesson, event, and domain contracts and delegates every domain rule to
 their existing versioned policies. A request targets exactly one canonical student, lesson,
-assessment attempt, response, and competency, and supplies all identities and timestamps. The service
+assessment attempt, and response, supplies the complete competency/evidence mapping, and explicitly
+selects one of those competencies as the pedagogy and authored-routing scope. The service
 starts or loads governed state, invokes `ScoringPolicyV1`, appends its immutable evidence with the
 student ledger's duplicate/conflict semantics, replays `BoundedWeightedV1`, constructs validated
 read-only pedagogy input, invokes `PedagogyPolicyV1`, and asks `LessonPolicyV1` to apply only an
@@ -29,6 +30,19 @@ different content under that ID is rejected. The deterministic in-memory adapter
 replacement only after all injected commit stages succeed. This defines required semantics without
 choosing locks, isolation levels, a database, or an async runtime.
 
+Response identity is independently idempotent across operation IDs. A response ID already committed
+with identical response content, student, and attempt returns its prior result as a replay before
+lesson lifecycle or scoring work; conflicting reuse is rejected. For a multi-competency response,
+all evidence and affected mastery projections are updated in deterministic competency order while
+only the explicitly selected, validated competency drives pedagogy.
+
+Pedagogy history rule v1 is derived from canonical evidence ordered by `(observed_at, evidence_id)`
+and scoped to the selected student and competency. `attempt_count` is that stream's evidence count,
+`recent_outcome` is its final evidence outcome (`ambiguous` maps to partial success), and
+`consecutive_failures` is only the trailing run of failures. Evidence from another competency never
+contributes to these fields. Event-fact semantic keys use exhaustive mappings to the governed
+snake-case wire vocabulary rather than debug formatting.
+
 The result contains policy outputs and privacy-minimal typed facts only. It deliberately does not
 construct event envelopes or own event IDs, causation, correlation, sequencing, publication, or a
 durable outbox. A durable adapter may atomically stage an outbox with the state, but that design is not
@@ -40,7 +54,8 @@ implied by the current port.
   tests, without an LLM, avatar, UI, database, networking, or async runtime.
 - Serialization validates stored values and new request/result/snapshot contracts; canonical ordered
   collections make replay and output stable.
-- The boundary is not a general multi-competency batch or complete lesson/session workflow.
+- A single assessment response may update every competency mapped to its question; the boundary is
+  not a general arbitrary batch or complete lesson/session workflow.
 
 ## Deferred durable-adapter decisions
 
