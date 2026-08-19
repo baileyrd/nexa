@@ -32,6 +32,7 @@ This registry is the navigation and governance authority for Nexa system specifi
 | ADR-0013 | [Assessment contract, scoring, and evidence](adr/0013-assessment-contract-scoring-and-evidence.md) | Accepted | Assessment ownership, scoring version, lifecycle, and evidence boundary |
 | ADR-0015 | [Governed knowledge ingestion and provenance](adr/0015-governed-knowledge-ingestion.md) | Accepted | Phase 4 artifact integrity, provenance, visibility, lifecycle, and atomic staging |
 | ADR-0016 | [Deterministic governed lexical retrieval](adr/0016-deterministic-lexical-retrieval.md) | Accepted | Phase 4 lexical query contracts, corpus validation, governance filtering, scoring, and stable ordering |
+| ADR-0017 | [Governed embeddings and deterministic vector retrieval](adr/0017-governed-vector-retrieval.md) | Accepted | Phase 4 embedding profiles, exact integer vectors, validated snapshots, governance filtering, and stable vector ranking |
 | ADR-0014 | [Learning-core composition and atomicity](adr/0014-learning-core-composition-and-atomicity.md) | Accepted | Phase 3 policy composition, unit of work, idempotency, and deferred durable adapters |
 | ADR-0008 | [Controlled 3D workspace migration and ownership](adr/0008-controlled-3d-workspace-migration.md) | Accepted | 3D library, viewer, and validator ownership after migration |
 
@@ -45,7 +46,7 @@ This registry is the navigation and governance authority for Nexa system specifi
 | 02 | NEXA-STU-001 | Student model | Implemented Phase 3 slice | `nexa-student` |
 | 03 | NEXA-PED-001 | Adaptive pedagogy | Implemented Phase 3 slice | `nexa-pedagogy` |
 | 04 | NEXA-TUTOR-001 | Tutor intelligence | Baseline Draft | `nexa-tutor` |
-| 05 | NEXA-KNOW-001 | Knowledge and RAG | Implemented ingestion/provenance and lexical retrieval slices; Phase 4 in progress | `nexa-knowledge` |
+| 05 | NEXA-KNOW-001 | Knowledge and RAG | Implemented ingestion/provenance, lexical retrieval, and vector retrieval slices; Phase 4 in progress | `nexa-knowledge` |
 | 06 | NEXA-LESSON-001 | Curriculum and lessons | Implemented Phase 3 slice | `nexa-lessons` |
 | 07 | NEXA-ASMT-001 | Assessment | Implemented Phase 3 slice | `nexa-assessment` |
 | 08 | NEXA-LAB-001 | Labs and sandboxes | Baseline Draft | `nexa-labs` |
