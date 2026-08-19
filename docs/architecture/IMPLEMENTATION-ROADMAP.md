@@ -39,15 +39,21 @@ Exit: the 3D implementation consumes NBP/avatar contracts and all existing tests
 
 ## Phase 3 — Build the learning core
 
+**Status:** In progress. The governed student-model/evidence-ledger slice is implemented; the Phase 3 exit gate is not satisfied.
+
 Implement:
 
-- student model and evidence ledger
+- [x] governed student model, immutable evidence ledger, versioned replay policy, and persistence ports
 - pedagogy policy engine
 - curriculum/lesson engine
 - assessment engine
 - governed persistence ports
 
 Exit: a headless deterministic lesson can adapt, assess, and update student state without an LLM or avatar.
+
+See [ADR-0010](../adr/0010-learning-state-evidence-and-persistence.md) and the
+[Phase 3 traceability matrix](PHASE-3-TRACEABILITY.md). The next recommended increment is the
+deterministic, explainable pedagogy decision policy over read-only mastery projections.
 
 ## Phase 4 — Add knowledge and tutor intelligence
 

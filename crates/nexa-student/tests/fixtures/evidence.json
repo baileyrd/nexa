@@ -1,0 +1,15 @@
+{
+  "id": "0193f249-95c2-79e0-a221-628003c28504",
+  "student_id": "0193f249-95c2-79e0-a221-628003c28501",
+  "competency_id": "0193f249-95c2-79e0-a221-628003c28502",
+  "evidence_type": "application",
+  "outcome": "success",
+  "difficulty": "moderate",
+  "independence": "independent",
+  "confidence": 0.9,
+  "source": {
+    "kind": "assessment",
+    "id": "0193f249-95c2-79e0-a221-628003c28503"
+  },
+  "observed_at": "2026-08-19T10:00:00Z"
+}

@@ -1,0 +1,15 @@
+[package]
+name = "nexa-student"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+nexa-domain = { path = "../nexa-domain" }
+nexa-events = { path = "../nexa-events" }
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
