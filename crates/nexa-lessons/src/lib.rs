@@ -428,6 +428,15 @@ pub enum TransitionError {
     TerminalState,
     #[error("pedagogy decision targets an unrelated competency")]
     PedagogyCompetencyMismatch,
+    #[error("pedagogy decision targets a different student")]
+    PedagogyStudentMismatch,
+    #[error("pedagogy decision policy version is incompatible: expected {expected}, got {actual}")]
+    PedagogyPolicyVersionMismatch {
+        expected: ProtocolVersion,
+        actual: ProtocolVersion,
+    },
+    #[error("lesson transition timestamp regressed")]
+    TimestampRegression,
 }
 impl TryFrom<ProgressWire> for LessonProgress {
     type Error = TransitionError;
@@ -549,6 +558,15 @@ impl LessonPolicyV1 {
         }
         Ok(l)
     }
+    fn validate_timestamp(p: &LessonProgress, at: Timestamp) -> Result<(), TransitionError> {
+        if p.updated_at
+            .or(p.started_at)
+            .is_some_and(|prior| at < prior)
+        {
+            return Err(TransitionError::TimestampRegression);
+        }
+        Ok(())
+    }
     pub fn start(
         curriculum: &Curriculum,
         p: &LessonProgress,
@@ -556,6 +574,7 @@ impl LessonPolicyV1 {
         at: Timestamp,
     ) -> Result<LessonProgress, TransitionError> {
         let l = Self::validate(curriculum, p)?;
+        Self::validate_timestamp(p, at)?;
         if p.lifecycle != LessonLifecycle::NotStarted {
             return Err(TransitionError::TerminalState);
         }
@@ -583,6 +602,7 @@ impl LessonPolicyV1 {
         at: Timestamp,
     ) -> Result<LessonProgress, TransitionError> {
         let l = Self::validate(curriculum, p)?;
+        Self::validate_timestamp(p, at)?;
         if matches!(
             p.lifecycle,
             LessonLifecycle::Completed | LessonLifecycle::Blocked | LessonLifecycle::Abandoned
@@ -592,6 +612,15 @@ impl LessonPolicyV1 {
         if p.lifecycle != LessonLifecycle::Active {
             return Err(TransitionError::InvalidState {
                 message: "routing requires active lifecycle",
+            });
+        }
+        if decision.student_id() != p.student_id {
+            return Err(TransitionError::PedagogyStudentMismatch);
+        }
+        if decision.policy_version() != LESSON_POLICY_V1 {
+            return Err(TransitionError::PedagogyPolicyVersionMismatch {
+                expected: LESSON_POLICY_V1,
+                actual: decision.policy_version(),
             });
         }
         let current = p.current_step_id.ok_or(TransitionError::InvalidState {
@@ -651,6 +680,7 @@ impl LessonPolicyV1 {
         at: Timestamp,
     ) -> Result<LessonProgress, TransitionError> {
         let l = Self::validate(curriculum, p)?;
+        Self::validate_timestamp(p, at)?;
         if p.lifecycle != LessonLifecycle::Active {
             return Err(TransitionError::TerminalState);
         }
@@ -698,6 +728,7 @@ impl LessonPolicyV1 {
         at: Timestamp,
     ) -> Result<LessonProgress, TransitionError> {
         Self::validate(curriculum, p)?;
+        Self::validate_timestamp(p, at)?;
         if p.lifecycle != LessonLifecycle::Waiting {
             return Err(TransitionError::InvalidState {
                 message: "resume requires waiting lifecycle",
@@ -717,6 +748,7 @@ impl LessonPolicyV1 {
         reason: &str,
     ) -> Result<LessonProgress, TransitionError> {
         Self::validate(curriculum, p)?;
+        Self::validate_timestamp(p, at)?;
         if p.lifecycle != LessonLifecycle::Active {
             return Err(TransitionError::TerminalState);
         }

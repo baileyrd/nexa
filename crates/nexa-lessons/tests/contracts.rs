@@ -15,7 +15,20 @@ fn at() -> Timestamp {
     "2026-08-19T12:00:00Z".parse().unwrap()
 }
 fn decision(option: &str, competency: &str) -> PedagogyDecision {
-    serde_json::from_value(json!({"policy_version":"1.0","student_id":"00000000-0000-0000-0000-000000000009","competency_id":competency,"selected_option":option,"rationale_codes":["no_evidence"]})).unwrap()
+    decision_for(
+        option,
+        competency,
+        "00000000-0000-0000-0000-000000000009",
+        "1.0",
+    )
+}
+fn decision_for(
+    option: &str,
+    competency: &str,
+    student: &str,
+    policy_version: &str,
+) -> PedagogyDecision {
+    serde_json::from_value(json!({"policy_version":policy_version,"student_id":student,"competency_id":competency,"selected_option":option,"rationale_codes":["no_evidence"]})).unwrap()
 }
 
 #[test]
@@ -175,6 +188,77 @@ fn routing_rejects_competency_mapped_only_to_another_step_objective() {
         ),
         Err(TransitionError::PedagogyCompetencyMismatch)
     );
+}
+
+#[test]
+fn routing_rejects_cross_student_and_incompatible_policy_decisions_atomically() {
+    let c = curriculum();
+    let active = LessonPolicyV1::start(&c, &progress(), &BTreeSet::new(), at()).unwrap();
+    let before = active.clone();
+    let competency = "00000000-0000-0000-0000-000000000008";
+    let wrong_student = decision_for(
+        "advance",
+        competency,
+        "00000000-0000-0000-0000-000000000019",
+        "1.0",
+    );
+    assert_eq!(
+        LessonPolicyV1::route(&c, &active, &wrong_student, &BTreeSet::new(), at()),
+        Err(TransitionError::PedagogyStudentMismatch)
+    );
+    assert_eq!(active, before);
+
+    let wrong_policy = decision_for(
+        "advance",
+        competency,
+        "00000000-0000-0000-0000-000000000009",
+        "2.0",
+    );
+    assert!(matches!(
+        LessonPolicyV1::route(&c, &active, &wrong_policy, &BTreeSet::new(), at()),
+        Err(TransitionError::PedagogyPolicyVersionMismatch { .. })
+    ));
+    assert_eq!(active, before);
+}
+
+#[test]
+fn every_transition_family_rejects_timestamp_regression_atomically() {
+    let c = curriculum();
+    let empty = BTreeSet::new();
+    let active = LessonPolicyV1::start(&c, &progress(), &empty, at()).unwrap();
+    let active_before = active.clone();
+    let earlier: Timestamp = "2026-08-19T11:59:59Z".parse().unwrap();
+    let d = decision("advance", "00000000-0000-0000-0000-000000000008");
+
+    assert_eq!(
+        LessonPolicyV1::route(&c, &active, &d, &empty, earlier),
+        Err(TransitionError::TimestampRegression)
+    );
+    assert_eq!(
+        LessonPolicyV1::advance(&c, &active, earlier),
+        Err(TransitionError::TimestampRegression)
+    );
+    assert_eq!(
+        LessonPolicyV1::wait(&c, &active, earlier),
+        Err(TransitionError::TimestampRegression)
+    );
+    assert_eq!(
+        LessonPolicyV1::block(&c, &active, earlier),
+        Err(TransitionError::TimestampRegression)
+    );
+    assert_eq!(
+        LessonPolicyV1::abandon(&c, &active, earlier),
+        Err(TransitionError::TimestampRegression)
+    );
+    assert_eq!(active, active_before);
+
+    let waiting = LessonPolicyV1::wait(&c, &active, at()).unwrap();
+    let waiting_before = waiting.clone();
+    assert_eq!(
+        LessonPolicyV1::resume(&c, &waiting, earlier),
+        Err(TransitionError::TimestampRegression)
+    );
+    assert_eq!(waiting, waiting_before);
 }
 #[test]
 fn prerequisite_order_is_stable_and_unmet_is_rejected() {
