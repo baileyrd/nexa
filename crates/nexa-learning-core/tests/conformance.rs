@@ -168,6 +168,84 @@ fn response_identity_is_idempotent_across_operations_and_conflicts_atomically() 
 }
 
 #[test]
+fn response_replay_is_bound_to_the_complete_authored_context() {
+    let mut uow = InMemoryUnitOfWork::default();
+    LearningCore::apply(&mut uow, &curriculum(), &assessment(), request()).unwrap();
+    let committed = uow.state().clone();
+
+    let mut changed_lesson = request();
+    changed_lesson.operation_id = id(50);
+    changed_lesson.lesson_id = id(5);
+    let mut changed_options = request();
+    changed_options.operation_id = id(51);
+    changed_options.available_options = BTreeSet::from([InstructionalOption::Review]);
+    for changed in [changed_lesson, changed_options] {
+        assert!(matches!(
+            LearningCore::apply(&mut uow, &curriculum(), &assessment(), changed),
+            Err(CompositionError::ConflictingReplay)
+        ));
+        assert_eq!(uow.state(), &committed);
+    }
+
+    let mut changed_assessment = assessment();
+    changed_assessment.version = ProtocolVersion::new(1, 1);
+    let mut retry = request();
+    retry.operation_id = id(52);
+    assert!(matches!(
+        LearningCore::apply(&mut uow, &curriculum(), &changed_assessment, retry),
+        Err(CompositionError::ConflictingReplay)
+    ));
+    assert_eq!(uow.state(), &committed);
+
+    let changed_curriculum: Curriculum =
+        serde_json::from_str(&include_str!("fixtures/curriculum.json").replace(
+            "00000000-0000-0000-0000-000000000001",
+            "00000000-0000-0000-0000-000000000099",
+        ))
+        .unwrap();
+    let mut retry = request();
+    retry.operation_id = id(53);
+    assert!(matches!(
+        LearningCore::apply(&mut uow, &changed_curriculum, &assessment(), retry),
+        Err(CompositionError::ConflictingReplay)
+    ));
+    assert_eq!(uow.state(), &committed);
+}
+
+#[test]
+fn response_replay_rejects_a_changed_selected_competency() {
+    let mut original = request();
+    original.response.value = ResponseValue::Rubric {
+        levels: BTreeMap::from([
+            (id(41), Score::new(1.0).unwrap()),
+            (id(42), Score::new(0.0).unwrap()),
+        ]),
+    };
+    original.evidence_ids = BTreeMap::from([(id(8), id(33)), (id(10), id(37))]);
+    let mut uow = InMemoryUnitOfWork::default();
+    LearningCore::apply(
+        &mut uow,
+        &curriculum(),
+        &multi_competency_assessment(),
+        original.clone(),
+    )
+    .unwrap();
+    let committed = uow.state().clone();
+    original.operation_id = id(54);
+    original.competency_id = id(10);
+    assert!(matches!(
+        LearningCore::apply(
+            &mut uow,
+            &curriculum(),
+            &multi_competency_assessment(),
+            original
+        ),
+        Err(CompositionError::ConflictingReplay)
+    ));
+    assert_eq!(uow.state(), &committed);
+}
+
+#[test]
 fn multi_competency_rubric_updates_each_projection_and_selects_pedagogy_scope() {
     let mut operation = request();
     operation.response.value = ResponseValue::Rubric {
@@ -262,6 +340,85 @@ fn malformed_and_cross_scope_requests_are_rejected_without_changes() {
         let mut uow = InMemoryUnitOfWork::default();
         assert!(LearningCore::apply(&mut uow, &curriculum(), &assessment(), r).is_err());
         assert_eq!(uow.state(), &LearningState::default());
+    }
+}
+
+#[derive(Clone)]
+struct UntrustedUnitOfWork {
+    state: LearningState,
+    commit_called: bool,
+}
+
+impl LearningUnitOfWork for UntrustedUnitOfWork {
+    type Error = std::io::Error;
+
+    fn load(&self) -> Result<LearningState, Self::Error> {
+        Ok(self.state.clone())
+    }
+
+    fn commit(
+        &mut self,
+        _expected: &LearningState,
+        _replacement: LearningState,
+    ) -> Result<(), Self::Error> {
+        self.commit_called = true;
+        Ok(())
+    }
+}
+
+#[test]
+fn malformed_loaded_states_are_rejected_without_commit() {
+    let mut source = InMemoryUnitOfWork::default();
+    LearningCore::apply(&mut source, &curriculum(), &assessment(), request()).unwrap();
+    let valid = source.state().clone();
+    let mut cases = Vec::new();
+
+    let mut duplicate_lesson = valid.clone();
+    duplicate_lesson
+        .lesson_progress
+        .push(duplicate_lesson.lesson_progress[0].clone());
+    cases.push(duplicate_lesson);
+
+    let mut duplicate_attempt = valid.clone();
+    duplicate_attempt
+        .assessment_attempts
+        .push(duplicate_attempt.assessment_attempts[0].clone());
+    cases.push(duplicate_attempt);
+
+    let mut duplicate_evidence = valid.clone();
+    duplicate_evidence
+        .evidence
+        .push(duplicate_evidence.evidence[0].clone());
+    cases.push(duplicate_evidence);
+
+    let mut bad_receipt_key = valid.clone();
+    let (_, receipt) = bad_receipt_key.receipts.pop_first().unwrap();
+    bad_receipt_key.receipts.insert(id(99), receipt);
+    cases.push(bad_receipt_key);
+
+    let mut bad_receipt_scope = valid;
+    bad_receipt_scope
+        .receipts
+        .first_entry()
+        .unwrap()
+        .get_mut()
+        .result
+        .assessment_attempt
+        .student_id = id(99);
+    cases.push(bad_receipt_scope);
+
+    for state in cases {
+        let original = state.clone();
+        let mut uow = UntrustedUnitOfWork {
+            state,
+            commit_called: false,
+        };
+        assert!(matches!(
+            LearningCore::apply(&mut uow, &curriculum(), &assessment(), request()),
+            Err(CompositionError::Invalid(_))
+        ));
+        assert!(!uow.commit_called);
+        assert_eq!(uow.state, original);
     }
 }
 

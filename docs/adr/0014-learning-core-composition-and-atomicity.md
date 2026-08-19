@@ -31,8 +31,10 @@ replacement only after all injected commit stages succeed. This defines required
 choosing locks, isolation levels, a database, or an async runtime.
 
 Response identity is independently idempotent across operation IDs. A response ID already committed
-with identical response content, student, and attempt returns its prior result as a replay before
-lesson lifecycle or scoring work; conflicting reuse is rejected. For a multi-competency response,
+with an otherwise identical operation and identical authored assessment and curriculum returns its
+prior result as a replay before lesson lifecycle or scoring work; any mismatch is rejected. Receipt
+v1 retains those exact authored contracts as its auditable semantic fingerprint rather than relying
+on a lossy or implementation-dependent hash. For a multi-competency response,
 all evidence and affected mastery projections are updated in deterministic competency order while
 only the explicitly selected, validated competency drives pedagogy.
 
@@ -42,6 +44,12 @@ and scoped to the selected student and competency. `attempt_count` is that strea
 `consecutive_failures` is only the trailing run of failures. Evidence from another competency never
 contributes to these fields. Event-fact semantic keys use exhaustive mappings to the governed
 snake-case wire vocabulary rather than debug formatting.
+
+Loaded persistence is untrusted input. Before lookup or replay, v1 rejects duplicate or noncanonical
+lesson scopes, attempt IDs, evidence IDs/order, and mastery scopes, as well as receipt map-key,
+authored-assessment, request, and result scope inconsistencies. Successful replacements sort every
+state vector by its governed identity/order so a durable adapter cannot make first-match behavior
+ambiguous.
 
 The result contains policy outputs and privacy-minimal typed facts only. It deliberately does not
 construct event envelopes or own event IDs, causation, correlation, sequencing, publication, or a

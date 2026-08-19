@@ -42,6 +42,10 @@ pub struct LearningState {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct OperationReceipt {
     pub request: LearningOperation,
+    /// Exact authored inputs are retained as the v1 semantic fingerprint. This deliberately
+    /// favors an auditable comparison over a lossy or implementation-dependent hash.
+    pub assessment: Assessment,
+    pub curriculum: Curriculum,
     pub result: LearningResult,
 }
 
@@ -117,6 +121,72 @@ pub enum CompositionError {
     Persistence(String),
 }
 
+/// Reject adapter-provided snapshots that are ambiguous or non-canonical before any policy runs.
+pub fn validate_loaded_state(state: &LearningState) -> Result<(), CompositionError> {
+    ensure_sorted_unique(
+        state
+            .lesson_progress
+            .iter()
+            .map(|p| (p.student_id(), p.lesson_id())),
+        "lesson progress scopes are duplicated or not canonically ordered",
+    )?;
+    let mut evidence_ids = BTreeSet::new();
+    if state.evidence.iter().any(|e| !evidence_ids.insert(e.id)) {
+        return Err(CompositionError::Invalid("duplicate evidence identifier"));
+    }
+    ensure_sorted_unique(
+        state.assessment_attempts.iter().map(|a| a.id),
+        "assessment attempt identifiers are duplicated or not canonically ordered",
+    )?;
+    ensure_sorted_unique(
+        state
+            .evidence
+            .iter()
+            .map(|e| (e.student_id, e.competency_id, e.observed_at, e.id)),
+        "evidence is duplicated or not canonically ordered",
+    )?;
+    ensure_sorted_unique(
+        state
+            .mastery
+            .iter()
+            .map(|m| (m.student_id(), m.competency_id())),
+        "mastery scopes are duplicated or not canonically ordered",
+    )?;
+    for (key, receipt) in &state.receipts {
+        let request = &receipt.request;
+        let result = &receipt.result;
+        if *key != request.operation_id
+            || receipt.assessment.id != request.response.assessment_id
+            || result.lesson_progress.student_id() != request.student_id
+            || result.lesson_progress.lesson_id() != request.lesson_id
+            || result.assessment_attempt.id != request.attempt_id
+            || result.assessment_attempt.student_id != request.student_id
+            || result.assessment_attempt.assessment_id != request.response.assessment_id
+            || result.mastery.student_id() != request.student_id
+            || result.mastery.competency_id() != request.competency_id
+        {
+            return Err(CompositionError::Invalid(
+                "inconsistent operation receipt scope",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn ensure_sorted_unique<T: Ord>(
+    values: impl Iterator<Item = T>,
+    message: &'static str,
+) -> Result<(), CompositionError> {
+    let mut previous = None;
+    for value in values {
+        if previous.as_ref().is_some_and(|old| old >= &value) {
+            return Err(CompositionError::Invalid(message));
+        }
+        previous = Some(value);
+    }
+    Ok(())
+}
+
 pub struct LearningCore;
 impl LearningCore {
     pub fn apply<U: LearningUnitOfWork>(
@@ -129,8 +199,9 @@ impl LearningCore {
         let original = uow
             .load()
             .map_err(|e| CompositionError::Persistence(e.to_string()))?;
+        validate_loaded_state(&original)?;
         if let Some(receipt) = original.receipts.get(&request.operation_id) {
-            return if receipt.request == request {
+            return if same_semantic_request(receipt, &request, assessment, curriculum, false) {
                 let mut result = receipt.result.clone();
                 result.replayed = true;
                 Ok(result)
@@ -138,7 +209,7 @@ impl LearningCore {
                 Err(CompositionError::ConflictingReplay)
             };
         }
-        if let Some(receipt) = response_receipt(&original, &request)? {
+        if let Some(receipt) = response_receipt(&original, &request, assessment, curriculum)? {
             let mut result = receipt.result.clone();
             result.replayed = true;
             return Ok(result);
@@ -240,6 +311,13 @@ impl LearningCore {
             attempt_index,
             attempt.clone(),
         );
+        staged
+            .lesson_progress
+            .sort_by_key(|p| (p.student_id(), p.lesson_id()));
+        staged.assessment_attempts.sort_by_key(|a| a.id);
+        staged
+            .evidence
+            .sort_by_key(|e| (e.student_id, e.competency_id, e.observed_at, e.id));
         let affected: BTreeSet<_> = request.evidence_ids.keys().copied().collect();
         staged.mastery.retain(|m| {
             m.student_id() != request.student_id || !affected.contains(&m.competency_id())
@@ -329,6 +407,8 @@ impl LearningCore {
             request.operation_id,
             OperationReceipt {
                 request,
+                assessment: assessment.clone(),
+                curriculum: curriculum.clone(),
                 result: result.clone(),
             },
         );
@@ -382,6 +462,8 @@ fn scoped_lesson(
 fn response_receipt<'a>(
     state: &'a LearningState,
     request: &LearningOperation,
+    assessment: &Assessment,
+    curriculum: &Curriculum,
 ) -> Result<Option<&'a OperationReceipt>, CompositionError> {
     let mut matching = None;
     for receipt in state
@@ -389,10 +471,7 @@ fn response_receipt<'a>(
         .values()
         .filter(|receipt| receipt.request.response.id == request.response.id)
     {
-        if receipt.request.response != request.response
-            || receipt.request.student_id != request.student_id
-            || receipt.request.attempt_id != request.attempt_id
-        {
+        if !same_semantic_request(receipt, request, assessment, curriculum, true) {
             return Err(CompositionError::ConflictingReplay);
         }
         matching = Some(receipt);
@@ -414,6 +493,20 @@ fn response_receipt<'a>(
         }
     }
     Ok(matching)
+}
+
+fn same_semantic_request(
+    receipt: &OperationReceipt,
+    request: &LearningOperation,
+    assessment: &Assessment,
+    curriculum: &Curriculum,
+    ignore_operation_id: bool,
+) -> bool {
+    let mut expected = receipt.request.clone();
+    if ignore_operation_id {
+        expected.operation_id = request.operation_id;
+    }
+    expected == *request && receipt.assessment == *assessment && receipt.curriculum == *curriculum
 }
 
 /// V1 history is the timestamp/evidence-id ordered evidence stream in one student/competency
