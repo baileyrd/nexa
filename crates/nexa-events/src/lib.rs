@@ -2,8 +2,9 @@
 #![forbid(unsafe_code)]
 
 use nexa_domain::{
-    BehaviorId, CorrelationId, EndpointId, EventId, MessageId, ProtocolVersion, SemanticKey,
-    Sequence, SessionId, SubjectId, Timestamp, TraceId,
+    BehaviorId, CompetencyId, CorrelationId, EndpointId, EventId, EvidenceId, MasteryScore,
+    MessageId, ProtocolVersion, SemanticKey, Sequence, SessionId, StudentId, SubjectId, Timestamp,
+    TraceId,
 };
 use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
@@ -52,6 +53,10 @@ pub enum EventKind {
     AvatarBehaviorDegraded,
     #[serde(rename = "avatar.behavior.failed")]
     AvatarBehaviorFailed,
+    #[serde(rename = "competency.evidence.added")]
+    CompetencyEvidenceAdded,
+    #[serde(rename = "competency.updated")]
+    CompetencyUpdated,
 }
 
 /// Operational, non-domain envelope metadata. Never place secrets here.
@@ -242,6 +247,33 @@ pub struct AvatarBehaviorFailed {
 }
 impl DomainEvent for AvatarBehaviorFailed {
     const KIND: EventKind = EventKind::AvatarBehaviorFailed;
+}
+
+/// Privacy-minimal notification that immutable learning evidence was accepted.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct CompetencyEvidenceAdded {
+    pub evidence_id: EvidenceId,
+    pub student_id: StudentId,
+    pub competency_id: CompetencyId,
+    pub evidence_type: SemanticKey,
+    pub outcome: SemanticKey,
+}
+impl DomainEvent for CompetencyEvidenceAdded {
+    const KIND: EventKind = EventKind::CompetencyEvidenceAdded;
+}
+
+/// Notification that replayable evidence changed a mastery projection.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CompetencyUpdated {
+    pub evidence_id: EvidenceId,
+    pub student_id: StudentId,
+    pub competency_id: CompetencyId,
+    pub previous_mastery: MasteryScore,
+    pub new_mastery: MasteryScore,
+    pub policy_version: ProtocolVersion,
+}
+impl DomainEvent for CompetencyUpdated {
+    const KIND: EventKind = EventKind::CompetencyUpdated;
 }
 
 /// A subscriber callback failure. Other subscribers are still called.

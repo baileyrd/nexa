@@ -18,6 +18,8 @@ pub enum ValueError {
     InvalidVersion,
     #[error("confidence must be finite and within the inclusive range 0.0..=1.0")]
     InvalidConfidence,
+    #[error("mastery score must be finite and within the inclusive range 0.0..=1.0")]
+    InvalidMasteryScore,
     #[error("timestamp must be a valid RFC 3339 instant")]
     InvalidTimestamp,
 }
@@ -54,6 +56,12 @@ macro_rules! uuid_id {
 }
 
 uuid_id!(
+    StudentId,
+    CompetencyId,
+    LearningObjectiveId,
+    EvidenceId,
+    AttemptId,
+    AssessmentId,
     SessionId,
     EventId,
     MessageId,
@@ -61,6 +69,28 @@ uuid_id!(
     CorrelationId,
     TraceId
 );
+
+/// A finite mastery estimate in the inclusive range `[0, 1]`.
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Serialize)]
+#[serde(transparent)]
+pub struct MasteryScore(f64);
+impl MasteryScore {
+    pub fn new(value: f64) -> Result<Self, ValueError> {
+        if value.is_finite() && (0.0..=1.0).contains(&value) {
+            Ok(Self(value))
+        } else {
+            Err(ValueError::InvalidMasteryScore)
+        }
+    }
+    pub const fn get(self) -> f64 {
+        self.0
+    }
+}
+impl<'de> Deserialize<'de> for MasteryScore {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::new(f64::deserialize(deserializer)?).map_err(de::Error::custom)
+    }
+}
 
 macro_rules! semantic_string {
     ($($name:ident),+ $(,)?) => {$(

@@ -35,6 +35,7 @@ Speech, canvas, tools, and avatar adapters
 | `assets/` | Avatars, scenes, and speech assets |
 | `docs/` | Architecture, specifications, ADRs, governance, and provenance |
 | `crates/nexa-3d/` | Renderer-independent 3D runtime, validation, and avatar adapter |
+| `crates/nexa-student/` | Headless student model, immutable evidence ledger, and replayable mastery policy |
 | `apps/nexa-3d-viewer/` | `wgpu`/`winit` interactive viewer composition root |
 | `tools/nexa-3d-validate/` | GPU-free asset and manifest validation CLI |
 
@@ -64,6 +65,13 @@ It currently validates and exercises:
 - headless CI-safe asset acceptance
 
 Renderer-neutral contracts remain in `nexa-avatar`; GPU, window, and OS input composition exists only in the viewer application.
+
+Phase 3 has begun with a dependency-light `nexa-student` slice. Canonical evidence is append-only,
+duplicate ingestion is idempotent, and mastery is a derived projection replayed with an explicit policy
+version. Only persistence ports and deterministic in-memory test adapters exist; no database or async
+runtime has been selected. Phase 3 remains incomplete pending pedagogy, lesson, and assessment engines.
+See [ADR-0010](docs/adr/0010-learning-state-evidence-and-persistence.md) and the
+[Phase 3 traceability matrix](docs/architecture/PHASE-3-TRACEABILITY.md).
 
 ## Run the implemented 3D slice
 
