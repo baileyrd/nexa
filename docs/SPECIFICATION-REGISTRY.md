@@ -25,6 +25,7 @@ This registry is the navigation and governance authority for Nexa system specifi
 | ADR-0005 | [Event envelope semantics](adr/0005-event-envelope-semantics.md) | Accepted | Identity, ordering, correlation, delivery, and replay |
 | ADR-0006 | [NBP versioning and extensions](adr/0006-nbp-versioning-and-extensions.md) | Accepted | Protocol evolution and extension governance |
 | ADR-0007 | [Avatar port ownership and adapter direction](adr/0007-avatar-port-ownership-and-adapter-direction.md) | Accepted | Renderer-neutral port ownership and adapter boundaries |
+| ADR-0009 | [Embodiment acceptance and lifecycle](adr/0009-embodiment-acceptance-and-lifecycle.md) | Accepted | Capability wire ownership, acknowledgement, lifecycle events, and synchronous core |
 | ADR-0008 | [Controlled 3D workspace migration and ownership](adr/0008-controlled-3d-workspace-migration.md) | Accepted | 3D library, viewer, and validator ownership after migration |
 
 ## Subsystem specifications
@@ -33,7 +34,7 @@ This registry is the navigation and governance authority for Nexa system specifi
 |---:|---|---|---|---|
 | 00 | NEXA-DOM-001 | Core domain model | Baseline Draft | `nexa-domain` |
 | 00 | NEXA-EVT-001 | Events and runtime bus | Baseline Draft | `nexa-events` |
-| 01 | NEXA-NBP-001 | Behavior protocol | Baseline Draft | `nexa-nbp` |
+| 01 | NEXA-NBP-001 | Behavior protocol | Implemented Phase 2 slice | `nexa-nbp` |
 | 02 | NEXA-STU-001 | Student model | Baseline Draft | `nexa-student` |
 | 03 | NEXA-PED-001 | Adaptive pedagogy | Baseline Draft | `nexa-pedagogy` |
 | 04 | NEXA-TUTOR-001 | Tutor intelligence | Baseline Draft | `nexa-tutor` |
@@ -42,8 +43,8 @@ This registry is the navigation and governance authority for Nexa system specifi
 | 07 | NEXA-ASMT-001 | Assessment | Baseline Draft | `nexa-assessment` |
 | 08 | NEXA-LAB-001 | Labs and sandboxes | Baseline Draft | `nexa-labs` |
 | 09 | NEXA-SPCH-001 | Speech interaction | Baseline Draft | `nexa-speech` |
-| 10 | NEXA-AVTR-001 | Renderer-neutral avatar | Baseline Draft | `nexa-avatar` |
-| 11 | NEXA-3D-001 | 3D character architecture | Baseline Draft | `nexa-3d` |
+| 10 | NEXA-AVTR-001 | Renderer-neutral avatar | Implemented Phase 2 slice | `nexa-avatar` |
+| 11 | NEXA-3D-001 | 3D character architecture | Implemented Phase 2 slice | `nexa-3d` |
 | 11 | NEXA-3D-ART-001 | 3D production pipeline | Baseline Draft | Assets/tooling |
 | 11 | NEXA-3D-REF-001 | Canonical 3D reference | Baseline Draft | Assets |
 | 11 | NEXA-3D-RUNTIME-001 | 3D validation runtime | Implemented slice | `crates/nexa-3d`; `apps/nexa-3d-viewer`; `tools/nexa-3d-validate` |

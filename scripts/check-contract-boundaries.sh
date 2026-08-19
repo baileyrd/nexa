@@ -20,6 +20,12 @@ for package, allowed in expected.items():
 print("contract dependency DAG passed")
 ' <<<"$metadata"
 
+# Renderer, platform, provider, executor, networking, and persistence crates must never enter contract crates.
+if rg -n --glob 'Cargo.toml' --glob '*.rs' '\b(wgpu|winit|gltf|tokio|async-std|rodio|cpal|reqwest|hyper|sqlx|rusqlite)\b' crates/nexa-{domain,events,nbp,avatar}; then
+  echo "contract crate references a forbidden implementation dependency" >&2
+  exit 1
+fi
+
 # Renderer, platform, provider, and executor crates must never enter the avatar contract.
 if rg -n --glob 'Cargo.toml' --glob '*.rs' \
   '\b(wgpu|winit|gltf|tokio|async-std|rodio|cpal|nexa-3d-runtime)\b' crates/nexa-avatar; then

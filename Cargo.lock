@@ -1071,6 +1071,7 @@ dependencies = [
  "gltf",
  "nexa-avatar",
  "nexa-domain",
+ "nexa-events",
  "nexa-nbp",
  "serde",
  "serde_json",

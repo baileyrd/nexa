@@ -1,0 +1,67 @@
+[
+  {
+    "nbp_version": "1.0",
+    "message_id": "018f1f64-4f09-7cc0-98c2-7b3e8f249010",
+    "message_type": "runtime.ack",
+    "timestamp": "2026-08-18T12:00:00Z",
+    "session_id": "018f1f64-4f09-7cc0-98c2-7b3e8f249003",
+    "sequence": 90,
+    "source": "nexa.avatar",
+    "target": "nexa.orchestrator",
+    "correlation_id": "018f1f64-4f09-7cc0-98c2-7b3e8f249004",
+    "payload": {
+      "behavior_id": "018f1f64-4f09-7cc0-98c2-7b3e8f249001",
+      "message_id": "018f1f64-4f09-7cc0-98c2-7b3e8f249002",
+      "status": "accepted"
+    }
+  },
+  {
+    "nbp_version": "1.0",
+    "message_id": "018f1f64-4f09-7cc0-98c2-7b3e8f249011",
+    "message_type": "runtime.ack",
+    "timestamp": "2026-08-18T12:00:00Z",
+    "session_id": "018f1f64-4f09-7cc0-98c2-7b3e8f249003",
+    "sequence": 91,
+    "source": "nexa.avatar",
+    "target": "nexa.orchestrator",
+    "correlation_id": "018f1f64-4f09-7cc0-98c2-7b3e8f249004",
+    "payload": {
+      "behavior_id": "018f1f64-4f09-7cc0-98c2-7b3e8f249001",
+      "message_id": "018f1f64-4f09-7cc0-98c2-7b3e8f249002",
+      "status": "started"
+    }
+  },
+  {
+    "nbp_version": "1.0",
+    "message_id": "018f1f64-4f09-7cc0-98c2-7b3e8f249012",
+    "message_type": "runtime.ack",
+    "timestamp": "2026-08-18T12:00:00Z",
+    "session_id": "018f1f64-4f09-7cc0-98c2-7b3e8f249003",
+    "sequence": 92,
+    "source": "nexa.avatar",
+    "target": "nexa.orchestrator",
+    "correlation_id": "018f1f64-4f09-7cc0-98c2-7b3e8f249004",
+    "payload": {
+      "behavior_id": "018f1f64-4f09-7cc0-98c2-7b3e8f249001",
+      "message_id": "018f1f64-4f09-7cc0-98c2-7b3e8f249002",
+      "status": "completed"
+    }
+  },
+  {
+    "nbp_version": "1.0",
+    "message_id": "018f1f64-4f09-7cc0-98c2-7b3e8f249013",
+    "message_type": "runtime.state",
+    "timestamp": "2026-08-18T12:00:00Z",
+    "session_id": "018f1f64-4f09-7cc0-98c2-7b3e8f249003",
+    "sequence": 93,
+    "source": "nexa.avatar",
+    "target": "nexa.orchestrator",
+    "correlation_id": "018f1f64-4f09-7cc0-98c2-7b3e8f249004",
+    "payload": {
+      "avatar_id": "headless-avatar",
+      "behavior_id": "018f1f64-4f09-7cc0-98c2-7b3e8f249001",
+      "message_id": "018f1f64-4f09-7cc0-98c2-7b3e8f249002",
+      "state": "explaining"
+    }
+  }
+]

@@ -76,7 +76,7 @@ fn cancellation_propagates_to_the_adapter_and_acknowledgement() {
         message_id: message_id(),
         cancellation: cancellation.clone(),
     });
-    assert_eq!(report.acknowledgement.status, RuntimeStatus::Cancelled);
+    assert_eq!(report.terminal_status(), RuntimeStatus::Cancelled);
     assert_eq!(
         adapter.requests(),
         &[AvatarRequest::Cancel {
@@ -90,17 +90,17 @@ fn cancellation_propagates_to_the_adapter_and_acknowledgement() {
 fn acknowledgement_and_state_map_without_renderer_values() {
     let mut adapter = fake([AvatarCapability::BehaviorState, AvatarCapability::Emotion]);
     let report = adapter.submit(message_id(), command());
-    assert_eq!(report.acknowledgement.status, RuntimeStatus::Accepted);
-    assert_eq!(report.state.unwrap().state, BehaviorState::Attentive);
-    assert!(report.error.is_none());
+    assert_eq!(report.terminal_status(), RuntimeStatus::Completed);
+    assert_eq!(report.state().unwrap().state, BehaviorState::Attentive);
+    assert!(report.error().is_none());
 }
 
 #[test]
 fn unsupported_capability_is_explicitly_degraded_with_recoverable_error() {
     let mut adapter = fake([AvatarCapability::BehaviorState]);
     let report = adapter.submit(message_id(), command());
-    assert_eq!(report.acknowledgement.status, RuntimeStatus::Degraded);
-    let error = report.error.unwrap();
+    assert_eq!(report.terminal_status(), RuntimeStatus::Degraded);
+    let error = report.error().unwrap();
     assert!(error.recoverable);
     assert_eq!(error.code.as_str(), "avatar.capability.unsupported");
 }
@@ -109,8 +109,8 @@ fn unsupported_capability_is_explicitly_degraded_with_recoverable_error() {
 fn mandatory_behavior_state_is_checked_with_optional_capabilities() {
     let mut adapter = fake([AvatarCapability::Emotion]);
     let report = adapter.submit(message_id(), command());
-    assert_eq!(report.acknowledgement.status, RuntimeStatus::Degraded);
-    assert!(report.error.unwrap().message.contains("BehaviorState"));
+    assert_eq!(report.terminal_status(), RuntimeStatus::Degraded);
+    assert!(report.error().unwrap().message.contains("BehaviorState"));
 }
 
 #[test]
@@ -192,4 +192,51 @@ fn visemes_are_required_only_when_speech_requests_emission() {
         missing.iter().collect::<Vec<_>>(),
         [AvatarCapability::Visemes]
     );
+}
+
+#[test]
+fn malformed_reports_are_rejected_during_deserialization() {
+    let mut adapter = fake([AvatarCapability::BehaviorState, AvatarCapability::Emotion]);
+    let valid = serde_json::to_value(adapter.submit(message_id(), command())).unwrap();
+
+    for lifecycle in [serde_json::json!([]), serde_json::json!(["degraded"])] {
+        let mut malformed = valid.clone();
+        malformed["lifecycle"] = lifecycle;
+        if malformed["lifecycle"] == serde_json::json!(["degraded"]) {
+            malformed["state"] = serde_json::Value::Null;
+            malformed.as_object_mut().unwrap().remove("error");
+        }
+        assert!(serde_json::from_value::<nexa_avatar::AvatarReport>(malformed).is_err());
+    }
+}
+
+#[test]
+fn output_sequence_overflow_is_structured() {
+    let input = NbpMessage::new(
+        ProtocolVersion::new(1, 0),
+        message_id(),
+        Timestamp::from_str("2026-08-18T12:00:00Z").unwrap(),
+        SessionId::from_str("018f1f64-4f09-7cc0-98c2-7b3e8f249003").unwrap(),
+        Sequence::new(1),
+        EndpointId::new("tutor").unwrap(),
+        None,
+        None,
+        Payload::BehaviorCommand(command()),
+        BTreeMap::new(),
+    )
+    .unwrap();
+    let report = fake([AvatarCapability::BehaviorState, AvatarCapability::Emotion])
+        .submit(message_id(), command());
+    let error = report
+        .to_nbp_messages(
+            &input,
+            EndpointId::new("avatar").unwrap(),
+            Sequence::new(u64::MAX),
+            [message_id(), message_id(), message_id(), message_id()],
+        )
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        nexa_avatar::OutputConversionError::SequenceOverflow
+    ));
 }
