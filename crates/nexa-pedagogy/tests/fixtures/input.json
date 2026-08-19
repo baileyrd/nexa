@@ -1,0 +1,20 @@
+{
+  "policy_version": "1.0",
+  "mastery": {
+    "student_id": "018f6f3e-8c5d-7a20-8000-000000000001",
+    "competency_id": "018f6f3e-8c5d-7a20-8000-000000000002",
+    "mastery": 0.5,
+    "model_confidence": 0.6,
+    "status": "functional",
+    "evidence_count": 3,
+    "last_evidence_at": "2026-08-19T00:00:00Z",
+    "policy_version": "1.0"
+  },
+  "recent_outcome": "partial_success",
+  "attempt_count": 2,
+  "consecutive_failures": 0,
+  "available_options": [
+    "practice",
+    "clarify"
+  ]
+}

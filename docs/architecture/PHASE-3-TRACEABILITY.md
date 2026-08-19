@@ -1,6 +1,6 @@
 # Phase 3 learning-core traceability
 
-Phase 3 is **in progress**. This matrix covers only the first independently reviewable increment.
+Phase 3 is **in progress**. This matrix covers the student-model and narrow pedagogy-policy increments.
 
 | Requirement | Authority | Implementation / evidence | Status |
 |---|---|---|---|
@@ -11,7 +11,9 @@ Phase 3 is **in progress**. This matrix covers only the first independently revi
 | Persistence boundary without database/runtime | ADR-0001; ADR-0002; ADR-0010 | synchronous repository traits and boundary script | Implemented slice |
 | Typed learning facts | NEXA-EVT-001; NEXA-STU-001 §§91–94 | `CompetencyEvidenceAdded` and `CompetencyUpdated` in `nexa-events` | Contract only |
 | Wire stability and malformed input | ADR-0004 | golden evidence fixture and serde validation tests | Implemented slice |
-| Pedagogy policy engine | NEXA-PED-001 | future `nexa-pedagogy` increment | Not started |
+| Read-only deterministic pedagogy policy | NEXA-PED-001 §§4–9, 24–33, 73–75, 90, 117–129; ADR-0011 | `PedagogyPolicyV1`, validated contracts, golden and table tests | Implemented slice |
+| Stable explanations and unavailable-option safety | NEXA-PED-001 §§7–8, 124–126; ADR-0011 | closed rationale codes and deterministic availability resolution | Implemented slice |
+| Privacy-minimal pedagogy fact | NEXA-EVT-001; NEXA-PED-001 §§100–101; ADR-0011 | `PedagogyDecisionMade` in `nexa-events` | Contract only |
 | Lesson/curriculum engine | NEXA-LESSON-001 | future `nexa-lessons` increment | Not started |
 | Assessment engine | NEXA-ASMT-001 | future `nexa-assessment` increment | Not started |
 | Concrete governed persistence | Phase 3 roadmap; ADR-0010 | durable adapter intentionally deferred | Not started |
@@ -22,11 +24,11 @@ The source material illustrates both UUID identities and semantic competency str
 the governed UUID types and does not invent key semantics. Estimator coefficients, equal-timestamp
 ordering, transaction technology, async signatures, retention/regression rules, and event-envelope
 construction were also unspecified. ADR-0010 records the narrow choices and deferrals without editing
-the reconstructed specifications.
+the reconstructed specifications. ADR-0011 additionally records unresolved action/strategy mapping,
+attempt scope, per-competency threshold authorship, policy hashes, and constraint composition.
 
 ## Exit-gate position
 
 Phase 3 is not complete: no headless adaptive lesson spanning pedagogy, curriculum, and assessment
-exists yet. The next recommended increment is a deterministic pedagogy decision policy consuming
-read-only mastery projections and producing explainable strategy/routing decisions, with no content,
-LLM, persistence, or orchestration implementation.
+exists yet. The next recommended increment is a headless curriculum/lesson contract that consumes
+pedagogy routing while keeping content execution, assessment, LLM, persistence, and orchestration out.

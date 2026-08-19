@@ -6,6 +6,7 @@ members = [
     "crates/nexa-domain",
     "crates/nexa-events",
     "crates/nexa-nbp",
+    "crates/nexa-pedagogy",
     "crates/nexa-student",
     "tools/nexa-3d-validate",
 ]
