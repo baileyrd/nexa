@@ -233,6 +233,68 @@ fn exact_metric_ties_limits_missing_and_order_are_deterministic() {
 }
 
 #[test]
+fn result_provenance_round_trips_and_rejects_tampering() {
+    let p = profile();
+    let a = record(
+        1,
+        "first sensitive body",
+        SourceStatus::Active,
+        KnowledgeVisibility::Student,
+        None,
+        None,
+    );
+    let b = record(
+        2,
+        "second sensitive body",
+        SourceStatus::Active,
+        KnowledgeVisibility::Student,
+        None,
+        None,
+    );
+    let result = InMemoryVectorSnapshot::from_records(
+        records(
+            vec![
+                (a.0, a.1, a.2, Some([1, 2, 3])),
+                (b.0, b.1, b.2, Some([3, 2, 1])),
+            ],
+            &p,
+        ),
+        p.profile_id,
+    )
+    .unwrap()
+    .retrieve(&query(&p, [1, 1, 1], 2))
+    .unwrap();
+
+    let wire = serde_json::to_string(&result).unwrap();
+    assert_eq!(
+        serde_json::from_str::<VectorRetrievalResult>(&wire).unwrap(),
+        result
+    );
+    assert!(!wire.contains("first sensitive body"));
+    assert!(!wire.contains("second sensitive body"));
+    assert!(!wire.contains("[1,2,3]"));
+
+    let original = serde_json::to_value(&result).unwrap();
+    let mut swapped_embedding = original.clone();
+    swapped_embedding["candidates"][0]["embedding_id"] =
+        swapped_embedding["candidates"][1]["embedding_id"].clone();
+    assert!(serde_json::from_value::<VectorRetrievalResult>(swapped_embedding).is_err());
+
+    for (field, tampered) in [
+        (
+            "profile_id",
+            serde_json::json!("018f0000-0000-7000-b000-000000000099"),
+        ),
+        ("profile_fingerprint", serde_json::json!("0".repeat(64))),
+        ("dimension", serde_json::json!(2)),
+    ] {
+        let mut value = original.clone();
+        value[field] = tampered;
+        assert!(serde_json::from_value::<VectorRetrievalResult>(value).is_err());
+    }
+}
+
+#[test]
 fn governance_scope_and_inactive_filters_precede_ranking() {
     let p = profile();
     let rows = vec![

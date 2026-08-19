@@ -451,6 +451,7 @@ impl<'de> Deserialize<'de> for VectorRetrievalQuery {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SimilarityEvidence {
+    pub embedding_id: EmbeddingRecordId,
     pub metric: VectorMetric,
     pub exact_dot_product: i64,
     pub accumulation_order: ProtocolVersion,
@@ -458,6 +459,10 @@ pub struct SimilarityEvidence {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct VectorRetrievalCandidate {
+    pub embedding_id: EmbeddingRecordId,
+    pub profile_id: EmbeddingProfileId,
+    pub profile_fingerprint: ProfileFingerprint,
+    pub dimension: usize,
     pub chunk_id: KnowledgeChunkId,
     pub artifact_id: KnowledgeArtifactId,
     pub source_id: KnowledgeSourceId,
@@ -492,6 +497,10 @@ pub struct VectorRetrievalResult {
     pub vector_policy_version: ProtocolVersion,
     pub query_id: RetrievalQueryId,
     pub result_id: RetrievalResultId,
+    pub profile_id: EmbeddingProfileId,
+    pub profile_fingerprint: ProfileFingerprint,
+    pub dimension: usize,
+    pub metric: VectorMetric,
     pub candidates: Vec<VectorRetrievalCandidate>,
     pub exclusions: Vec<VectorRetrievalExclusion>,
 }
@@ -501,6 +510,10 @@ impl<'de> Deserialize<'de> for VectorRetrievalCandidate {
         #[derive(Deserialize)]
         #[serde(deny_unknown_fields)]
         struct W {
+            embedding_id: EmbeddingRecordId,
+            profile_id: EmbeddingProfileId,
+            profile_fingerprint: ProfileFingerprint,
+            dimension: usize,
             chunk_id: KnowledgeChunkId,
             artifact_id: KnowledgeArtifactId,
             source_id: KnowledgeSourceId,
@@ -508,10 +521,20 @@ impl<'de> Deserialize<'de> for VectorRetrievalCandidate {
             evidence: SimilarityEvidence,
         }
         let w = W::deserialize(d)?;
-        if w.source_version == 0 || w.evidence.accumulation_order != VECTOR_RETRIEVAL_V1 {
+        if w.source_version == 0
+            || w.dimension == 0
+            || w.dimension > MAX_VECTOR_DIMENSION
+            || w.embedding_id != w.evidence.embedding_id
+            || w.evidence.metric != VectorMetric::DotProduct
+            || w.evidence.accumulation_order != VECTOR_RETRIEVAL_V1
+        {
             return Err(serde::de::Error::custom(VectorError::InvalidCorpus));
         }
         Ok(Self {
+            embedding_id: w.embedding_id,
+            profile_id: w.profile_id,
+            profile_fingerprint: w.profile_fingerprint,
+            dimension: w.dimension,
             chunk_id: w.chunk_id,
             artifact_id: w.artifact_id,
             source_id: w.source_id,
@@ -548,6 +571,9 @@ impl VectorRetrievalResult {
     fn validate(&self) -> Result<(), VectorError> {
         if self.contract_version != V1
             || self.vector_policy_version != VECTOR_RETRIEVAL_V1
+            || self.dimension == 0
+            || self.dimension > MAX_VECTOR_DIMENSION
+            || self.metric != VectorMetric::DotProduct
             || self.candidates.len() > MAX_VECTOR_RESULTS
         {
             return Err(VectorError::UnsupportedContract);
@@ -561,10 +587,19 @@ impl VectorRetrievalResult {
             return Err(VectorError::InvalidCorpus);
         }
         let candidates: BTreeSet<_> = self.candidates.iter().map(|x| x.chunk_id).collect();
+        let embedding_records: BTreeSet<_> =
+            self.candidates.iter().map(|x| x.embedding_id).collect();
         let exclusions: BTreeSet<_> = self.exclusions.iter().map(|x| x.chunk_id).collect();
         if candidates.len() != self.candidates.len()
+            || embedding_records.len() != self.candidates.len()
             || exclusions.len() != self.exclusions.len()
             || !candidates.is_disjoint(&exclusions)
+            || self.candidates.iter().any(|x| {
+                x.profile_id != self.profile_id
+                    || x.profile_fingerprint != self.profile_fingerprint
+                    || x.dimension != self.dimension
+                    || x.evidence.metric != self.metric
+            })
         {
             return Err(VectorError::InvalidCorpus);
         }
@@ -580,6 +615,10 @@ impl<'de> Deserialize<'de> for VectorRetrievalResult {
             vector_policy_version: ProtocolVersion,
             query_id: RetrievalQueryId,
             result_id: RetrievalResultId,
+            profile_id: EmbeddingProfileId,
+            profile_fingerprint: ProfileFingerprint,
+            dimension: usize,
+            metric: VectorMetric,
             candidates: Vec<VectorRetrievalCandidate>,
             exclusions: Vec<VectorRetrievalExclusion>,
         }
@@ -589,6 +628,10 @@ impl<'de> Deserialize<'de> for VectorRetrievalResult {
             vector_policy_version: w.vector_policy_version,
             query_id: w.query_id,
             result_id: w.result_id,
+            profile_id: w.profile_id,
+            profile_fingerprint: w.profile_fingerprint,
+            dimension: w.dimension,
+            metric: w.metric,
             candidates: w.candidates,
             exclusions: w.exclusions,
         };
@@ -795,11 +838,16 @@ impl InMemoryVectorSnapshot {
             let e = d.embedding.as_ref().expect("checked");
             let score = dot(q.vector.values(), e.vector.values())?;
             candidates.push(VectorRetrievalCandidate {
+                embedding_id: e.embedding_id,
+                profile_id: e.profile_id,
+                profile_fingerprint: e.profile_fingerprint.clone(),
+                dimension: e.dimension,
                 chunk_id: d.chunk.chunk_id,
                 artifact_id: d.artifact_id,
                 source_id: d.source.source_id,
                 source_version: d.source.source_version,
                 evidence: SimilarityEvidence {
+                    embedding_id: e.embedding_id,
                     metric: VectorMetric::DotProduct,
                     exact_dot_product: score,
                     accumulation_order: VECTOR_RETRIEVAL_V1,
@@ -831,6 +879,10 @@ impl InMemoryVectorSnapshot {
             vector_policy_version: VECTOR_RETRIEVAL_V1,
             query_id: q.query_id,
             result_id: q.result_id,
+            profile_id: self.profile.profile_id,
+            profile_fingerprint: self.profile.fingerprint.clone(),
+            dimension: self.profile.dimension,
+            metric: self.profile.metric,
             candidates,
             exclusions,
         })
