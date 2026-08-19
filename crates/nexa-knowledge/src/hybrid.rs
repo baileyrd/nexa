@@ -329,12 +329,16 @@ impl fmt::Debug for HybridCandidate {
 }
 impl HybridCandidate {
     fn validate(&self) -> Result<(), HybridError> {
-        if self.source_version == 0
-            || self.reranking.policy_version != HYBRID_RERANK_V1
-            || self.reranking.final_rank == 0
-        {
+        if self.source_version == 0 {
             return Err(HybridError::InvalidResult);
         }
+        if let Some(lexical) = &self.lexical {
+            lexical.validate()?;
+        }
+        if let Some(vector) = &self.vector {
+            vector.validate()?;
+        }
+        self.reranking.validate()?;
         let p = match (self.lexical.is_some(), self.vector.is_some()) {
             (true, true) => ChannelParticipation::Both,
             (true, false) => ChannelParticipation::LexicalOnly,
@@ -342,17 +346,6 @@ impl HybridCandidate {
             _ => return Err(HybridError::InvalidResult),
         };
         if p != self.participation {
-            return Err(HybridError::InvalidResult);
-        }
-        if self
-            .lexical
-            .as_ref()
-            .is_some_and(|x| x.rank == 0 || x.rank as usize > MAX_RETRIEVAL_RESULTS)
-            || self
-                .vector
-                .as_ref()
-                .is_some_and(|x| x.rank == 0 || x.rank as usize > MAX_RETRIEVAL_RESULTS)
-        {
             return Err(HybridError::InvalidResult);
         }
         Ok(())
@@ -386,13 +379,16 @@ impl HybridExclusion {
         }
         match self.reason {
             HybridExclusionReason::Governance
-                if !self.lexical_reason.is_some_and(gov_l)
-                    && !self.vector_reason.is_some_and(gov_v) =>
+                if (self.lexical_reason.is_none() && self.vector_reason.is_none())
+                    || self.lexical_reason.is_some_and(|reason| !gov_l(reason))
+                    || self.vector_reason.is_some_and(|reason| !gov_v(reason)) =>
             {
                 Err(HybridError::InvalidResult)
             }
             HybridExclusionReason::ChannelAbsence
-                if self.lexical_reason.is_none() && self.vector_reason.is_none() =>
+                if (self.lexical_reason.is_none() && self.vector_reason.is_none())
+                    || self.lexical_reason.is_some_and(gov_l)
+                    || self.vector_reason.is_some_and(gov_v) =>
             {
                 Err(HybridError::InvalidResult)
             }
@@ -416,11 +412,14 @@ pub struct HybridRetrievalResult {
     pub query_id: RetrievalQueryId,
     pub lexical_result_id: RetrievalResultId,
     pub vector_result_id: RetrievalResultId,
+    pub lexical_policy_version: ProtocolVersion,
+    pub vector_policy_version: ProtocolVersion,
     pub result_id: HybridRetrievalResultId,
     pub profile_id: EmbeddingProfileId,
     pub profile_fingerprint: ProfileFingerprint,
     pub dimension: usize,
     pub metric: VectorMetric,
+    pub maximum_results: usize,
     pub policy: HybridFusionPolicy,
     pub candidates: Vec<HybridCandidate>,
     pub exclusions: Vec<HybridExclusion>,
@@ -430,11 +429,17 @@ impl HybridRetrievalResult {
         if self.contract_version != V1
             || self.fusion_policy_version != HYBRID_FUSION_V1
             || self.reranking_policy_version != HYBRID_RERANK_V1
+            || self.lexical_policy_version != LEXICAL_RETRIEVAL_V1
+            || self.vector_policy_version != VECTOR_RETRIEVAL_V1
             || self.dimension == 0
             || self.dimension > MAX_VECTOR_DIMENSION
             || self.metric != VectorMetric::DotProduct
             || self.policy.validate().is_err()
-            || self.candidates.len() > MAX_HYBRID_RESULTS
+            || self.fusion_policy_version != self.policy.fusion_policy_version
+            || self.reranking_policy_version != self.policy.reranking_policy_version
+            || self.maximum_results == 0
+            || self.maximum_results > MAX_HYBRID_RESULTS
+            || self.candidates.len() > self.maximum_results
         {
             return Err(HybridError::UnsupportedContract);
         }
@@ -482,7 +487,7 @@ impl HybridRetrievalResult {
         Ok(())
     }
 }
-wire!(HybridRetrievalResult{contract_version:ProtocolVersion,fusion_policy_version:ProtocolVersion,reranking_policy_version:ProtocolVersion,query_id:RetrievalQueryId,lexical_result_id:RetrievalResultId,vector_result_id:RetrievalResultId,result_id:HybridRetrievalResultId,profile_id:EmbeddingProfileId,profile_fingerprint:ProfileFingerprint,dimension:usize,metric:VectorMetric,policy:HybridFusionPolicy,candidates:Vec<HybridCandidate>,exclusions:Vec<HybridExclusion>});
+wire!(HybridRetrievalResult{contract_version:ProtocolVersion,fusion_policy_version:ProtocolVersion,reranking_policy_version:ProtocolVersion,query_id:RetrievalQueryId,lexical_result_id:RetrievalResultId,vector_result_id:RetrievalResultId,lexical_policy_version:ProtocolVersion,vector_policy_version:ProtocolVersion,result_id:HybridRetrievalResultId,profile_id:EmbeddingProfileId,profile_fingerprint:ProfileFingerprint,dimension:usize,metric:VectorMetric,maximum_results:usize,policy:HybridFusionPolicy,candidates:Vec<HybridCandidate>,exclusions:Vec<HybridExclusion>});
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum HybridError {
@@ -694,11 +699,14 @@ pub fn fuse(
         query_id: request.query_id,
         lexical_result_id: lexical.result_id,
         vector_result_id: vector.result_id,
+        lexical_policy_version: lexical.retrieval_policy_version,
+        vector_policy_version: vector.vector_policy_version,
         result_id: request.hybrid_result_id,
         profile_id: request.profile_id,
         profile_fingerprint: request.profile_fingerprint.clone(),
         dimension: request.dimension,
         metric: request.metric,
+        maximum_results: request.maximum_results,
         policy: request.policy.clone(),
         candidates,
         exclusions,
@@ -923,5 +931,84 @@ mod tests {
         assert!(serde_json::from_value::<HybridFusionPolicy>(value).is_err());
         let error = HybridError::ChannelConflict;
         assert!(!format!("{error:?} {error}").contains("018f"));
+    }
+
+    #[test]
+    fn standalone_candidate_rejects_invalid_nested_evidence() {
+        let q = id("018f0000-0000-7000-e000-000000000001");
+        let l = id("018f0000-0000-7000-e000-000000000002");
+        let v = id("018f0000-0000-7000-e000-000000000003");
+        let p = profile();
+        let out = fuse(
+            &request(q, l, v, &p, 1),
+            &lexical(q, l, &[1]),
+            &vector(q, v, &p, &[1]),
+        )
+        .unwrap();
+        let candidate = serde_json::to_value(&out.candidates[0]).unwrap();
+
+        let mut invalid_dimension = candidate.clone();
+        invalid_dimension["vector"]["dimension"] = 0.into();
+        assert!(serde_json::from_value::<HybridCandidate>(invalid_dimension).is_err());
+
+        let mut invalid_metric = candidate.clone();
+        invalid_metric["vector"]["metric"] = serde_json::json!("cosine");
+        assert!(serde_json::from_value::<HybridCandidate>(invalid_metric).is_err());
+
+        let mut unsupported_reranking = candidate;
+        unsupported_reranking["reranking"]["policy_version"] = 2.into();
+        assert!(serde_json::from_value::<HybridCandidate>(unsupported_reranking).is_err());
+    }
+
+    #[test]
+    fn result_rejects_limit_and_source_policy_tampering() {
+        let q = id("018f0000-0000-7000-e000-000000000001");
+        let l = id("018f0000-0000-7000-e000-000000000002");
+        let v = id("018f0000-0000-7000-e000-000000000003");
+        let p = profile();
+        let channels = lexical(q, l, &[1, 2]);
+        let vectors = vector(q, v, &p, &[]);
+        let limited = fuse(&request(q, l, v, &p, 1), &channels, &vectors).unwrap();
+        let complete = fuse(&request(q, l, v, &p, 2), &channels, &vectors).unwrap();
+
+        let mut moved_exclusion = serde_json::to_value(&limited).unwrap();
+        moved_exclusion["candidates"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::to_value(&complete.candidates[1]).unwrap());
+        moved_exclusion["exclusions"] = serde_json::json!([]);
+        assert!(serde_json::from_value::<HybridRetrievalResult>(moved_exclusion).is_err());
+
+        for field in ["lexical_policy_version", "vector_policy_version"] {
+            let mut tampered = serde_json::to_value(&limited).unwrap();
+            tampered[field] = 2.into();
+            assert!(serde_json::from_value::<HybridRetrievalResult>(tampered).is_err());
+        }
+    }
+
+    #[test]
+    fn exclusions_reject_governance_downgrades_and_mixed_classification() {
+        let base = serde_json::json!({
+            "chunk_id": "018f0000-0000-7000-a000-000000000001",
+            "artifact_id": "018f0000-0000-7000-9000-000000000001",
+            "source_id": "018f0000-0000-7000-8000-000000000001",
+            "source_version": 1,
+            "reason": "channel_absence",
+            "lexical_reason": null,
+            "vector_reason": null
+        });
+        let mut lexical_downgrade = base.clone();
+        lexical_downgrade["lexical_reason"] = serde_json::json!("not_active");
+        assert!(serde_json::from_value::<HybridExclusion>(lexical_downgrade).is_err());
+
+        let mut vector_downgrade = base.clone();
+        vector_downgrade["vector_reason"] = serde_json::json!("not_active");
+        assert!(serde_json::from_value::<HybridExclusion>(vector_downgrade).is_err());
+
+        let mut mixed_governance = base;
+        mixed_governance["reason"] = serde_json::json!("governance");
+        mixed_governance["lexical_reason"] = serde_json::json!("not_active");
+        mixed_governance["vector_reason"] = serde_json::json!("missing_embedding");
+        assert!(serde_json::from_value::<HybridExclusion>(mixed_governance).is_err());
     }
 }
