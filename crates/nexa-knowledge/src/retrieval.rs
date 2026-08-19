@@ -389,7 +389,7 @@ pub struct RetrievalResult {
 }
 
 impl RetrievalResult {
-    fn validate(&self) -> Result<(), RetrievalError> {
+    pub(crate) fn validate(&self) -> Result<(), RetrievalError> {
         if self.contract_version != V1
             || self.retrieval_policy_version != LEXICAL_RETRIEVAL_V1
             || self.candidates.len() > MAX_RETRIEVAL_RESULTS

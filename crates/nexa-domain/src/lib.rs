@@ -87,6 +87,7 @@ uuid_id!(
     EmbeddingProfileId,
     RetrievalQueryId,
     RetrievalResultId,
+    HybridRetrievalResultId,
     CitationId
 );
 

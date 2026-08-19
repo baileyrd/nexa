@@ -568,7 +568,7 @@ impl<'de> Deserialize<'de> for VectorRetrievalExclusion {
     }
 }
 impl VectorRetrievalResult {
-    fn validate(&self) -> Result<(), VectorError> {
+    pub(crate) fn validate(&self) -> Result<(), VectorError> {
         if self.contract_version != V1
             || self.vector_policy_version != VECTOR_RETRIEVAL_V1
             || self.dimension == 0
