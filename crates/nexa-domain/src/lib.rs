@@ -88,6 +88,7 @@ uuid_id!(
     RetrievalQueryId,
     RetrievalResultId,
     HybridRetrievalResultId,
+    ContextPackageId,
     CitationId
 );
 

@@ -425,7 +425,7 @@ pub struct HybridRetrievalResult {
     pub exclusions: Vec<HybridExclusion>,
 }
 impl HybridRetrievalResult {
-    fn validate(&self) -> Result<(), HybridError> {
+    pub(crate) fn validate(&self) -> Result<(), HybridError> {
         if self.contract_version != V1
             || self.fusion_policy_version != HYBRID_FUSION_V1
             || self.reranking_policy_version != HYBRID_RERANK_V1
