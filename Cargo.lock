@@ -1147,6 +1147,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "nexa-learning-core"
+version = "0.1.0"
+dependencies = [
+ "nexa-assessment",
+ "nexa-domain",
+ "nexa-events",
+ "nexa-lessons",
+ "nexa-pedagogy",
+ "nexa-student",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "nexa-lessons"
 version = "0.1.0"
 dependencies = [

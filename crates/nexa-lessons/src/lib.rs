@@ -523,6 +523,18 @@ impl LessonProgress {
     pub fn lifecycle(&self) -> LessonLifecycle {
         self.lifecycle
     }
+    pub fn student_id(&self) -> StudentId {
+        self.student_id
+    }
+    pub fn lesson_id(&self) -> LessonId {
+        self.lesson_id
+    }
+    pub fn policy_version(&self) -> ProtocolVersion {
+        self.policy_version
+    }
+    pub fn updated_at(&self) -> Option<Timestamp> {
+        self.updated_at
+    }
     pub fn current_step_id(&self) -> Option<LessonStepId> {
         self.current_step_id
     }

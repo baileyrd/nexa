@@ -1,7 +1,6 @@
 # Phase 3 learning-core traceability
 
-Phase 3 is **in progress**. This matrix covers the student-model, pedagogy-policy,
-curriculum/lesson-transition, and narrow deterministic assessment increments.
+Phase 3's **headless deterministic exit gate is complete**. This matrix also covers the atomic learning-core composition increment; durable production adapters remain deferred.
 
 | Requirement | Authority | Implementation / evidence | Status |
 |---|---|---|---|
@@ -25,7 +24,9 @@ curriculum/lesson-transition, and narrow deterministic assessment increments.
 | Frozen attempt lifecycle and replay safety | NEXA-ASMT-001 §§55–67, 105, 136–143, 186; ADR-0013 | pure transitions, scope/policy/time/conflict and immutability tests | Implemented slice |
 | Privacy-minimal mastery evidence creation | NEXA-ASMT-001 §§82–88, 135–137; ADR-0010; ADR-0013 | `LearningEvidence` output and existing ledger compatibility tests | Implemented slice |
 | Typed assessment facts | NEXA-EVT-001; NEXA-ASMT-001 §§131–135; ADR-0013 | evaluated/completed payloads in `nexa-events` | Contract only |
-| Concrete governed persistence | Phase 3 roadmap; ADR-0010 | durable adapter intentionally deferred | Not started |
+| Atomic learning-core composition | Phase 3 roadmap; ADR-0014 | `nexa-learning-core`, end-to-end deterministic conformance test | Implemented |
+| Explicit persistence/UoW boundary | ADR-0010; ADR-0014 | expected-snapshot replacement port and deterministic failure-injection adapter | Implemented contract |
+| Durable persistence and outbox adapter | ADR-0014 | concurrency, authorization, retention, recovery, and publication semantics deferred | Deferred |
 
 ## Recorded baseline ambiguities
 
@@ -42,7 +43,4 @@ and orchestration semantics.
 
 ## Exit-gate position
 
-Phase 3 is not complete: its individual learning-core policies exist, but no headless composition
-atomically connects lesson routing, assessment evidence ingestion, replayed mastery, and governed
-durable persistence. The next increment should define that composition boundary without adding an LLM,
-avatar, UI, or ungoverned database semantics.
+The Phase 3 exit gate is demonstrated: conformance starts a lesson and assessment, scores a response, appends immutable evidence, replays mastery, obtains a deterministic pedagogy decision, applies an authored route, and atomically commits all state. Failure injection proves rollback and safe retry. This does not claim a durable adapter; its transaction, concurrency, outbox, retention, authorization, recovery, and migration semantics remain deferred in ADR-0014.
