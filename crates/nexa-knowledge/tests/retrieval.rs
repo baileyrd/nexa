@@ -149,6 +149,37 @@ fn query_and_result_have_golden_round_trips_and_reject_malformed_wire() {
     let mut value = serde_json::to_value(&result).unwrap();
     value["candidates"][0]["score"] = serde_json::json!(0.5);
     assert!(serde_json::from_value::<RetrievalResult>(value).is_err());
+
+    let evidence = serde_json::to_value(&result.candidates[0].score_evidence[0]).unwrap();
+    for (field, bad) in [("query_frequency", 0), ("contribution", 0)] {
+        let mut malformed = evidence.clone();
+        malformed[field] = bad.into();
+        assert!(serde_json::from_value::<TermScoreEvidence>(malformed).is_err());
+    }
+    let mut candidate = serde_json::to_value(&result.candidates[0]).unwrap();
+    candidate["source_version"] = 0.into();
+    assert!(serde_json::from_value::<RetrievalCandidate>(candidate).is_err());
+
+    let no_match = snapshot.retrieve(&query("absent", 2)).unwrap();
+    let mut exclusion = serde_json::to_value(&no_match.exclusions[0]).unwrap();
+    exclusion["source_version"] = 0.into();
+    assert!(serde_json::from_value::<RetrievalExclusion>(exclusion).is_err());
+
+    let mut duplicate = serde_json::to_value(&result).unwrap();
+    let mut second = duplicate["candidates"][0].clone();
+    second["score"] = 1.into();
+    second["score_evidence"].as_array_mut().unwrap().truncate(1);
+    duplicate["candidates"].as_array_mut().unwrap().push(second);
+    assert!(serde_json::from_value::<RetrievalResult>(duplicate).is_err());
+
+    let mut contradictory = serde_json::to_value(&result).unwrap();
+    let candidate = &result.candidates[0];
+    contradictory["exclusions"] = serde_json::json!([{
+        "chunk_id": candidate.chunk_id, "artifact_id": candidate.artifact_id,
+        "source_id": candidate.source_id, "source_version": candidate.source_version,
+        "reason": "result_limit"
+    }]);
+    assert!(serde_json::from_value::<RetrievalResult>(contradictory).is_err());
 }
 
 #[test]
@@ -386,6 +417,22 @@ fn conflicting_incomplete_and_corrupted_corpora_fail_closed() {
     missing.artifacts.clear();
     assert!(InMemoryRetrievalSnapshot::from_records(missing).is_err());
 
+    let mut two_artifacts = corpus(vec![valid.clone()]);
+    two_artifacts.artifacts.push(
+        KnowledgeArtifact::new(
+            id("018f0000-0000-7000-9000-000000000002"),
+            &valid.0,
+            "text/plain",
+            b"other body".to_vec(),
+            id("2026-08-19T00:00:00Z"),
+        )
+        .unwrap(),
+    );
+    assert!(matches!(
+        InMemoryRetrievalSnapshot::from_records(two_artifacts),
+        Err(RetrievalError::InvalidCorpus)
+    ));
+
     let mut corrupt = valid;
     corrupt.2.chunk_content_hash = ContentHash::sha256(b"forged");
     assert!(matches!(
@@ -424,6 +471,28 @@ fn conflicting_incomplete_and_corrupted_corpora_fail_closed() {
         InMemoryRetrievalSnapshot::from_records(corpus(vec![active, conflict])),
         Err(RetrievalError::InvalidCorpus)
     ));
+}
+
+#[test]
+fn oversized_source_terms_are_omitted_without_disabling_the_corpus() {
+    let body = format!("{} searchable", "x".repeat(MAX_RETRIEVAL_TERM_BYTES + 1));
+    let snapshot = InMemoryRetrievalSnapshot::from_records(corpus(vec![record(
+        [1, 1, 1],
+        &body,
+        KnowledgeVisibility::Student,
+        SourceStatus::Active,
+        None,
+        None,
+    )]))
+    .unwrap();
+    assert_eq!(
+        snapshot
+            .retrieve(&query("searchable", 1))
+            .unwrap()
+            .candidates
+            .len(),
+        1
+    );
 }
 
 #[test]

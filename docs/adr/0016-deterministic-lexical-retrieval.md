@@ -20,6 +20,8 @@ Governance and exact optional course and lesson filters run before document-freq
 
 Version `1.0` tokenization iterates Unicode scalar values, treats consecutive alphanumeric scalars as terms, applies Rust's Unicode lowercase mapping scalar by scalar, and splits on every other scalar. It performs no compatibility, accent, markup, URL, path, whitespace, or line-ending normalization. LF and CRLF therefore tokenize equivalently where their line endings are merely delimiters, while original artifact hashes and provenance remain distinct under ADR-0015.
 
+The 256-byte normalized-term limit is a query validation boundary. During corpus indexing, an entire alphanumeric run whose normalized UTF-8 representation exceeds that limit is omitted; indexing resumes at the next delimiter. This deterministic omission prevents unusual source content from invalidating the snapshot while ensuring that an overlong run cannot partially match a query.
+
 For each eligible document and normalized query term, V1 records query term frequency (`qtf`), chunk term frequency (`tf`), document frequency (`df`), and eligible document count (`N`). Its exact integer contribution is:
 
 ```text

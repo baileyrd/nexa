@@ -9,7 +9,11 @@ use nexa_domain::{
     RetrievalQueryId, RetrievalResultId,
 };
 use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, collections::BTreeMap, fmt};
+use std::{
+    cmp::Ordering,
+    collections::{BTreeMap, BTreeSet},
+    fmt,
+};
 
 /// Maximum UTF-8 byte length accepted for a query.
 pub const MAX_RETRIEVAL_QUERY_BYTES: usize = 4 * 1024;
@@ -103,7 +107,7 @@ impl<'de> Deserialize<'de> for RetrievalQuery {
 
 /// Exact integer evidence for one query term. V1 contribution is
 /// `query_frequency * term_frequency * (document_count - document_frequency + 1)`.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct TermScoreEvidence {
     /// SHA-256 of the normalized UTF-8 query term; the untrusted term is not returned.
@@ -115,13 +119,89 @@ pub struct TermScoreEvidence {
     pub contribution: u64,
 }
 
+impl TermScoreEvidence {
+    pub fn new(
+        term_hash: ContentHash,
+        query_frequency: u32,
+        term_frequency: u32,
+        document_frequency: u32,
+        document_count: u32,
+    ) -> Result<Self, RetrievalError> {
+        let contribution = u64::from(query_frequency)
+            .checked_mul(u64::from(term_frequency))
+            .and_then(|n| {
+                n.checked_mul(u64::from(
+                    document_count
+                        .checked_sub(document_frequency)?
+                        .checked_add(1)?,
+                ))
+            })
+            .ok_or(RetrievalError::InvalidScore)?;
+        let value = Self {
+            term_hash,
+            query_frequency,
+            term_frequency,
+            document_frequency,
+            document_count,
+            contribution,
+        };
+        value.validate()?;
+        Ok(value)
+    }
+
+    fn validate(&self) -> Result<(), RetrievalError> {
+        let expected = u64::from(self.query_frequency)
+            .checked_mul(u64::from(self.term_frequency))
+            .and_then(|n| {
+                self.document_count
+                    .checked_sub(self.document_frequency)
+                    .and_then(|d| d.checked_add(1))
+                    .and_then(|d| n.checked_mul(u64::from(d)))
+            });
+        if self.query_frequency == 0
+            || self.term_frequency == 0
+            || self.document_frequency == 0
+            || expected != Some(self.contribution)
+        {
+            return Err(RetrievalError::InvalidScore);
+        }
+        Ok(())
+    }
+}
+
+impl<'de> Deserialize<'de> for TermScoreEvidence {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Wire {
+            term_hash: ContentHash,
+            query_frequency: u32,
+            term_frequency: u32,
+            document_frequency: u32,
+            document_count: u32,
+            contribution: u64,
+        }
+        let w = Wire::deserialize(d)?;
+        let value = Self {
+            term_hash: w.term_hash,
+            query_frequency: w.query_frequency,
+            term_frequency: w.term_frequency,
+            document_frequency: w.document_frequency,
+            document_count: w.document_count,
+            contribution: w.contribution,
+        };
+        value.validate().map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
+}
+
 /// A finite score validated at every construction and wire boundary.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
 pub struct RetrievalScore(f64);
 
 impl RetrievalScore {
-    fn new(value: u64) -> Result<Self, RetrievalError> {
+    pub fn new(value: u64) -> Result<Self, RetrievalError> {
         let value = value as f64;
         if value.is_finite() && value > 0.0 {
             Ok(Self(value))
@@ -145,7 +225,7 @@ impl<'de> Deserialize<'de> for RetrievalScore {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RetrievalCandidate {
     pub chunk_id: KnowledgeChunkId,
@@ -154,6 +234,73 @@ pub struct RetrievalCandidate {
     pub source_version: u64,
     pub score: RetrievalScore,
     pub score_evidence: Vec<TermScoreEvidence>,
+}
+
+impl RetrievalCandidate {
+    pub fn new(
+        chunk_id: KnowledgeChunkId,
+        artifact_id: KnowledgeArtifactId,
+        source_id: KnowledgeSourceId,
+        source_version: u64,
+        score: RetrievalScore,
+        score_evidence: Vec<TermScoreEvidence>,
+    ) -> Result<Self, RetrievalError> {
+        let value = Self {
+            chunk_id,
+            artifact_id,
+            source_id,
+            source_version,
+            score,
+            score_evidence,
+        };
+        value.validate()?;
+        Ok(value)
+    }
+
+    fn validate(&self) -> Result<(), RetrievalError> {
+        let total = self.score_evidence.iter().try_fold(0u64, |n, e| {
+            e.validate()?;
+            n.checked_add(e.contribution)
+                .ok_or(RetrievalError::InvalidScore)
+        })?;
+        if self.source_version == 0
+            || self.score_evidence.is_empty()
+            || self
+                .score_evidence
+                .windows(2)
+                .any(|e| e[0].term_hash >= e[1].term_hash)
+            || total as f64 != self.score.get()
+        {
+            return Err(RetrievalError::InvalidScore);
+        }
+        Ok(())
+    }
+}
+
+impl<'de> Deserialize<'de> for RetrievalCandidate {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Wire {
+            chunk_id: KnowledgeChunkId,
+            artifact_id: KnowledgeArtifactId,
+            source_id: KnowledgeSourceId,
+            source_version: u64,
+            score: RetrievalScore,
+            score_evidence: Vec<TermScoreEvidence>,
+        }
+        let w = Wire::deserialize(d)?;
+        let value = Self {
+            chunk_id: w.chunk_id,
+            artifact_id: w.artifact_id,
+            source_id: w.source_id,
+            source_version: w.source_version,
+            score: w.score,
+            score_evidence: w.score_evidence,
+        };
+        value.validate().map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -168,7 +315,7 @@ pub enum RetrievalExclusionReason {
     ResultLimit,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RetrievalExclusion {
     pub chunk_id: KnowledgeChunkId,
@@ -176,6 +323,58 @@ pub struct RetrievalExclusion {
     pub source_id: KnowledgeSourceId,
     pub source_version: u64,
     pub reason: RetrievalExclusionReason,
+}
+
+impl RetrievalExclusion {
+    pub fn new(
+        chunk_id: KnowledgeChunkId,
+        artifact_id: KnowledgeArtifactId,
+        source_id: KnowledgeSourceId,
+        source_version: u64,
+        reason: RetrievalExclusionReason,
+    ) -> Result<Self, RetrievalError> {
+        let value = Self {
+            chunk_id,
+            artifact_id,
+            source_id,
+            source_version,
+            reason,
+        };
+        value.validate()?;
+        Ok(value)
+    }
+
+    fn validate(&self) -> Result<(), RetrievalError> {
+        if self.source_version == 0 {
+            Err(RetrievalError::InvalidCorpus)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for RetrievalExclusion {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Wire {
+            chunk_id: KnowledgeChunkId,
+            artifact_id: KnowledgeArtifactId,
+            source_id: KnowledgeSourceId,
+            source_version: u64,
+            reason: RetrievalExclusionReason,
+        }
+        let w = Wire::deserialize(d)?;
+        let value = Self {
+            chunk_id: w.chunk_id,
+            artifact_id: w.artifact_id,
+            source_id: w.source_id,
+            source_version: w.source_version,
+            reason: w.reason,
+        };
+        value.validate().map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -199,35 +398,12 @@ impl RetrievalResult {
         }
         let mut previous = None;
         if self.candidates.iter().any(|candidate| {
-            let total = candidate
-                .score_evidence
-                .iter()
-                .try_fold(0u64, |total, evidence| {
-                    total.checked_add(evidence.contribution)
-                });
             let order = (candidate.score.get(), candidate.chunk_id);
             let incorrectly_ordered = previous
                 .map(|(score, chunk)| score < order.0 || (score == order.0 && chunk >= order.1))
                 .unwrap_or(false);
             previous = Some(order);
-            candidate.source_version == 0
-                || incorrectly_ordered
-                || candidate.score_evidence.is_empty()
-                || total.map(|n| n as f64) != Some(candidate.score.get())
-                || candidate
-                    .score_evidence
-                    .windows(2)
-                    .any(|terms| terms[0].term_hash >= terms[1].term_hash)
-                || candidate.score_evidence.iter().any(|e| {
-                    e.query_frequency == 0
-                        || e.term_frequency == 0
-                        || e.document_frequency == 0
-                        || e.document_frequency > e.document_count
-                        || e.contribution
-                            != u64::from(e.query_frequency)
-                                * u64::from(e.term_frequency)
-                                * u64::from(e.document_count - e.document_frequency + 1)
-                })
+            incorrectly_ordered || candidate.validate().is_err()
         }) {
             return Err(RetrievalError::InvalidScore);
         }
@@ -239,6 +415,14 @@ impl RetrievalResult {
                 .exclusions
                 .windows(2)
                 .any(|pair| exclusion_order(&pair[0]) >= exclusion_order(&pair[1]))
+        {
+            return Err(RetrievalError::InvalidCorpus);
+        }
+        let candidate_ids: BTreeSet<_> = self.candidates.iter().map(reference_identity).collect();
+        let exclusion_ids: BTreeSet<_> = self.exclusions.iter().map(exclusion_identity).collect();
+        if candidate_ids.len() != self.candidates.len()
+            || exclusion_ids.len() != self.exclusions.len()
+            || !candidate_ids.is_disjoint(&exclusion_ids)
         {
             return Err(RetrievalError::InvalidCorpus);
         }
@@ -362,7 +546,7 @@ impl InMemoryRetrievalSnapshot {
                 .or_insert(0usize) += 1;
         }
         if records.sources.iter().any(|source| {
-            !artifacts_by_source.contains_key(&(source.source_id, source.source_version))
+            artifacts_by_source.get(&(source.source_id, source.source_version)) != Some(&1)
         }) {
             return Err(RetrievalError::InvalidCorpus);
         }
@@ -389,9 +573,7 @@ impl InMemoryRetrievalSnapshot {
                     documents.push(CorpusDocument {
                         source: source.clone(),
                         artifact: artifact.clone(),
-                        terms: frequencies(
-                            tokenize(text).map_err(|_| RetrievalError::InvalidCorpus)?,
-                        ),
+                        terms: frequencies(tokenize_source(text)),
                         chunk,
                     });
                 } else {
@@ -552,6 +734,37 @@ pub fn tokenize(text: &str) -> Result<Vec<String>, RetrievalError> {
     Ok(terms)
 }
 
+/// Tokenizes corpus text using the query policy while deterministically omitting an
+/// entire alphanumeric run if its normalized representation exceeds the term bound.
+fn tokenize_source(text: &str) -> Vec<String> {
+    let mut terms = Vec::new();
+    let mut term = String::new();
+    let mut oversized = false;
+    for character in text.chars() {
+        if character.is_alphanumeric() {
+            if !oversized {
+                for lowercase in character.to_lowercase() {
+                    term.push(lowercase);
+                }
+                if term.len() > MAX_RETRIEVAL_TERM_BYTES {
+                    term.clear();
+                    oversized = true;
+                }
+            }
+        } else {
+            if !oversized && !term.is_empty() {
+                terms.push(std::mem::take(&mut term));
+            }
+            term.clear();
+            oversized = false;
+        }
+    }
+    if !oversized && !term.is_empty() {
+        terms.push(term);
+    }
+    terms
+}
+
 fn frequencies(terms: Vec<String>) -> BTreeMap<String, u32> {
     let mut frequencies = BTreeMap::new();
     for term in terms {
@@ -597,6 +810,38 @@ fn exclusion(chunk: &KnowledgeChunk, reason: RetrievalExclusionReason) -> Retrie
 }
 
 fn exclusion_order(
+    value: &RetrievalExclusion,
+) -> (
+    KnowledgeChunkId,
+    KnowledgeArtifactId,
+    KnowledgeSourceId,
+    u64,
+) {
+    (
+        value.chunk_id,
+        value.artifact_id,
+        value.source_id,
+        value.source_version,
+    )
+}
+
+fn reference_identity(
+    value: &RetrievalCandidate,
+) -> (
+    KnowledgeChunkId,
+    KnowledgeArtifactId,
+    KnowledgeSourceId,
+    u64,
+) {
+    (
+        value.chunk_id,
+        value.artifact_id,
+        value.source_id,
+        value.source_version,
+    )
+}
+
+fn exclusion_identity(
     value: &RetrievalExclusion,
 ) -> (
     KnowledgeChunkId,
