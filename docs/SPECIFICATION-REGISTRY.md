@@ -36,6 +36,7 @@ This registry is the navigation and governance authority for Nexa system specifi
 | ADR-0018 | [Exact hybrid fusion and provider-free reranking](adr/0018-deterministic-hybrid-fusion.md) | Accepted | Phase 4 exact rank fusion, governance reconciliation, evidence, and stable reranking |
 | ADR-0019 | [Governed deterministic context assembly](adr/0019-governed-context-assembly.md) | Accepted | Phase 4 governed material reconciliation, exact token accounting, whole-chunk packing, and replay evidence |
 | ADR-0020 | [Governed deterministic citation resolution](adr/0020-governed-deterministic-citation-resolution.md) | Accepted | Phase 4 claim-to-context evidence, closed source locators, deterministic resolution, and standalone replay |
+| ADR-0021 | [Provider-neutral tutor response planning](adr/0021-provider-neutral-tutor-response-planning.md) | Accepted | Phase 4 structured caller content, citation binding, structural safety, and replay |
 | ADR-0014 | [Learning-core composition and atomicity](adr/0014-learning-core-composition-and-atomicity.md) | Accepted | Phase 3 policy composition, unit of work, idempotency, and deferred durable adapters |
 | ADR-0008 | [Controlled 3D workspace migration and ownership](adr/0008-controlled-3d-workspace-migration.md) | Accepted | 3D library, viewer, and validator ownership after migration |
 
@@ -79,3 +80,7 @@ Directories 13 through 27 reserve future specification namespaces. A reserved di
 - Validate every dependency declaration against this registry.
 - Add ownership, acceptance criteria, conformance tests, and implementation links.
 - Promote specifications from Baseline Draft only through explicit review.
+
+### Phase 4 implementation decisions
+
+- [ADR-0021](adr/0021-provider-neutral-tutor-response-planning.md) records the narrow provider-neutral tutor-response planning boundary. It implements structural validation only and does not supersede NEXA-TUTOR-001, NEXA-KNOW-001, NEXA-STU-001, NEXA-PED-001, or NEXA-ASMT-001.

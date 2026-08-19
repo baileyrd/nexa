@@ -1266,6 +1266,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nexa-tutor"
+version = "0.1.0"
+dependencies = [
+ "nexa-domain",
+ "nexa-knowledge",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
 name = "num-traits"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"

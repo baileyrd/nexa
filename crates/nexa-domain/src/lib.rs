@@ -91,7 +91,10 @@ uuid_id!(
     ContextPackageId,
     CitationSetId,
     CitationId,
-    ClaimId
+    ClaimId,
+    TutorResponseId,
+    TutorSectionId,
+    InteractionId
 );
 
 /// A finite mastery estimate in the inclusive range `[0, 1]`.

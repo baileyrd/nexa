@@ -61,14 +61,14 @@ See [ADR-0010](../adr/0010-learning-state-evidence-and-persistence.md),
 
 ## Phase 4 — Add knowledge and tutor intelligence
 
-**Status:** In progress. The dependency-light ingestion, integrity, structural provenance, visibility, atomic staging (ADR-0015), deterministic governed lexical retrieval (ADR-0016), governed caller-supplied embedding/vector retrieval (ADR-0017), exact hybrid fusion/provider-free reranking (ADR-0018), and governed deterministic context assembly with exact token packing (ADR-0019), and governed deterministic citation resolution (ADR-0020) slices are implemented. Learned reranking, partial truncation, provider tokenization, semantic citation fidelity, tutor intelligence, provider integration, networking, vector databases, and durable adapters remain unimplemented.
+**Status:** In progress. The knowledge slices through deterministic citation resolution (ADRs 0015–0020) and provider-neutral structured response planning (ADR-0021) are implemented. Learned reranking, partial truncation, provider tokenization, semantic citation fidelity and safety, generative tutor intelligence, provider integration, networking, vector databases, and durable adapters remain unimplemented.
 
 - Source ingestion and provenance
 - [x] deterministic governed lexical retrieval
 - [x] governed embedding contracts and deterministic vector retrieval
 - [x] exact hybrid fusion and provider-free policy reranking
 - context assembly and token budgeting
-- structured tutor response contracts
+- [x] provider-neutral structured tutor response planning contracts
 - model-provider abstraction and safety gates
 
 Exit: grounded responses carry citations, confidence, and machine-validated tutor/behavior output.
@@ -104,3 +104,7 @@ Every increment includes:
 - deterministic fixtures where practical
 - schema and content versioning
 - documentation and traceability updates
+
+### Phase 4 narrow increment: tutor response planning
+
+ADR-0021 adds provider-neutral caller-supplied structured responses, deterministic citation/pedagogy/safety validation, and standalone replay evidence. It does **not** complete Phase 4 or tutor intelligence; semantic safety, semantic entailment, generation, providers, networking, persistence, and durable adapters remain deferred.
