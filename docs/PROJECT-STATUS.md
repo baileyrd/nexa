@@ -24,14 +24,14 @@ The current Cargo workspace contains the contract kernel; avatar/3D; student, pe
 
 - Phase 1 defers the remaining domain inventory, durable event replay/store semantics, privacy retention, async backpressure, broader payloads, NBP arbitration/update/canvas behavior, and formal schema compatibility automation.
 - Phase 3 defers durable adapter choices and transaction, concurrency, authorization, retention, recovery, migration, and outbox semantics; its traceability matrix records further policy/content ambiguities.
-- Phase 4 defers learned/semantic reranking, partial truncation, provider tokenization, semantic safety and prompt-injection detection, factual correctness, semantic citation fidelity/entailment and hallucination control, generative inference and concrete provider integration, repair/regeneration, routing, tool execution, async/streaming execution, networking, vector databases, persistence, and durable adapters.
+- Phase 4 defers learned/semantic reranking, partial truncation, actual inference and concrete providers, provider selection/routing/fallback, provider tokenization, privacy filtering and remote-provider authorization, semantic validation (including semantic safety and prompt-injection detection, factual correctness, semantic citation fidelity/entailment, and hallucination control), retry/repair/regeneration, tool execution, async/streaming execution, networking, vector databases, persistence, and durable adapters.
 - Phases 5 and 6 (complete session orchestration; authoring, packaging, and operations) have not begun according to the roadmap.
 - Registry baseline work remains open: reconstruction formatting normalization, duplicate/relocated 3D material reconciliation, dependency-declaration audit, fuller ownership/acceptance/conformance links, and explicit specification promotion review.
 - **Documentation inconsistency:** Phase 4 traceability verifies ingestion and context assembly as implemented, while their roadmap bullets remain unchecked. Treat the traceability evidence and phase status text as the implementation checkpoint; do not silently edit the checklist without focused review.
 
 ## Next incomplete increment
 
-**Verified roadmap fact:** Phase 4 is the active phase. Provider-neutral invocation, deterministic prompt compilation, and structural output admission are implemented, while actual inference/concrete providers, semantic safety, and semantic correctness remain separate incomplete capability areas. ADR-0024 permits only candidate sections to enter ADR-0021 under trusted caller authority.
+**Verified roadmap fact:** Phase 4 is the active phase. Provider-neutral invocation, deterministic prompt compilation, structural output admission, and ADR-0025 single-attempt invocation-to-admission composition are implemented. Actual inference/concrete providers, provider selection/routing/fallback, provider tokenization, privacy filtering/remote-provider authorization, semantic validation, retry/repair/regeneration, async/streaming, networking, and persistence remain separate incomplete capability areas. ADR-0024 permits only candidate sections to enter ADR-0021 under trusted caller authority, and ADR-0025 composes that admission with exactly one supplied-provider invocation after shared preflight.
 
 **Recommendation (not a decision):** choose one explicitly deferred Phase 4 capability and first resolve its authoritative requirements and ADR needs. Do not bundle provider selection, inference integration, semantic validation, repair/regeneration, networking, or persistence into one increment.
 
@@ -39,5 +39,5 @@ The current Cargo workspace contains the contract kernel; avatar/3D; student, pe
 
 1. Start from the current `main`; read [`CHATGPT_WORKFLOW.md`](../CHATGPT_WORKFLOW.md), [`AGENTS.md`](../AGENTS.md), and [`PROJECT-STATUS.md`](PROJECT-STATUS.md), in that order, followed by the applicable baseline, registry, roadmap, traceability, specifications, and ADRs routed to by those files.
 2. Confirm PR #27 / `eccf21d8e4a3f1b7c6da6b5c0e97a2df6155d4ef` is the verified predecessor on `main`, then inspect intervening merges and read ADR-0025 after ADRs 0021–0024.
-3. Choose one evidence-backed incomplete Phase 4 increment after deterministic prompt compilation and structural output admission, state its exclusions, and identify specification/ADR/traceability impact before coding.
+3. Choose one evidence-backed incomplete Phase 4 increment after ADR-0025's implemented single-attempt invocation-to-admission composition, state its exclusions, and identify specification/ADR/traceability impact before coding.
 4. Keep the PR independently reviewable, report documentation/implementation conflicts, and run every validation command in `AGENTS.md`.
