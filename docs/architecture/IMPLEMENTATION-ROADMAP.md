@@ -61,7 +61,7 @@ See [ADR-0010](../adr/0010-learning-state-evidence-and-persistence.md),
 
 ## Phase 4 — Add knowledge and tutor intelligence
 
-**Status:** In progress. The knowledge slices through deterministic citation resolution (ADRs 0015–0020), provider-neutral structured response planning (ADR-0021), and provider-neutral model invocation contracts with a deterministic mock (ADR-0022) are implemented. Learned reranking, partial truncation, provider tokenization, semantic citation fidelity and safety, generative tutor intelligence, concrete provider integration, networking, vector databases, and durable adapters remain unimplemented.
+**Status:** In progress. The knowledge slices through deterministic citation resolution (ADRs 0015–0020), provider-neutral structured response planning (ADR-0021), provider-neutral model invocation contracts with a deterministic mock (ADR-0022), and deterministic provider-neutral prompt compilation (ADR-0023) are implemented. Learned reranking, partial truncation, provider tokenization, semantic citation fidelity and safety, generative tutor intelligence, concrete provider integration, networking, vector databases, and durable adapters remain unimplemented.
 
 - Source ingestion and provenance
 - [x] deterministic governed lexical retrieval
@@ -70,6 +70,7 @@ See [ADR-0010](../adr/0010-learning-state-evidence-and-persistence.md),
 - context assembly and token budgeting
 - [x] provider-neutral structured tutor response planning contracts
 - provider-neutral model invocation contracts implemented; concrete provider integration and safety gates remain
+- [x] deterministic provider-neutral prompt compilation; inference and model-output admission remain deferred
 
 Exit: grounded responses carry citations, confidence, and machine-validated tutor/behavior output.
 
@@ -111,4 +112,8 @@ ADR-0021 adds provider-neutral caller-supplied structured responses, determinist
 
 ### Phase 4 narrow increment: model invocation
 
-ADR-0022 adds a synchronous provider-neutral invocation port, bounded untrusted request/response contracts, capability validation, normalized errors, and a deterministic scripted adapter. It does **not** call a model or connect raw output to response planning; concrete providers, routing, prompt compilation, async/streaming execution, and semantic safety remain deferred.
+ADR-0022 adds a synchronous provider-neutral invocation port, bounded untrusted request/response contracts, capability validation, normalized errors, and a deterministic scripted adapter. It does **not** call a model or connect raw output to response planning; concrete providers, routing, async/streaming execution, and semantic safety remain deferred. Its prompt-compilation deferral is addressed only by the separate ADR-0023 increment below.
+
+### Phase 4 narrow increment: prompt compilation
+
+ADR-0023 adds closed classified prompt layers, canonical version-bound compilation into ADR-0022 `ModelInput`, byte accounting, redaction, and standalone replay evidence. It does **not** invoke a model, route providers, tokenize, decode or admit output, connect raw output to ADR-0021, establish semantic safety/grounding/entailment, repair responses, stream, network, or persist data.
