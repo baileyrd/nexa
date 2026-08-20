@@ -61,7 +61,7 @@ See [ADR-0010](../adr/0010-learning-state-evidence-and-persistence.md),
 
 ## Phase 4 — Add knowledge and tutor intelligence
 
-**Status:** In progress. The knowledge slices through deterministic citation resolution (ADRs 0015–0020) and provider-neutral structured response planning (ADR-0021) are implemented. Learned reranking, partial truncation, provider tokenization, semantic citation fidelity and safety, generative tutor intelligence, provider integration, networking, vector databases, and durable adapters remain unimplemented.
+**Status:** In progress. The knowledge slices through deterministic citation resolution (ADRs 0015–0020), provider-neutral structured response planning (ADR-0021), and provider-neutral model invocation contracts with a deterministic mock (ADR-0022) are implemented. Learned reranking, partial truncation, provider tokenization, semantic citation fidelity and safety, generative tutor intelligence, concrete provider integration, networking, vector databases, and durable adapters remain unimplemented.
 
 - Source ingestion and provenance
 - [x] deterministic governed lexical retrieval
@@ -69,7 +69,7 @@ See [ADR-0010](../adr/0010-learning-state-evidence-and-persistence.md),
 - [x] exact hybrid fusion and provider-free policy reranking
 - context assembly and token budgeting
 - [x] provider-neutral structured tutor response planning contracts
-- model-provider abstraction and safety gates
+- provider-neutral model invocation contracts implemented; concrete provider integration and safety gates remain
 
 Exit: grounded responses carry citations, confidence, and machine-validated tutor/behavior output.
 
@@ -108,3 +108,7 @@ Every increment includes:
 ### Phase 4 narrow increment: tutor response planning
 
 ADR-0021 adds provider-neutral caller-supplied structured responses, deterministic citation/pedagogy/safety validation, and standalone replay evidence. It does **not** complete Phase 4 or tutor intelligence; semantic safety, semantic entailment, generation, providers, networking, persistence, and durable adapters remain deferred.
+
+### Phase 4 narrow increment: model invocation
+
+ADR-0022 adds a synchronous provider-neutral invocation port, bounded untrusted request/response contracts, capability validation, normalized errors, and a deterministic scripted adapter. It does **not** call a model or connect raw output to response planning; concrete providers, routing, prompt compilation, async/streaming execution, and semantic safety remain deferred.

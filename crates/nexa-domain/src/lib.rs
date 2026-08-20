@@ -94,7 +94,10 @@ uuid_id!(
     ClaimId,
     TutorResponseId,
     TutorSectionId,
-    InteractionId
+    InteractionId,
+    ModelProviderId,
+    ModelId,
+    ModelInvocationId
 );
 
 /// A finite mastery estimate in the inclusive range `[0, 1]`.
