@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 
 pub mod model;
+pub mod prompt;
 
 use nexa_domain::{
     CitationId, CitationSetId, ClaimId, ContextPackageId, CourseId, EvidenceId,
