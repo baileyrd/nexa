@@ -227,8 +227,19 @@ pub struct SectionRequest {
 }
 impl SectionRequest {
     fn validate(&self) -> Result<(), TutorError> {
+        let unique_claims: BTreeSet<_> = self.claims.iter().collect();
+        let unique_citations: BTreeSet<_> = self.citations.iter().map(|b| b.citation_id).collect();
         if self.scaffolding > 10
+            || self.claims.len() > MAX_REFERENCES_PER_SECTION
+            || self.citations.len() > MAX_REFERENCES_PER_SECTION
+            || unique_claims.len() != self.claims.len()
+            || unique_citations.len() != self.citations.len()
+            || self.citations_required && self.citations.is_empty()
             || self.claims.is_empty() && !self.citations.is_empty()
+            || self
+                .citations
+                .iter()
+                .any(|b| !unique_claims.contains(&b.claim_id))
             || self.citations.iter().any(|x| x.validate().is_err())
         {
             Err(TutorError::InvalidStructure)
@@ -275,9 +286,40 @@ pub struct PlanningRequest {
 }
 impl PlanningRequest {
     fn validate_wire(&self) -> Result<(), TutorError> {
+        if [
+            self.contract_version,
+            self.response_policy_version,
+            self.safety_policy_version,
+            self.citation_policy_version,
+            self.governance_policy_version,
+        ]
+        .iter()
+        .any(|version| *version != V1)
+        {
+            return Err(TutorError::UnsupportedVersion);
+        }
         self.limits.validate()?;
         self.evidence.validate()?;
-        if self.sections.is_empty() || self.sections.iter().any(|s| s.validate().is_err()) {
+        if self.scope != self.evidence.scope {
+            return Err(TutorError::ProvenanceMismatch);
+        }
+        if self.permitted_capabilities.is_empty()
+            || self.sections.is_empty()
+            || self.sections.len() > self.limits.maximum_sections
+            || self.sections.iter().any(|s| s.validate().is_err())
+            || self.sections.iter().any(|s| {
+                s.content.as_str().len() > self.limits.maximum_section_bytes
+                    || s.claims.len() > self.limits.maximum_references_per_section
+                    || s.citations.len() > self.limits.maximum_references_per_section
+            })
+            || self
+                .sections
+                .iter()
+                .try_fold(0usize, |total, s| {
+                    total.checked_add(s.content.as_str().len())
+                })
+                .is_none_or(|total| total > self.limits.maximum_response_bytes)
+        {
             return Err(TutorError::InvalidStructure);
         }
         Ok(())
@@ -402,6 +444,30 @@ validating_deserialize!(CitationDecisionAnchor, validate, {
     citation_position: u32, resolved: bool
 });
 
+/// Independent authoritative manifest copied from the validated citation result.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CitationManifestEntry {
+    pub claim_id: ClaimId,
+    pub citation_id: CitationId,
+    pub claim_position: u32,
+    pub citation_position: u32,
+    pub resolved: bool,
+}
+impl CitationManifestEntry {
+    fn validate(&self) -> Result<(), TutorError> {
+        if !self.resolved || self.claim_position == 0 || self.citation_position == 0 {
+            Err(TutorError::CitationMismatch)
+        } else {
+            Ok(())
+        }
+    }
+}
+validating_deserialize!(CitationManifestEntry, validate, {
+    claim_id: ClaimId, citation_id: CitationId, claim_position: u32,
+    citation_position: u32, resolved: bool
+});
+
 #[derive(Clone, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct TutorResponse {
@@ -423,6 +489,7 @@ pub struct TutorResponse {
     pub context_was_empty: bool,
     pub ordered_section_ids: Vec<TutorSectionId>,
     pub citation_anchors: Vec<CitationDecisionAnchor>,
+    pub citation_manifest: Vec<CitationManifestEntry>,
     pub status: ResponseStatus,
     pub rationale: Vec<Rationale>,
     pub sections: Vec<PlannedSection>,
@@ -565,6 +632,23 @@ pub fn plan_response(
                 claim_position: b.claim_position,
                 citation_position: b.citation_position,
                 resolved: true,
+            })
+            .collect(),
+        citation_manifest: citations
+            .claims
+            .iter()
+            .filter(|claim| claim.status == CitationResolutionStatus::Resolved)
+            .flat_map(|claim| {
+                claim
+                    .citations
+                    .iter()
+                    .map(|citation| CitationManifestEntry {
+                        claim_id: claim.claim_id,
+                        citation_id: citation.citation_id,
+                        claim_position: claim.claim_position,
+                        citation_position: citation.citation_position,
+                        resolved: true,
+                    })
             })
             .collect(),
         status,
@@ -718,10 +802,16 @@ impl PlanningRequest {
                     return Err(TutorError::InvalidEvidence)
                 }
                 SafetyClassification::ConstrainedRequired
-                | SafetyClassification::AssessmentProtected
+                    if s.kind != SectionKind::ConstrainedResponse =>
+                {
+                    return Err(TutorError::InvalidEvidence)
+                }
+                SafetyClassification::AssessmentProtected
                     if !matches!(
                         s.kind,
-                        SectionKind::ConstrainedResponse | SectionKind::SafetyRefusal
+                        SectionKind::Hint
+                            | SectionKind::CheckForUnderstanding
+                            | SectionKind::ConstrainedResponse
                     ) =>
                 {
                     return Err(TutorError::InvalidEvidence)
@@ -767,6 +857,7 @@ impl TutorResponse {
             context_was_empty: bool,
             ordered_section_ids: &'a [TutorSectionId],
             citation_anchors: &'a [CitationDecisionAnchor],
+            citation_manifest: &'a [CitationManifestEntry],
             status: ResponseStatus,
             rationale: &'a [Rationale],
             sections: &'a [PlannedSection],
@@ -790,6 +881,7 @@ impl TutorResponse {
             context_was_empty: self.context_was_empty,
             ordered_section_ids: &self.ordered_section_ids,
             citation_anchors: &self.citation_anchors,
+            citation_manifest: &self.citation_manifest,
             status: self.status,
             rationale: &self.rationale,
             sections: &self.sections,
@@ -814,6 +906,7 @@ impl TutorResponse {
         }
         let mut ids = BTreeSet::new();
         let mut bindings = Vec::new();
+        let mut global_citations = BTreeSet::new();
         let mut total: usize = 0;
         for (i, s) in self.sections.iter().enumerate() {
             s.validate()?;
@@ -839,7 +932,10 @@ impl TutorResponse {
                 return Err(TutorError::IdentityConflict);
             }
             for b in &s.citations {
-                if !claims.contains(&b.claim_id) || !citations.insert(b.citation_id) {
+                if !claims.contains(&b.claim_id)
+                    || !citations.insert(b.citation_id)
+                    || !global_citations.insert(b.citation_id)
+                {
                     return Err(TutorError::CitationMismatch);
                 }
                 bindings.push(CitationDecisionAnchor {
@@ -861,6 +957,30 @@ impl TutorResponse {
                 .iter()
                 .any(|a| !a.resolved || a.claim_position == 0 || a.citation_position == 0)
         {
+            return Err(TutorError::CitationMismatch);
+        }
+        if self.citation_manifest.len() > MAX_SECTIONS * MAX_REFERENCES_PER_SECTION {
+            return Err(TutorError::InvalidLimit);
+        }
+        let mut manifest_claim_citations = BTreeSet::new();
+        let mut manifest_citation_ids = BTreeSet::new();
+        for entry in &self.citation_manifest {
+            entry.validate()?;
+            if !manifest_claim_citations.insert((entry.claim_id, entry.citation_id))
+                || !manifest_citation_ids.insert(entry.citation_id)
+            {
+                return Err(TutorError::CitationMismatch);
+            }
+        }
+        if bindings.iter().any(|binding| {
+            !self.citation_manifest.iter().any(|entry| {
+                entry.claim_id == binding.claim_id
+                    && entry.citation_id == binding.citation_id
+                    && entry.claim_position == binding.claim_position
+                    && entry.citation_position == binding.citation_position
+                    && entry.resolved
+            })
+        }) {
             return Err(TutorError::CitationMismatch);
         }
         let refusal = self.sections.iter().any(|s| {
@@ -886,6 +1006,11 @@ impl TutorResponse {
                 SectionKind::ConstrainedResponse => {
                     s.safety == SafetyClassification::ConstrainedRequired
                 }
+                SectionKind::Hint | SectionKind::CheckForUnderstanding
+                    if self.evidence.assessment_restriction != AssessmentRestriction::None =>
+                {
+                    s.safety == SafetyClassification::AssessmentProtected
+                }
                 _ => {
                     s.safety == SafetyClassification::Ordinary
                         && self.evidence.assessment_restriction == AssessmentRestriction::None
@@ -897,11 +1022,10 @@ impl TutorResponse {
         }
         let expected_status = if refusal {
             ResponseStatus::Refused
-        } else if self
-            .sections
-            .iter()
-            .any(|s| s.kind == SectionKind::ConstrainedResponse)
-        {
+        } else if self.sections.iter().any(|s| {
+            s.kind == SectionKind::ConstrainedResponse
+                || s.safety == SafetyClassification::AssessmentProtected
+        }) {
             ResponseStatus::Constrained
         } else {
             ResponseStatus::Accepted
@@ -961,6 +1085,7 @@ impl<'de> Deserialize<'de> for TutorResponse {
             context_was_empty: bool,
             ordered_section_ids: Vec<TutorSectionId>,
             citation_anchors: Vec<CitationDecisionAnchor>,
+            citation_manifest: Vec<CitationManifestEntry>,
             status: ResponseStatus,
             rationale: Vec<Rationale>,
             sections: Vec<PlannedSection>,
@@ -986,6 +1111,7 @@ impl<'de> Deserialize<'de> for TutorResponse {
             context_was_empty: w.context_was_empty,
             ordered_section_ids: w.ordered_section_ids,
             citation_anchors: w.citation_anchors,
+            citation_manifest: w.citation_manifest,
             status: w.status,
             rationale: w.rationale,
             sections: w.sections,
@@ -1046,6 +1172,7 @@ mod tests {
             context_was_empty: false,
             ordered_section_ids: vec![id(13, TutorSectionId::new)],
             citation_anchors: vec![],
+            citation_manifest: vec![],
             status: ResponseStatus::Accepted,
             rationale: vec![Rationale::Validated],
             sections: vec![PlannedSection {
@@ -1087,6 +1214,73 @@ mod tests {
     }
     fn recompute(r: &mut TutorResponse) {
         r.replay_anchor = r.compute_anchor().unwrap();
+    }
+    fn planning_wire() -> serde_json::Value {
+        let r = response();
+        let mut value = serde_json::to_value(&r).unwrap();
+        let object = value.as_object_mut().unwrap();
+        for response_only in [
+            "context_was_empty",
+            "ordered_section_ids",
+            "citation_anchors",
+            "citation_manifest",
+            "status",
+            "rationale",
+            "replay_anchor",
+        ] {
+            object.remove(response_only);
+        }
+        object["sections"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("position");
+        value
+    }
+    #[test]
+    fn planning_wire_rejects_all_intrinsic_contract_violations() {
+        assert!(serde_json::from_value::<PlanningRequest>(planning_wire()).is_ok());
+        for version in [
+            "contract_version",
+            "response_policy_version",
+            "safety_policy_version",
+            "citation_policy_version",
+            "governance_policy_version",
+        ] {
+            let mut value = planning_wire();
+            value[version] = "2.0".into();
+            assert!(serde_json::from_value::<PlanningRequest>(value).is_err());
+        }
+        let mut value = planning_wire();
+        value["permitted_capabilities"] = serde_json::json!([]);
+        assert!(serde_json::from_value::<PlanningRequest>(value).is_err());
+
+        let mut value = planning_wire();
+        value["limits"]["maximum_sections"] = 1.into();
+        let section = value["sections"][0].clone();
+        value["sections"].as_array_mut().unwrap().push(section);
+        assert!(serde_json::from_value::<PlanningRequest>(value).is_err());
+
+        let mut value = planning_wire();
+        value["sections"][0]["citations_required"] = true.into();
+        assert!(serde_json::from_value::<PlanningRequest>(value).is_err());
+
+        let claim = serde_json::to_value(id(40, ClaimId::new)).unwrap();
+        let citation = serde_json::to_value(id(41, CitationId::new)).unwrap();
+        let binding = serde_json::json!({
+            "claim_id": claim, "citation_id": citation,
+            "claim_position": 1, "citation_position": 1
+        });
+        let mut value = planning_wire();
+        value["sections"][0]["claims"] = serde_json::json!([claim, claim]);
+        value["sections"][0]["citations"] = serde_json::json!([binding, binding]);
+        assert!(serde_json::from_value::<PlanningRequest>(value).is_err());
+
+        let mut value = planning_wire();
+        value["limits"]["maximum_section_bytes"] = 5.into();
+        assert!(serde_json::from_value::<PlanningRequest>(value).is_err());
+        let mut value = planning_wire();
+        value["limits"]["maximum_response_bytes"] = 5.into();
+        assert!(serde_json::from_value::<PlanningRequest>(value).is_err());
     }
     #[test]
     fn standalone_wire_rejects_intrinsically_invalid_values() {
@@ -1146,12 +1340,91 @@ mod tests {
             citation_position: 1,
             resolved: true,
         }];
+        r.citation_manifest = vec![CitationManifestEntry {
+            claim_id: claim,
+            citation_id: citation,
+            claim_position: 1,
+            citation_position: 1,
+            resolved: true,
+        }];
         recompute(&mut r);
         assert_eq!(r.validate(), Ok(()));
 
         r.sections[0].citations[0].citation_id = id(42, CitationId::new);
         recompute(&mut r);
         assert_eq!(r.validate(), Err(TutorError::CitationMismatch));
+    }
+    #[test]
+    fn independent_manifest_rejects_fabrication_and_global_duplicates() {
+        let mut r = response();
+        let claim = id(40, ClaimId::new);
+        let citation = id(41, CitationId::new);
+        let binding = CitationBinding {
+            claim_id: claim,
+            citation_id: citation,
+            claim_position: 1,
+            citation_position: 1,
+        };
+        r.sections[0].claims = vec![claim];
+        r.sections[0].citations = vec![binding.clone()];
+        r.citation_anchors = vec![CitationDecisionAnchor {
+            claim_id: claim,
+            citation_id: citation,
+            claim_position: 1,
+            citation_position: 1,
+            resolved: true,
+        }];
+        recompute(&mut r);
+        assert_eq!(r.validate(), Err(TutorError::CitationMismatch));
+
+        r.citation_manifest = vec![CitationManifestEntry {
+            claim_id: claim,
+            citation_id: citation,
+            claim_position: 1,
+            citation_position: 1,
+            resolved: true,
+        }];
+        let mut duplicate = r.sections[0].clone();
+        duplicate.section_id = id(14, TutorSectionId::new);
+        duplicate.position = 2;
+        r.sections.push(duplicate);
+        r.ordered_section_ids.push(id(14, TutorSectionId::new));
+        r.citation_anchors.push(r.citation_anchors[0].clone());
+        recompute(&mut r);
+        assert_eq!(r.validate(), Err(TutorError::CitationMismatch));
+    }
+    #[test]
+    fn assessment_protected_hint_and_check_are_exactly_compatible() {
+        for (kind, capability) in [
+            (SectionKind::Hint, Capability::Hint),
+            (
+                SectionKind::CheckForUnderstanding,
+                Capability::CheckUnderstanding,
+            ),
+        ] {
+            let mut r = response();
+            r.sections[0].kind = kind;
+            r.sections[0].capability = capability;
+            r.sections[0].safety = SafetyClassification::AssessmentProtected;
+            r.sections[0].assessment_restriction = AssessmentRestriction::WithholdAnswers;
+            r.permitted_capabilities = [capability].into();
+            r.evidence.allowed_section_kinds = [kind].into();
+            r.evidence.assessment_restriction = AssessmentRestriction::WithholdAnswers;
+            r.status = ResponseStatus::Constrained;
+            r.rationale = vec![Rationale::AssessmentProtection];
+            recompute(&mut r);
+            assert_eq!(r.validate(), Ok(()));
+
+            let mut downgraded = r.clone();
+            downgraded.sections[0].safety = SafetyClassification::Ordinary;
+            recompute(&mut downgraded);
+            assert_eq!(downgraded.validate(), Err(TutorError::InvalidEvidence));
+            let mut mismatch = r;
+            mismatch.sections[0].assessment_restriction =
+                AssessmentRestriction::WithholdHiddenEvaluation;
+            recompute(&mut mismatch);
+            assert!(mismatch.validate().is_err());
+        }
     }
     #[test]
     fn safety_precedence_is_refusal_only_and_exact() {
