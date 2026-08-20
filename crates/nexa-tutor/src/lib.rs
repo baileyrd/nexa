@@ -1,6 +1,7 @@
 //! Provider-neutral, synchronous response planning over caller-supplied text.
 #![forbid(unsafe_code)]
 
+pub mod admission;
 pub mod model;
 pub mod prompt;
 
@@ -122,7 +123,7 @@ pub struct DecisionEvidence {
     pub assessment_restriction: AssessmentRestriction,
 }
 impl DecisionEvidence {
-    fn validate(&self) -> Result<(), TutorError> {
+    pub(crate) fn validate(&self) -> Result<(), TutorError> {
         if self.learner_state_version != V1
             || self.pedagogy_policy_version != V1
             || self.decision_evidence_version != V1
@@ -360,7 +361,7 @@ validating_deserialize!(ResponseLimits, validate, {
     maximum_references_per_section: usize
 });
 impl ResponseLimits {
-    fn validate(&self) -> Result<(), TutorError> {
+    pub(crate) fn validate(&self) -> Result<(), TutorError> {
         if self.maximum_sections == 0
             || self.maximum_sections > MAX_SECTIONS
             || self.maximum_section_bytes == 0
@@ -1279,6 +1280,161 @@ mod tests {
         .unwrap();
         let citations = resolve_citations(&citation_request, &context).unwrap();
         (context, citations)
+    }
+
+    #[test]
+    fn model_output_admission_is_closed_bound_and_delegates_to_planner() {
+        use crate::admission::{
+            admit_model_output, AdmissionError, AdmissionResult, TrustedPlanningAuthority,
+        };
+        use crate::model::{
+            FinishReason, ModelCapabilities, ModelDescriptor, ModelRequest, ModelResponse,
+            PrivacyClass, RawModelOutput, RequiredCapabilities, MODEL_INVOCATION_V1,
+        };
+        use crate::prompt::{
+            compile_prompt, PromptCompilationRequest, PromptContent, PromptLayer, PromptLayerKind,
+            PromptLimits, PROMPT_COMPILATION_V1,
+        };
+        use nexa_domain::{ModelId, ModelInvocationId, ModelProviderId};
+
+        let planning = planning_request(response());
+        let authority = TrustedPlanningAuthority {
+            contract_version: planning.contract_version,
+            response_id: planning.response_id,
+            interaction_id: planning.interaction_id,
+            scope: planning.scope.clone(),
+            context_package_id: planning.context_package_id,
+            citation_set_id: planning.citation_set_id,
+            hybrid_result_id: planning.hybrid_result_id,
+            query_id: planning.query_id,
+            response_policy_version: planning.response_policy_version,
+            safety_policy_version: planning.safety_policy_version,
+            citation_policy_version: planning.citation_policy_version,
+            governance_policy_version: planning.governance_policy_version,
+            limits: planning.limits,
+            permitted_capabilities: planning.permitted_capabilities.clone(),
+            evidence: planning.evidence.clone(),
+        };
+        let layer = |kind, text| PromptLayer {
+            kind,
+            classification: kind.classification(),
+            content: PromptContent::new(text).unwrap(),
+        };
+        let compilation = compile_prompt(&PromptCompilationRequest {
+            contract_version: PROMPT_COMPILATION_V1,
+            prompt_package_version: V1,
+            context_builder_version: V1,
+            output_schema_version: V1,
+            limits: PromptLimits {
+                maximum_layer_bytes: 1000,
+                maximum_compiled_bytes: 10000,
+            },
+            layers: vec![
+                layer(PromptLayerKind::PlatformContract, "platform"),
+                layer(PromptLayerKind::NexaIdentity, "identity"),
+                layer(PromptLayerKind::Policy, "policy"),
+                layer(PromptLayerKind::Pedagogy, "pedagogy"),
+                layer(PromptLayerKind::StudentInput, "input"),
+                layer(PromptLayerKind::OutputContract, "output"),
+            ],
+        })
+        .unwrap();
+        let descriptor = ModelDescriptor::new(
+            id(50, ModelProviderId::new),
+            id(51, ModelId::new),
+            PrivacyClass::LocalOnly,
+            ModelCapabilities {
+                streaming: false,
+                structured_output: true,
+                tool_calling: false,
+                vision: false,
+                context_window_tokens: 20000,
+                maximum_output_tokens: 1000,
+            },
+        )
+        .unwrap();
+        let request = ModelRequest {
+            invocation_id: id(52, ModelInvocationId::new),
+            provider_id: descriptor.provider_id,
+            model_id: descriptor.model_id,
+            contract_version: MODEL_INVOCATION_V1,
+            input: compilation.model_input.clone(),
+            required_capabilities: RequiredCapabilities {
+                structured_output: true,
+                tool_calling: false,
+                vision: false,
+            },
+            maximum_output_tokens: 1000,
+        };
+        let candidate = json!({"candidate_schema_version":"1.0","sections":planning.sections});
+        let output = RawModelOutput::new(serde_json::to_string(&candidate).unwrap()).unwrap();
+        let response = ModelResponse {
+            invocation_id: request.invocation_id,
+            provider_id: request.provider_id,
+            model_id: request.model_id,
+            contract_version: MODEL_INVOCATION_V1,
+            output,
+            finish_reason: FinishReason::Complete,
+            reported_usage: None,
+        };
+        let (context, citations) = governed_inputs();
+        let admitted = admit_model_output(
+            &descriptor,
+            &request,
+            &response,
+            &compilation,
+            &authority,
+            &context,
+            &citations,
+        )
+        .unwrap();
+        assert_eq!(
+            admitted.response,
+            plan_response(&planning, &context, &citations).unwrap()
+        );
+        assert_eq!(admitted.evidence.provider_id, descriptor.provider_id);
+        assert!(!format!("{admitted:?}").contains("Caller supplied explanation"));
+        let wire = serde_json::to_string(&admitted).unwrap();
+        assert_eq!(
+            serde_json::from_str::<AdmissionResult>(&wire).unwrap(),
+            admitted
+        );
+
+        let mut limited = response.clone();
+        limited.finish_reason = FinishReason::OutputLimit;
+        assert_eq!(
+            admit_model_output(
+                &descriptor,
+                &request,
+                &limited,
+                &compilation,
+                &authority,
+                &context,
+                &citations
+            ),
+            Err(AdmissionError::IncompleteOutput)
+        );
+        for bad in [
+            json!({"candidate_schema_version":"1.0","sections":[],"response_id":planning.response_id}),
+            json!({"candidate_schema_version":"1.0","sections":[]}),
+        ] {
+            let mut invalid = response.clone();
+            invalid.output = RawModelOutput::new(serde_json::to_string(&bad).unwrap()).unwrap();
+            assert!(admit_model_output(
+                &descriptor,
+                &request,
+                &invalid,
+                &compilation,
+                &authority,
+                &context,
+                &citations
+            )
+            .is_err());
+        }
+        let mut tampered: serde_json::Value = serde_json::from_str(&wire).unwrap();
+        tampered["evidence"]["provider_id"] =
+            serde_json::to_value(id(90, ModelProviderId::new)).unwrap();
+        assert!(serde_json::from_value::<AdmissionResult>(tampered).is_err());
     }
     #[test]
     fn planning_wire_rejects_all_intrinsic_contract_violations() {

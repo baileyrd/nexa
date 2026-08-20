@@ -104,7 +104,7 @@ impl ModelDescriptor {
         Ok(value)
     }
 
-    fn validate(&self) -> Result<(), ModelError> {
+    pub fn validate(&self) -> Result<(), ModelError> {
         if self.contract_version != MODEL_INVOCATION_V1 {
             return Err(ModelError::new(ModelErrorKind::UnsupportedVersion));
         }
