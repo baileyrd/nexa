@@ -15,6 +15,22 @@ use std::{
 };
 use thiserror::Error;
 
+macro_rules! validating_deserialize {
+    ($name:ident, $validator:ident, {$($field:ident: $ty:ty),* $(,)?}) => {
+        impl<'de> Deserialize<'de> for $name {
+            fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Wire { $($field: $ty),* }
+                let w = Wire::deserialize(d)?;
+                let value = Self { $($field: w.$field),* };
+                value.$validator().map_err(serde::de::Error::custom)?;
+                Ok(value)
+            }
+        }
+    };
+}
+
 pub const V1: ProtocolVersion = ProtocolVersion::new(1, 0);
 pub const MAX_SECTIONS: usize = 32;
 pub const MAX_SECTION_BYTES: usize = 16_384;
@@ -88,7 +104,7 @@ pub struct Scope {
 }
 
 /// Reference-only evidence selected and validated by student/pedagogy owners.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct DecisionEvidence {
     pub learner_state_evidence_id: EvidenceId,
@@ -119,8 +135,20 @@ impl DecisionEvidence {
         Ok(())
     }
 }
+validating_deserialize!(DecisionEvidence, validate, {
+    learner_state_evidence_id: EvidenceId,
+    pedagogy_decision_evidence_id: EvidenceId,
+    scope: Scope,
+    learner_state_version: ProtocolVersion,
+    pedagogy_policy_version: ProtocolVersion,
+    decision_evidence_version: ProtocolVersion,
+    allowed_section_kinds: BTreeSet<SectionKind>,
+    minimum_scaffolding: u8,
+    maximum_scaffolding: u8,
+    assessment_restriction: AssessmentRestriction
+});
 
-#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct InertText(String);
 impl InertText {
@@ -150,13 +178,18 @@ impl InertText {
         &self.0
     }
 }
+impl<'de> Deserialize<'de> for InertText {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Self::new(String::deserialize(d)?).map_err(serde::de::Error::custom)
+    }
+}
 impl fmt::Debug for InertText {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("InertText([REDACTED])")
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CitationBinding {
     pub claim_id: ClaimId,
@@ -164,8 +197,20 @@ pub struct CitationBinding {
     pub claim_position: u32,
     pub citation_position: u32,
 }
+impl CitationBinding {
+    fn validate(&self) -> Result<(), TutorError> {
+        if self.claim_position == 0 || self.citation_position == 0 {
+            Err(TutorError::CitationMismatch)
+        } else {
+            Ok(())
+        }
+    }
+}
+validating_deserialize!(CitationBinding, validate, {
+    claim_id: ClaimId, citation_id: CitationId, claim_position: u32, citation_position: u32
+});
 
-#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct SectionRequest {
     pub section_id: TutorSectionId,
@@ -180,6 +225,24 @@ pub struct SectionRequest {
     pub scaffolding: u8,
     pub assessment_restriction: AssessmentRestriction,
 }
+impl SectionRequest {
+    fn validate(&self) -> Result<(), TutorError> {
+        if self.scaffolding > 10
+            || self.claims.is_empty() && !self.citations.is_empty()
+            || self.citations.iter().any(|x| x.validate().is_err())
+        {
+            Err(TutorError::InvalidStructure)
+        } else {
+            Ok(())
+        }
+    }
+}
+validating_deserialize!(SectionRequest, validate, {
+    section_id: TutorSectionId, kind: SectionKind, content: InertText,
+    claims: Vec<ClaimId>, citations: Vec<CitationBinding>, citations_required: bool,
+    pedagogy_decision_evidence_id: EvidenceId, safety: SafetyClassification,
+    capability: Capability, scaffolding: u8, assessment_restriction: AssessmentRestriction
+});
 impl fmt::Debug for SectionRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SectionRequest")
@@ -190,7 +253,7 @@ impl fmt::Debug for SectionRequest {
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PlanningRequest {
     pub contract_version: ProtocolVersion,
@@ -210,6 +273,26 @@ pub struct PlanningRequest {
     pub evidence: DecisionEvidence,
     pub sections: Vec<SectionRequest>,
 }
+impl PlanningRequest {
+    fn validate_wire(&self) -> Result<(), TutorError> {
+        self.limits.validate()?;
+        self.evidence.validate()?;
+        if self.sections.is_empty() || self.sections.iter().any(|s| s.validate().is_err()) {
+            return Err(TutorError::InvalidStructure);
+        }
+        Ok(())
+    }
+}
+validating_deserialize!(PlanningRequest, validate_wire, {
+    contract_version: ProtocolVersion, response_id: TutorResponseId,
+    interaction_id: InteractionId, scope: Scope, context_package_id: ContextPackageId,
+    citation_set_id: CitationSetId, hybrid_result_id: HybridRetrievalResultId,
+    query_id: RetrievalQueryId, response_policy_version: ProtocolVersion,
+    safety_policy_version: ProtocolVersion, citation_policy_version: ProtocolVersion,
+    governance_policy_version: ProtocolVersion, limits: ResponseLimits,
+    permitted_capabilities: BTreeSet<Capability>, evidence: DecisionEvidence,
+    sections: Vec<SectionRequest>
+});
 impl fmt::Debug for PlanningRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PlanningRequest")
@@ -219,7 +302,7 @@ impl fmt::Debug for PlanningRequest {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ResponseLimits {
     pub maximum_sections: usize,
@@ -227,8 +310,12 @@ pub struct ResponseLimits {
     pub maximum_response_bytes: usize,
     pub maximum_references_per_section: usize,
 }
+validating_deserialize!(ResponseLimits, validate, {
+    maximum_sections: usize, maximum_section_bytes: usize, maximum_response_bytes: usize,
+    maximum_references_per_section: usize
+});
 impl ResponseLimits {
-    fn validate(self) -> Result<(), TutorError> {
+    fn validate(&self) -> Result<(), TutorError> {
         if self.maximum_sections == 0
             || self.maximum_sections > MAX_SECTIONS
             || self.maximum_section_bytes == 0
@@ -245,7 +332,7 @@ impl ResponseLimits {
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PlannedSection {
     pub section_id: TutorSectionId,
@@ -254,12 +341,33 @@ pub struct PlannedSection {
     pub content: InertText,
     pub claims: Vec<ClaimId>,
     pub citations: Vec<CitationBinding>,
+    pub citations_required: bool,
     pub pedagogy_decision_evidence_id: EvidenceId,
     pub safety: SafetyClassification,
     pub capability: Capability,
     pub scaffolding: u8,
     pub assessment_restriction: AssessmentRestriction,
 }
+impl PlannedSection {
+    fn validate(&self) -> Result<(), TutorError> {
+        if self.position == 0
+            || self.scaffolding > 10
+            || self.citations_required && self.citations.is_empty()
+            || self.claims.is_empty() && !self.citations.is_empty()
+            || self.citations.iter().any(|x| x.validate().is_err())
+        {
+            Err(TutorError::InvalidStructure)
+        } else {
+            Ok(())
+        }
+    }
+}
+validating_deserialize!(PlannedSection, validate, {
+    section_id: TutorSectionId, position: u32, kind: SectionKind, content: InertText,
+    claims: Vec<ClaimId>, citations: Vec<CitationBinding>, citations_required: bool,
+    pedagogy_decision_evidence_id: EvidenceId, safety: SafetyClassification,
+    capability: Capability, scaffolding: u8, assessment_restriction: AssessmentRestriction
+});
 impl fmt::Debug for PlannedSection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PlannedSection")
@@ -269,6 +377,30 @@ impl fmt::Debug for PlannedSection {
             .finish()
     }
 }
+
+/// Reference-only copy of the governed citation decision used for replay.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CitationDecisionAnchor {
+    pub claim_id: ClaimId,
+    pub citation_id: CitationId,
+    pub claim_position: u32,
+    pub citation_position: u32,
+    pub resolved: bool,
+}
+impl CitationDecisionAnchor {
+    fn validate(&self) -> Result<(), TutorError> {
+        if !self.resolved || self.claim_position == 0 || self.citation_position == 0 {
+            Err(TutorError::CitationMismatch)
+        } else {
+            Ok(())
+        }
+    }
+}
+validating_deserialize!(CitationDecisionAnchor, validate, {
+    claim_id: ClaimId, citation_id: CitationId, claim_position: u32,
+    citation_position: u32, resolved: bool
+});
 
 #[derive(Clone, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -289,6 +421,8 @@ pub struct TutorResponse {
     pub permitted_capabilities: BTreeSet<Capability>,
     pub evidence: DecisionEvidence,
     pub context_was_empty: bool,
+    pub ordered_section_ids: Vec<TutorSectionId>,
+    pub citation_anchors: Vec<CitationDecisionAnchor>,
     pub status: ResponseStatus,
     pub rationale: Vec<Rationale>,
     pub sections: Vec<PlannedSection>,
@@ -395,6 +529,7 @@ pub fn plan_response(
             content: s.content.clone(),
             claims: s.claims.clone(),
             citations: s.citations.clone(),
+            citations_required: s.citations_required,
             pedagogy_decision_evidence_id: s.pedagogy_decision_evidence_id,
             safety: s.safety,
             capability: s.capability,
@@ -419,6 +554,19 @@ pub fn plan_response(
         permitted_capabilities: request.permitted_capabilities.clone(),
         evidence: request.evidence.clone(),
         context_was_empty: context.included.is_empty(),
+        ordered_section_ids: request.sections.iter().map(|s| s.section_id).collect(),
+        citation_anchors: request
+            .sections
+            .iter()
+            .flat_map(|s| s.citations.iter())
+            .map(|b| CitationDecisionAnchor {
+                claim_id: b.claim_id,
+                citation_id: b.citation_id,
+                claim_position: b.claim_position,
+                citation_position: b.citation_position,
+                resolved: true,
+            })
+            .collect(),
         status,
         rationale,
         sections,
@@ -486,6 +634,18 @@ impl PlanningRequest {
         {
             return Err(TutorError::InvalidLimit);
         }
+        let refusal = self.sections.iter().any(|s| {
+            s.kind == SectionKind::SafetyRefusal
+                || s.safety == SafetyClassification::RefusalRequired
+        });
+        if refusal
+            && self.sections.iter().any(|s| {
+                s.kind != SectionKind::SafetyRefusal
+                    || s.safety != SafetyClassification::RefusalRequired
+            })
+        {
+            return Err(TutorError::InvalidEvidence);
+        }
         let mut section_ids = BTreeSet::new();
         let mut total = 0usize;
         let claim_map: BTreeMap<_, _> = citations.claims.iter().map(|c| (c.claim_id, c)).collect();
@@ -541,15 +701,15 @@ impl PlanningRequest {
                 }
             }
             let protected = self.evidence.assessment_restriction != AssessmentRestriction::None;
-            if protected
-                && (s.assessment_restriction == AssessmentRestriction::None
-                    || !matches!(
+            if s.assessment_restriction != self.evidence.assessment_restriction
+                || protected
+                    && !matches!(
                         s.kind,
                         SectionKind::Hint
                             | SectionKind::CheckForUnderstanding
                             | SectionKind::ConstrainedResponse
                             | SectionKind::SafetyRefusal
-                    ))
+                    )
             {
                 return Err(TutorError::InvalidEvidence);
             }
@@ -605,6 +765,8 @@ impl TutorResponse {
             permitted_capabilities: &'a BTreeSet<Capability>,
             evidence: &'a DecisionEvidence,
             context_was_empty: bool,
+            ordered_section_ids: &'a [TutorSectionId],
+            citation_anchors: &'a [CitationDecisionAnchor],
             status: ResponseStatus,
             rationale: &'a [Rationale],
             sections: &'a [PlannedSection],
@@ -626,6 +788,8 @@ impl TutorResponse {
             permitted_capabilities: &self.permitted_capabilities,
             evidence: &self.evidence,
             context_was_empty: self.context_was_empty,
+            ordered_section_ids: &self.ordered_section_ids,
+            citation_anchors: &self.citation_anchors,
             status: self.status,
             rationale: &self.rationale,
             sections: &self.sections,
@@ -645,17 +809,126 @@ impl TutorResponse {
         if self.sections.is_empty() || self.sections.len() > self.limits.maximum_sections {
             return Err(TutorError::InvalidStructure);
         }
+        if self.scope != self.evidence.scope || self.permitted_capabilities.is_empty() {
+            return Err(TutorError::ProvenanceMismatch);
+        }
         let mut ids = BTreeSet::new();
-        let mut total = 0;
+        let mut bindings = Vec::new();
+        let mut total: usize = 0;
         for (i, s) in self.sections.iter().enumerate() {
+            s.validate()?;
             if s.position as usize != i + 1
                 || !ids.insert(s.section_id)
+                || self.ordered_section_ids.get(i) != Some(&s.section_id)
                 || expected_capability(s.kind) != s.capability
                 || !self.permitted_capabilities.contains(&s.capability)
+                || !self.evidence.allowed_section_kinds.contains(&s.kind)
+                || s.pedagogy_decision_evidence_id != self.evidence.pedagogy_decision_evidence_id
+                || s.scaffolding < self.evidence.minimum_scaffolding
+                || s.scaffolding > self.evidence.maximum_scaffolding
+                || s.assessment_restriction != self.evidence.assessment_restriction
+                || s.content.as_str().len() > self.limits.maximum_section_bytes
+                || s.claims.len() > self.limits.maximum_references_per_section
+                || s.citations.len() > self.limits.maximum_references_per_section
             {
                 return Err(TutorError::InvalidStructure);
             }
-            total += s.content.as_str().len();
+            let mut claims = BTreeSet::new();
+            let mut citations = BTreeSet::new();
+            if s.claims.iter().any(|x| !claims.insert(*x)) {
+                return Err(TutorError::IdentityConflict);
+            }
+            for b in &s.citations {
+                if !claims.contains(&b.claim_id) || !citations.insert(b.citation_id) {
+                    return Err(TutorError::CitationMismatch);
+                }
+                bindings.push(CitationDecisionAnchor {
+                    claim_id: b.claim_id,
+                    citation_id: b.citation_id,
+                    claim_position: b.claim_position,
+                    citation_position: b.citation_position,
+                    resolved: true,
+                });
+            }
+            total = total
+                .checked_add(s.content.as_str().len())
+                .ok_or(TutorError::InvalidLimit)?;
+        }
+        if self.ordered_section_ids.len() != self.sections.len()
+            || bindings != self.citation_anchors
+            || self
+                .citation_anchors
+                .iter()
+                .any(|a| !a.resolved || a.claim_position == 0 || a.citation_position == 0)
+        {
+            return Err(TutorError::CitationMismatch);
+        }
+        let refusal = self.sections.iter().any(|s| {
+            s.kind == SectionKind::SafetyRefusal
+                || s.safety == SafetyClassification::RefusalRequired
+        });
+        if refusal
+            && self.sections.iter().any(|s| {
+                s.kind != SectionKind::SafetyRefusal
+                    || s.safety != SafetyClassification::RefusalRequired
+            })
+        {
+            return Err(TutorError::InvalidEvidence);
+        }
+        for s in &self.sections {
+            let compatible = match s.kind {
+                SectionKind::SafetyRefusal => s.safety == SafetyClassification::RefusalRequired,
+                SectionKind::ConstrainedResponse
+                    if self.evidence.assessment_restriction != AssessmentRestriction::None =>
+                {
+                    s.safety == SafetyClassification::AssessmentProtected
+                }
+                SectionKind::ConstrainedResponse => {
+                    s.safety == SafetyClassification::ConstrainedRequired
+                }
+                _ => {
+                    s.safety == SafetyClassification::Ordinary
+                        && self.evidence.assessment_restriction == AssessmentRestriction::None
+                }
+            };
+            if !compatible {
+                return Err(TutorError::InvalidEvidence);
+            }
+        }
+        let expected_status = if refusal {
+            ResponseStatus::Refused
+        } else if self
+            .sections
+            .iter()
+            .any(|s| s.kind == SectionKind::ConstrainedResponse)
+        {
+            ResponseStatus::Constrained
+        } else {
+            ResponseStatus::Accepted
+        };
+        let expected_rationale = match expected_status {
+            ResponseStatus::Accepted => vec![Rationale::Validated],
+            ResponseStatus::Refused => vec![Rationale::SafetyRefusal],
+            ResponseStatus::Constrained => vec![if self.evidence.assessment_restriction
+                != AssessmentRestriction::None
+            {
+                Rationale::AssessmentProtection
+            } else {
+                Rationale::SafetyConstraint
+            }],
+        };
+        if self.status != expected_status || self.rationale != expected_rationale {
+            return Err(TutorError::InvalidEvidence);
+        }
+        if self.context_was_empty
+            && self.sections.iter().any(|s| {
+                !matches!(
+                    s.kind,
+                    SectionKind::SafetyRefusal | SectionKind::ConstrainedResponse
+                )
+            })
+        {
+            return Err(TutorError::CitationMismatch);
         }
         if total > self.limits.maximum_response_bytes
             || self.compute_anchor()? != self.replay_anchor
@@ -686,6 +959,8 @@ impl<'de> Deserialize<'de> for TutorResponse {
             permitted_capabilities: BTreeSet<Capability>,
             evidence: DecisionEvidence,
             context_was_empty: bool,
+            ordered_section_ids: Vec<TutorSectionId>,
+            citation_anchors: Vec<CitationDecisionAnchor>,
             status: ResponseStatus,
             rationale: Vec<Rationale>,
             sections: Vec<PlannedSection>,
@@ -709,6 +984,8 @@ impl<'de> Deserialize<'de> for TutorResponse {
             permitted_capabilities: w.permitted_capabilities,
             evidence: w.evidence,
             context_was_empty: w.context_was_empty,
+            ordered_section_ids: w.ordered_section_ids,
+            citation_anchors: w.citation_anchors,
             status: w.status,
             rationale: w.rationale,
             sections: w.sections,
@@ -767,6 +1044,8 @@ mod tests {
             permitted_capabilities: [Capability::Explain].into(),
             evidence,
             context_was_empty: false,
+            ordered_section_ids: vec![id(13, TutorSectionId::new)],
+            citation_anchors: vec![],
             status: ResponseStatus::Accepted,
             rationale: vec![Rationale::Validated],
             sections: vec![PlannedSection {
@@ -776,6 +1055,7 @@ mod tests {
                 content: InertText::new("Caller supplied explanation.").unwrap(),
                 claims: vec![],
                 citations: vec![],
+                citations_required: false,
                 pedagogy_decision_evidence_id: id(6, EvidenceId::new),
                 safety: SafetyClassification::Ordinary,
                 capability: Capability::Explain,
@@ -804,6 +1084,113 @@ mod tests {
         let mut v = serde_json::to_value(response()).unwrap();
         v["governance_policy_version"] = "0.1".into();
         assert!(serde_json::from_value::<TutorResponse>(v).is_err())
+    }
+    fn recompute(r: &mut TutorResponse) {
+        r.replay_anchor = r.compute_anchor().unwrap();
+    }
+    #[test]
+    fn standalone_wire_rejects_intrinsically_invalid_values() {
+        assert!(serde_json::from_str::<InertText>("\"tool_call\"").is_err());
+        let mut v = serde_json::to_value(response()).unwrap();
+        v["sections"][0]["position"] = 0.into();
+        assert!(serde_json::from_value::<TutorResponse>(v).is_err());
+        let mut v = serde_json::to_value(response()).unwrap();
+        v["evidence"]["maximum_scaffolding"] = 11.into();
+        assert!(serde_json::from_value::<TutorResponse>(v).is_err());
+        let mut v = serde_json::to_value(response()).unwrap();
+        v["limits"]["maximum_sections"] = 0.into();
+        assert!(serde_json::from_value::<TutorResponse>(v).is_err());
+        let mut v = serde_json::to_value(response()).unwrap();
+        v["sections"][0]["citations_required"] = true.into();
+        assert!(serde_json::from_value::<TutorResponse>(v).is_err());
+    }
+    #[test]
+    fn recomputed_anchor_cannot_hide_semantic_tampering() {
+        let mut r = response();
+        r.status = ResponseStatus::Refused;
+        recompute(&mut r);
+        assert_eq!(r.validate(), Err(TutorError::InvalidEvidence));
+
+        let mut r = response();
+        r.ordered_section_ids[0] = id(99, TutorSectionId::new);
+        recompute(&mut r);
+        assert!(r.validate().is_err());
+
+        let mut r = response();
+        r.sections[0].citations_required = true;
+        recompute(&mut r);
+        assert!(r.validate().is_err());
+
+        let mut r = response();
+        r.sections[0].assessment_restriction = AssessmentRestriction::WithholdAnswers;
+        recompute(&mut r);
+        assert_eq!(r.validate(), Err(TutorError::InvalidStructure));
+    }
+    #[test]
+    fn retained_citation_anchors_reject_reassociation() {
+        let mut r = response();
+        let claim = id(40, ClaimId::new);
+        let citation = id(41, CitationId::new);
+        r.sections[0].claims = vec![claim];
+        r.sections[0].citations = vec![CitationBinding {
+            claim_id: claim,
+            citation_id: citation,
+            claim_position: 1,
+            citation_position: 1,
+        }];
+        r.sections[0].citations_required = true;
+        r.citation_anchors = vec![CitationDecisionAnchor {
+            claim_id: claim,
+            citation_id: citation,
+            claim_position: 1,
+            citation_position: 1,
+            resolved: true,
+        }];
+        recompute(&mut r);
+        assert_eq!(r.validate(), Ok(()));
+
+        r.sections[0].citations[0].citation_id = id(42, CitationId::new);
+        recompute(&mut r);
+        assert_eq!(r.validate(), Err(TutorError::CitationMismatch));
+    }
+    #[test]
+    fn safety_precedence_is_refusal_only_and_exact() {
+        let mut refused = response();
+        refused.sections[0].kind = SectionKind::SafetyRefusal;
+        refused.sections[0].capability = Capability::Refuse;
+        refused.sections[0].safety = SafetyClassification::RefusalRequired;
+        refused.permitted_capabilities = [Capability::Refuse].into();
+        refused.evidence.allowed_section_kinds = [SectionKind::SafetyRefusal].into();
+        refused.status = ResponseStatus::Refused;
+        refused.rationale = vec![Rationale::SafetyRefusal];
+        recompute(&mut refused);
+        assert_eq!(refused.validate(), Ok(()));
+
+        let mut mixed = refused.clone();
+        let mut ordinary = response().sections.remove(0);
+        ordinary.section_id = id(14, TutorSectionId::new);
+        ordinary.position = 2;
+        mixed.sections.push(ordinary);
+        mixed.ordered_section_ids.push(id(14, TutorSectionId::new));
+        mixed.limits.maximum_sections = 2;
+        mixed.permitted_capabilities.insert(Capability::Explain);
+        mixed
+            .evidence
+            .allowed_section_kinds
+            .insert(SectionKind::Explanation);
+        recompute(&mut mixed);
+        assert_eq!(mixed.validate(), Err(TutorError::InvalidEvidence));
+
+        let mut constrained = response();
+        constrained.sections[0].kind = SectionKind::ConstrainedResponse;
+        constrained.sections[0].capability = Capability::Constrain;
+        constrained.sections[0].safety = SafetyClassification::ConstrainedRequired;
+        constrained.permitted_capabilities = [Capability::Constrain].into();
+        constrained.evidence.allowed_section_kinds = [SectionKind::ConstrainedResponse].into();
+        constrained.status = ResponseStatus::Constrained;
+        constrained.rationale = vec![Rationale::SafetyConstraint];
+        recompute(&mut constrained);
+        assert_eq!(constrained.validate(), Ok(()));
     }
     #[test]
     fn content_debug_and_errors_are_redacted() {
