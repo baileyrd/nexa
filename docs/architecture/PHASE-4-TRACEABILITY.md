@@ -24,7 +24,7 @@
 | Semantic citation fidelity and tutor behavior | Explicitly deferred by ADR-0020 | Not implemented |
 | Model providers, networking, vector databases, and durable adapters | Explicitly deferred by ADR-0017 | Not implemented |
 
-Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministic vector retrieval are implemented. Learned/cross-encoder reranking, authority/freshness ranking, partial truncation, provider tokenization, semantic citation fidelity, tutor intelligence and tutor-response generation, provider integration, networking, vector databases, and durable adapters remain unimplemented. The reconstructed knowledge and tutor specifications retain their registry authority; these increments do not promote them.
+Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministic vector retrieval are implemented, as are deterministic prompt compilation and strict structural output admission. Learned/cross-encoder reranking, authority/freshness ranking, partial truncation, provider tokenization, semantic citation fidelity/entailment, semantic safety, tutor inference and concrete providers, networking, vector databases, and durable adapters remain unimplemented. The reconstructed knowledge and tutor specifications retain their registry authority; these increments do not promote them. The known inconsistency between implemented ingestion/context evidence here and unchecked corresponding roadmap bullets is intentionally not resolved by this increment.
 
 ## Tutor-response planning increment
 
@@ -57,4 +57,17 @@ Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministi
 | Unambiguous deterministic framing and content preservation | fixed canonical JSON envelope, explicit position/length metadata | Implemented slice |
 | Content-free audit and standalone replay integrity | manifest, exact byte count, SHA-256 anchor, validating decode | Implemented slice |
 | Final provider-neutral context validation | integration with `ModelRequest::validate_for`; ADR-0022 remains authoritative | Implemented slice |
-| Inference, provider routing/tokenization, output admission, semantic safety/grounding, repair, async/streaming, networking, persistence | Explicitly deferred by ADR-0023 | Not implemented |
+| Inference, provider routing/tokenization, semantic safety/grounding, repair, async/streaming, networking, persistence | Still deferred after ADR-0023; output admission is addressed separately by ADR-0024 | Not implemented |
+
+## Model-output admission increment
+
+| Requirement | Evidence | Status |
+|---|---|---|
+| Caller-owned identities, policies, limits, capability permissions, and decision evidence | `TrustedPlanningAuthority`; ADR-0024 | Implemented slice |
+| Closed model-owned V1 candidate sections and strict JSON decoding | `CandidateOutputV1`, `serde(deny_unknown_fields)`, bounded `RawModelOutput` | Implemented slice |
+| Descriptor/request/response identities and exact compiled-input association | `admit_model_output`, intrinsic `PromptCompilationResult::validate` | Implemented slice |
+| Output-limit rejection with no repair or partial success | `FinishReason::Complete` gate; admission tests | Implemented slice |
+| Existing policy, pedagogy, safety, capability, provenance, and citation-reference validation | Delegation to unchanged `plan_response` with exact governed inputs | Implemented slice |
+| Content-free raw-output, prompt, response, and admission replay binding | `AdmissionEvidence`, `AdmissionResult` standalone validation | Implemented slice |
+| Truth, semantic safety, prompt-injection detection, entailment, hallucination control, instructional quality | Explicitly not established by ADR-0024 | Not implemented |
+| Inference/providers, routing/tokenization, repair/regeneration, tool execution, async/streaming, networking/persistence | Explicitly deferred by ADR-0024 | Not implemented |

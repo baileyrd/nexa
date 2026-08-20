@@ -1,6 +1,7 @@
 //! Provider-neutral, synchronous response planning over caller-supplied text.
 #![forbid(unsafe_code)]
 
+pub mod admission;
 pub mod model;
 pub mod prompt;
 
@@ -122,7 +123,7 @@ pub struct DecisionEvidence {
     pub assessment_restriction: AssessmentRestriction,
 }
 impl DecisionEvidence {
-    fn validate(&self) -> Result<(), TutorError> {
+    pub(crate) fn validate(&self) -> Result<(), TutorError> {
         if self.learner_state_version != V1
             || self.pedagogy_policy_version != V1
             || self.decision_evidence_version != V1
@@ -360,7 +361,7 @@ validating_deserialize!(ResponseLimits, validate, {
     maximum_references_per_section: usize
 });
 impl ResponseLimits {
-    fn validate(&self) -> Result<(), TutorError> {
+    pub(crate) fn validate(&self) -> Result<(), TutorError> {
         if self.maximum_sections == 0
             || self.maximum_sections > MAX_SECTIONS
             || self.maximum_section_bytes == 0
@@ -1279,6 +1280,666 @@ mod tests {
         .unwrap();
         let citations = resolve_citations(&citation_request, &context).unwrap();
         (context, citations)
+    }
+
+    struct AdmissionFixture {
+        descriptor: crate::model::ModelDescriptor,
+        request: crate::model::ModelRequest,
+        response: crate::model::ModelResponse,
+        compilation: crate::prompt::PromptCompilationResult,
+        authority: crate::admission::TrustedPlanningAuthority,
+        context: ContextPackage,
+        citations: CitationResult,
+        section: serde_json::Value,
+    }
+
+    impl AdmissionFixture {
+        fn admit(
+            &self,
+        ) -> Result<crate::admission::AdmissionResult, crate::admission::AdmissionError> {
+            crate::admission::admit_model_output(
+                &self.descriptor,
+                &self.request,
+                &self.response,
+                &self.compilation,
+                &self.authority,
+                &self.context,
+                &self.citations,
+            )
+        }
+
+        fn set_candidate(&mut self, candidate: serde_json::Value) {
+            self.response.output =
+                crate::model::RawModelOutput::new(serde_json::to_string(&candidate).unwrap())
+                    .unwrap();
+        }
+
+        fn set_sections(&mut self, sections: Vec<serde_json::Value>) {
+            self.set_candidate(json!({"candidate_schema_version":"1.0", "sections":sections}));
+        }
+    }
+
+    fn admission_fixture() -> AdmissionFixture {
+        use crate::model::{
+            FinishReason, ModelCapabilities, ModelDescriptor, ModelRequest, ModelResponse,
+            PrivacyClass, RawModelOutput, RequiredCapabilities, MODEL_INVOCATION_V1,
+        };
+        use crate::prompt::{
+            compile_prompt, PromptCompilationRequest, PromptContent, PromptLayer, PromptLayerKind,
+            PromptLimits, PROMPT_COMPILATION_V1,
+        };
+        use nexa_domain::{ModelId, ModelInvocationId, ModelProviderId};
+
+        let planning = planning_request(response());
+        let authority = crate::admission::TrustedPlanningAuthority {
+            contract_version: planning.contract_version,
+            response_id: planning.response_id,
+            interaction_id: planning.interaction_id,
+            scope: planning.scope.clone(),
+            context_package_id: planning.context_package_id,
+            citation_set_id: planning.citation_set_id,
+            hybrid_result_id: planning.hybrid_result_id,
+            query_id: planning.query_id,
+            response_policy_version: planning.response_policy_version,
+            safety_policy_version: planning.safety_policy_version,
+            citation_policy_version: planning.citation_policy_version,
+            governance_policy_version: planning.governance_policy_version,
+            limits: planning.limits,
+            permitted_capabilities: planning.permitted_capabilities.clone(),
+            evidence: planning.evidence.clone(),
+        };
+        let layer = |kind, text| PromptLayer {
+            kind,
+            classification: kind.classification(),
+            content: PromptContent::new(text).unwrap(),
+        };
+        let compilation = compile_prompt(&PromptCompilationRequest {
+            contract_version: PROMPT_COMPILATION_V1,
+            prompt_package_version: V1,
+            context_builder_version: V1,
+            output_schema_version: V1,
+            limits: PromptLimits {
+                maximum_layer_bytes: 1000,
+                maximum_compiled_bytes: 10000,
+            },
+            layers: vec![
+                layer(
+                    PromptLayerKind::PlatformContract,
+                    "distinctive private platform prompt",
+                ),
+                layer(PromptLayerKind::NexaIdentity, "identity"),
+                layer(PromptLayerKind::Policy, "policy"),
+                layer(PromptLayerKind::Pedagogy, "pedagogy"),
+                layer(
+                    PromptLayerKind::StudentInput,
+                    "distinctive private learner prompt",
+                ),
+                layer(PromptLayerKind::OutputContract, "output"),
+            ],
+        })
+        .unwrap();
+        let descriptor = ModelDescriptor::new(
+            id(50, ModelProviderId::new),
+            id(51, ModelId::new),
+            PrivacyClass::LocalOnly,
+            ModelCapabilities {
+                streaming: false,
+                structured_output: true,
+                tool_calling: false,
+                vision: false,
+                context_window_tokens: 20000,
+                maximum_output_tokens: 1000,
+            },
+        )
+        .unwrap();
+        let request = ModelRequest {
+            invocation_id: id(52, ModelInvocationId::new),
+            provider_id: descriptor.provider_id,
+            model_id: descriptor.model_id,
+            contract_version: MODEL_INVOCATION_V1,
+            input: compilation.model_input.clone(),
+            required_capabilities: RequiredCapabilities {
+                structured_output: true,
+                tool_calling: false,
+                vision: false,
+            },
+            maximum_output_tokens: 1000,
+        };
+        let section = serde_json::to_value(&planning.sections[0]).unwrap();
+        let output = RawModelOutput::new(
+            serde_json::to_string(
+                &json!({"candidate_schema_version":"1.0", "sections":[section.clone()]}),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let response = ModelResponse {
+            invocation_id: request.invocation_id,
+            provider_id: request.provider_id,
+            model_id: request.model_id,
+            contract_version: MODEL_INVOCATION_V1,
+            output,
+            finish_reason: FinishReason::Complete,
+            reported_usage: None,
+        };
+        let (context, citations) = governed_inputs();
+        AdmissionFixture {
+            descriptor,
+            request,
+            response,
+            compilation,
+            authority,
+            context,
+            citations,
+            section,
+        }
+    }
+
+    #[test]
+    fn admission_rejects_descriptor_request_and_response_identity_mismatches() {
+        use crate::admission::AdmissionError;
+        use nexa_domain::{ModelId, ModelInvocationId, ModelProviderId};
+        let mut f = admission_fixture();
+        f.request.provider_id = id(60, ModelProviderId::new);
+        assert_eq!(f.admit(), Err(AdmissionError::InvalidDescriptorRequest));
+        let mut f = admission_fixture();
+        f.request.model_id = id(61, ModelId::new);
+        assert_eq!(f.admit(), Err(AdmissionError::InvalidDescriptorRequest));
+        let mut f = admission_fixture();
+        f.response.invocation_id = id(62, ModelInvocationId::new);
+        assert_eq!(
+            f.admit(),
+            Err(AdmissionError::ModelResponseIdentityMismatch)
+        );
+        let mut f = admission_fixture();
+        f.response.provider_id = id(63, ModelProviderId::new);
+        assert_eq!(
+            f.admit(),
+            Err(AdmissionError::ModelResponseIdentityMismatch)
+        );
+        let mut f = admission_fixture();
+        f.response.model_id = id(64, ModelId::new);
+        assert_eq!(
+            f.admit(),
+            Err(AdmissionError::ModelResponseIdentityMismatch)
+        );
+    }
+
+    #[test]
+    fn admission_rejects_unsupported_invocation_contract_versions() {
+        use crate::admission::AdmissionError;
+        let mut f = admission_fixture();
+        f.descriptor.contract_version = ProtocolVersion::new(2, 0);
+        assert_eq!(f.admit(), Err(AdmissionError::InvalidDescriptorRequest));
+        let mut f = admission_fixture();
+        f.request.contract_version = ProtocolVersion::new(2, 0);
+        assert_eq!(f.admit(), Err(AdmissionError::InvalidDescriptorRequest));
+        let mut f = admission_fixture();
+        f.response.contract_version = ProtocolVersion::new(2, 0);
+        assert_eq!(f.admit(), Err(AdmissionError::UnsupportedVersion));
+    }
+
+    #[test]
+    fn admission_requires_structured_output_and_host_limits_are_authoritative() {
+        use crate::admission::AdmissionError;
+        let mut f = admission_fixture();
+        f.request.required_capabilities.structured_output = false;
+        assert_eq!(f.admit(), Err(AdmissionError::UnsupportedStructuredOutput));
+        let mut f = admission_fixture();
+        f.descriptor.capabilities.structured_output = false;
+        assert_eq!(f.admit(), Err(AdmissionError::UnsupportedStructuredOutput));
+        let mut f = admission_fixture();
+        f.descriptor.capabilities.maximum_output_tokens = 999;
+        assert_eq!(f.admit(), Err(AdmissionError::InvalidDescriptorRequest));
+        let mut f = admission_fixture();
+        f.descriptor.capabilities.context_window_tokens =
+            f.request.input.as_str().len() as u32 + 999;
+        assert_eq!(f.admit(), Err(AdmissionError::InvalidDescriptorRequest));
+        for field in [
+            "context_window_tokens",
+            "maximum_output_tokens",
+            "token_limit",
+            "usage",
+        ] {
+            let mut f = admission_fixture();
+            let mut candidate =
+                json!({"candidate_schema_version":"1.0", "sections":[f.section.clone()]});
+            candidate[field] = json!(1);
+            f.set_candidate(candidate);
+            assert_eq!(
+                f.admit(),
+                Err(AdmissionError::InvalidCandidateSchema),
+                "{field}"
+            );
+        }
+    }
+
+    #[test]
+    fn admission_rejects_prompt_input_replay_and_intrinsic_compilation_tampering() {
+        use crate::admission::AdmissionError;
+        use crate::model::ModelInput;
+        let mut f = admission_fixture();
+        let mut bytes = f.request.input.as_str().as_bytes().to_vec();
+        *bytes.last_mut().unwrap() ^= 1;
+        f.request.input = ModelInput::new(String::from_utf8(bytes).unwrap()).unwrap();
+        assert_eq!(
+            f.admit(),
+            Err(AdmissionError::PromptAssociationReplayMismatch)
+        );
+        for mutation in 0..4 {
+            let mut f = admission_fixture();
+            match mutation {
+                0 => f.compilation.replay_anchor = "a".repeat(64),
+                1 => f.compilation.compiled_bytes += 1,
+                2 => f.compilation.manifest[0].content_bytes += 1,
+                _ => f.compilation.model_input = ModelInput::new("tampered envelope").unwrap(),
+            }
+            assert_eq!(
+                f.admit(),
+                Err(AdmissionError::PromptAssociationReplayMismatch)
+            );
+        }
+    }
+
+    #[test]
+    fn admission_rejects_every_unsupported_compilation_and_candidate_version() {
+        use crate::admission::AdmissionError;
+        for field in 0..4 {
+            let mut f = admission_fixture();
+            match field {
+                0 => f.compilation.contract_version = ProtocolVersion::new(2, 0),
+                1 => f.compilation.prompt_package_version = ProtocolVersion::new(2, 0),
+                2 => f.compilation.context_builder_version = ProtocolVersion::new(2, 0),
+                _ => f.compilation.output_schema_version = ProtocolVersion::new(2, 0),
+            }
+            assert_eq!(f.admit(), Err(AdmissionError::UnsupportedVersion));
+        }
+        let mut f = admission_fixture();
+        f.set_candidate(json!({"candidate_schema_version":"2.0", "sections":[f.section.clone()]}));
+        assert_eq!(f.admit(), Err(AdmissionError::UnsupportedVersion));
+    }
+
+    #[test]
+    fn admission_rejects_malformed_truncated_and_trailing_json() {
+        use crate::admission::AdmissionError;
+        use crate::model::RawModelOutput;
+        for (wire, expected) in [
+            ("not json", AdmissionError::MalformedSyntax),
+            (
+                "{\"candidate_schema_version\":\"1.0\",\"sections\":[",
+                AdmissionError::MalformedSyntax,
+            ),
+            (
+                "{\"candidate_schema_version\":\"1.0\",\"sections\":[]} trailing",
+                AdmissionError::MalformedSyntax,
+            ),
+        ] {
+            let mut f = admission_fixture();
+            f.response.output = RawModelOutput::new(wire).unwrap();
+            assert_eq!(f.admit(), Err(expected));
+        }
+    }
+
+    #[test]
+    fn admission_candidate_schema_is_closed_at_every_level() {
+        use crate::admission::AdmissionError;
+        let attempts = [
+            "response_id",
+            "provider_id",
+            "model_id",
+            "invocation_id",
+            "policies",
+            "limits",
+            "decision_evidence",
+            "usage",
+            "actions",
+            "tools",
+            "renderer_commands",
+        ];
+        for field in attempts {
+            let mut f = admission_fixture();
+            let mut candidate =
+                json!({"candidate_schema_version":"1.0", "sections":[f.section.clone()]});
+            candidate[field] = json!("host-owned");
+            f.set_candidate(candidate);
+            assert_eq!(
+                f.admit(),
+                Err(AdmissionError::InvalidCandidateSchema),
+                "{field}"
+            );
+        }
+        let mut f = admission_fixture();
+        f.section["unknown_section_field"] = json!(true);
+        f.set_sections(vec![f.section.clone()]);
+        assert_eq!(f.admit(), Err(AdmissionError::InvalidCandidateSchema));
+        let mut f = admission_fixture();
+        f.section["kind"] = json!("renderer_command");
+        f.set_sections(vec![f.section.clone()]);
+        assert_eq!(f.admit(), Err(AdmissionError::InvalidCandidateSchema));
+        let mut f = admission_fixture();
+        f.set_candidate(json!({"candidate_schema_version":"1.0", "sections":[]}));
+        assert_eq!(f.admit(), Err(AdmissionError::InvalidCandidateSchema));
+        let mut f = admission_fixture();
+        f.set_candidate(planning_wire());
+        assert_eq!(f.admit(), Err(AdmissionError::InvalidCandidateSchema));
+    }
+
+    #[test]
+    fn admission_enforces_raw_section_response_and_count_limits() {
+        use crate::admission::AdmissionError;
+        use crate::model::{RawModelOutput, MAX_MODEL_OUTPUT_BYTES};
+        assert!(RawModelOutput::new("x".repeat(MAX_MODEL_OUTPUT_BYTES + 1)).is_err());
+        let mut f = admission_fixture();
+        f.authority.limits.maximum_section_bytes = 3;
+        assert_eq!(f.admit(), Err(AdmissionError::PlanningEvidenceProvenance));
+        let mut f = admission_fixture();
+        f.authority.limits.maximum_response_bytes = f.section["content"].as_str().unwrap().len();
+        let mut second = f.section.clone();
+        second["section_id"] = json!(Uuid::from_u128(80));
+        f.set_sections(vec![f.section.clone(), second]);
+        assert_eq!(f.admit(), Err(AdmissionError::PlanningEvidenceProvenance));
+        let mut f = admission_fixture();
+        f.authority.limits.maximum_sections = 1;
+        let mut second = f.section.clone();
+        second["section_id"] = json!(Uuid::from_u128(81));
+        f.set_sections(vec![f.section.clone(), second]);
+        assert_eq!(f.admit(), Err(AdmissionError::PlanningEvidenceProvenance));
+        let mut f = admission_fixture();
+        f.authority.limits.maximum_references_per_section = 1;
+        f.section["claims"] = json!([Uuid::from_u128(82), Uuid::from_u128(83)]);
+        f.set_sections(vec![f.section.clone()]);
+        assert_eq!(f.admit(), Err(AdmissionError::PlanningEvidenceProvenance));
+    }
+
+    #[test]
+    fn admission_delegates_policy_pedagogy_assessment_and_safety_checks() {
+        use crate::admission::AdmissionError;
+        for mutation in 0..6 {
+            let mut f = admission_fixture();
+            match mutation {
+                0 => f.section["capability"] = json!("summarize"),
+                1 => {
+                    f.authority.evidence.allowed_section_kinds = [SectionKind::Summary].into();
+                }
+                2 => f.section["scaffolding"] = json!(9),
+                3 => f.section["pedagogy_decision_evidence_id"] = json!(Uuid::from_u128(84)),
+                4 => f.section["assessment_restriction"] = json!("withhold_answers"),
+                _ => f.section["safety"] = json!("refusal_required"),
+            }
+            f.set_sections(vec![f.section.clone()]);
+            assert_eq!(
+                f.admit(),
+                Err(AdmissionError::PolicyPedagogySafetyCapability),
+                "mutation {mutation}"
+            );
+        }
+    }
+
+    #[test]
+    fn admission_delegates_citation_grounding_and_reference_checks() {
+        use crate::admission::AdmissionError;
+        let mut f = admission_fixture();
+        f.section["citations_required"] = json!(true);
+        f.set_sections(vec![f.section.clone()]);
+        assert_eq!(f.admit(), Err(AdmissionError::InvalidCandidateSchema));
+        let mut f = admission_fixture();
+        f.section["claims"] = json!([Uuid::from_u128(85)]);
+        f.section["citations"] = json!([{
+            "claim_id":Uuid::from_u128(85), "citation_id":Uuid::from_u128(86),
+            "claim_position":1, "citation_position":1
+        }]);
+        f.set_sections(vec![f.section.clone()]);
+        assert_eq!(f.admit(), Err(AdmissionError::CitationGroundingReference));
+    }
+
+    #[test]
+    fn admission_delegates_all_planning_provenance_mismatches() {
+        use crate::admission::AdmissionError;
+        use nexa_domain::{
+            CitationSetId, ContextPackageId, HybridRetrievalResultId, RetrievalQueryId,
+        };
+        for mutation in 0..6 {
+            let mut f = admission_fixture();
+            match mutation {
+                0 => f.authority.scope.student_id = id(90, StudentId::new),
+                1 => f.authority.context_package_id = id(91, ContextPackageId::new),
+                2 => f.authority.citation_set_id = id(92, CitationSetId::new),
+                3 => f.authority.hybrid_result_id = id(93, HybridRetrievalResultId::new),
+                4 => f.authority.query_id = id(94, RetrievalQueryId::new),
+                _ => f.authority.governance_policy_version = ProtocolVersion::new(2, 0),
+            }
+            let expected = if mutation == 0 || mutation == 5 {
+                if mutation == 5 {
+                    AdmissionError::UnsupportedVersion
+                } else {
+                    AdmissionError::PlanningEvidenceProvenance
+                }
+            } else {
+                AdmissionError::PlanningEvidenceProvenance
+            };
+            assert_eq!(f.admit(), Err(expected), "mutation {mutation}");
+        }
+    }
+
+    #[test]
+    fn admission_raw_hash_and_standalone_result_replay_are_bound() {
+        use crate::admission::{AdmissionError, AdmissionResult};
+        let f = admission_fixture();
+        let first = f.admit().unwrap();
+        let mut changed = admission_fixture();
+        changed.section["content"] = json!("A different valid candidate section.");
+        changed.set_sections(vec![changed.section.clone()]);
+        let second = changed.admit().unwrap();
+        assert_ne!(
+            first.evidence.raw_output_sha256,
+            second.evidence.raw_output_sha256
+        );
+
+        let mut invalid_nested = serde_json::to_value(&first).unwrap();
+        invalid_nested["response"]["sections"][0]["content"] = json!("tampered nested section");
+        assert!(serde_json::from_value::<AdmissionResult>(invalid_nested).is_err());
+
+        let mut disagreement = serde_json::to_value(&first).unwrap();
+        disagreement["evidence"]["tutor_response_replay_anchor"] = json!("a".repeat(64));
+        assert!(serde_json::from_value::<AdmissionResult>(disagreement).is_err());
+
+        let mut incomplete = admission_fixture();
+        incomplete.response.finish_reason = crate::model::FinishReason::OutputLimit;
+        assert_eq!(incomplete.admit(), Err(AdmissionError::IncompleteOutput));
+    }
+
+    #[test]
+    fn admission_privacy_and_provider_non_consumption_are_explicit() {
+        use crate::admission::AdmissionError;
+        use crate::model::{LanguageModelProvider, ScriptedModelProvider, ScriptedOutcome};
+        let f = admission_fixture();
+        let provider = ScriptedModelProvider::new(
+            f.descriptor.clone(),
+            [ScriptedOutcome::Response(f.response.clone())],
+        )
+        .unwrap();
+        assert!(f.admit().is_ok());
+        assert_eq!(provider.remaining(), 1);
+        assert!(provider.generate(&f.request).is_ok());
+
+        let mut f = admission_fixture();
+        let secret = "distinctive-raw-output-secret";
+        f.response.output =
+            crate::model::RawModelOutput::new(format!("{{\"unknown\":\"{secret}\"}}")).unwrap();
+        let error = f.admit().unwrap_err();
+        assert_eq!(error, AdmissionError::InvalidCandidateSchema);
+        for diagnostic in [
+            format!("{error}"),
+            format!("{error:?}"),
+            format!("{:?}", f.response),
+            format!("{:?}", f.request),
+            format!("{:?}", f.authority),
+        ] {
+            assert!(!diagnostic.contains(secret));
+            assert!(!diagnostic.contains("distinctive private platform prompt"));
+            assert!(!diagnostic.contains("distinctive private learner prompt"));
+            assert!(!diagnostic.contains("Caller supplied explanation"));
+            assert!(!diagnostic.contains("a\"}"));
+        }
+        let serde_error = serde_json::from_str::<crate::admission::AdmissionResult>(secret)
+            .unwrap_err()
+            .to_string();
+        assert!(!serde_error.contains(secret));
+    }
+
+    #[test]
+    fn model_output_admission_is_closed_bound_and_delegates_to_planner() {
+        use crate::admission::{
+            admit_model_output, AdmissionError, AdmissionResult, TrustedPlanningAuthority,
+        };
+        use crate::model::{
+            FinishReason, ModelCapabilities, ModelDescriptor, ModelRequest, ModelResponse,
+            PrivacyClass, RawModelOutput, RequiredCapabilities, MODEL_INVOCATION_V1,
+        };
+        use crate::prompt::{
+            compile_prompt, PromptCompilationRequest, PromptContent, PromptLayer, PromptLayerKind,
+            PromptLimits, PROMPT_COMPILATION_V1,
+        };
+        use nexa_domain::{ModelId, ModelInvocationId, ModelProviderId};
+
+        let planning = planning_request(response());
+        let authority = TrustedPlanningAuthority {
+            contract_version: planning.contract_version,
+            response_id: planning.response_id,
+            interaction_id: planning.interaction_id,
+            scope: planning.scope.clone(),
+            context_package_id: planning.context_package_id,
+            citation_set_id: planning.citation_set_id,
+            hybrid_result_id: planning.hybrid_result_id,
+            query_id: planning.query_id,
+            response_policy_version: planning.response_policy_version,
+            safety_policy_version: planning.safety_policy_version,
+            citation_policy_version: planning.citation_policy_version,
+            governance_policy_version: planning.governance_policy_version,
+            limits: planning.limits,
+            permitted_capabilities: planning.permitted_capabilities.clone(),
+            evidence: planning.evidence.clone(),
+        };
+        let layer = |kind, text| PromptLayer {
+            kind,
+            classification: kind.classification(),
+            content: PromptContent::new(text).unwrap(),
+        };
+        let compilation = compile_prompt(&PromptCompilationRequest {
+            contract_version: PROMPT_COMPILATION_V1,
+            prompt_package_version: V1,
+            context_builder_version: V1,
+            output_schema_version: V1,
+            limits: PromptLimits {
+                maximum_layer_bytes: 1000,
+                maximum_compiled_bytes: 10000,
+            },
+            layers: vec![
+                layer(PromptLayerKind::PlatformContract, "platform"),
+                layer(PromptLayerKind::NexaIdentity, "identity"),
+                layer(PromptLayerKind::Policy, "policy"),
+                layer(PromptLayerKind::Pedagogy, "pedagogy"),
+                layer(PromptLayerKind::StudentInput, "input"),
+                layer(PromptLayerKind::OutputContract, "output"),
+            ],
+        })
+        .unwrap();
+        let descriptor = ModelDescriptor::new(
+            id(50, ModelProviderId::new),
+            id(51, ModelId::new),
+            PrivacyClass::LocalOnly,
+            ModelCapabilities {
+                streaming: false,
+                structured_output: true,
+                tool_calling: false,
+                vision: false,
+                context_window_tokens: 20000,
+                maximum_output_tokens: 1000,
+            },
+        )
+        .unwrap();
+        let request = ModelRequest {
+            invocation_id: id(52, ModelInvocationId::new),
+            provider_id: descriptor.provider_id,
+            model_id: descriptor.model_id,
+            contract_version: MODEL_INVOCATION_V1,
+            input: compilation.model_input.clone(),
+            required_capabilities: RequiredCapabilities {
+                structured_output: true,
+                tool_calling: false,
+                vision: false,
+            },
+            maximum_output_tokens: 1000,
+        };
+        let candidate = json!({"candidate_schema_version":"1.0","sections":planning.sections});
+        let output = RawModelOutput::new(serde_json::to_string(&candidate).unwrap()).unwrap();
+        let response = ModelResponse {
+            invocation_id: request.invocation_id,
+            provider_id: request.provider_id,
+            model_id: request.model_id,
+            contract_version: MODEL_INVOCATION_V1,
+            output,
+            finish_reason: FinishReason::Complete,
+            reported_usage: None,
+        };
+        let (context, citations) = governed_inputs();
+        let admitted = admit_model_output(
+            &descriptor,
+            &request,
+            &response,
+            &compilation,
+            &authority,
+            &context,
+            &citations,
+        )
+        .unwrap();
+        assert_eq!(
+            admitted.response,
+            plan_response(&planning, &context, &citations).unwrap()
+        );
+        assert_eq!(admitted.evidence.provider_id, descriptor.provider_id);
+        assert!(!format!("{admitted:?}").contains("Caller supplied explanation"));
+        let wire = serde_json::to_string(&admitted).unwrap();
+        assert_eq!(
+            serde_json::from_str::<AdmissionResult>(&wire).unwrap(),
+            admitted
+        );
+
+        let mut limited = response.clone();
+        limited.finish_reason = FinishReason::OutputLimit;
+        assert_eq!(
+            admit_model_output(
+                &descriptor,
+                &request,
+                &limited,
+                &compilation,
+                &authority,
+                &context,
+                &citations
+            ),
+            Err(AdmissionError::IncompleteOutput)
+        );
+        for bad in [
+            json!({"candidate_schema_version":"1.0","sections":[],"response_id":planning.response_id}),
+            json!({"candidate_schema_version":"1.0","sections":[]}),
+        ] {
+            let mut invalid = response.clone();
+            invalid.output = RawModelOutput::new(serde_json::to_string(&bad).unwrap()).unwrap();
+            assert!(admit_model_output(
+                &descriptor,
+                &request,
+                &invalid,
+                &compilation,
+                &authority,
+                &context,
+                &citations
+            )
+            .is_err());
+        }
+        let mut tampered: serde_json::Value = serde_json::from_str(&wire).unwrap();
+        tampered["evidence"]["provider_id"] =
+            serde_json::to_value(id(90, ModelProviderId::new)).unwrap();
+        assert!(serde_json::from_value::<AdmissionResult>(tampered).is_err());
     }
     #[test]
     fn planning_wire_rejects_all_intrinsic_contract_violations() {
