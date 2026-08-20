@@ -85,6 +85,44 @@ impl TrustedPlanningAuthority {
             sections,
         }
     }
+
+    fn validate_against(
+        &self,
+        context: &ContextPackage,
+        citations: &CitationResult,
+    ) -> Result<(), AdmissionError> {
+        self.validate()?;
+        context
+            .validate()
+            .map_err(|_| AdmissionError::PlanningEvidenceProvenance)?;
+        citations
+            .validate()
+            .map_err(|_| AdmissionError::CitationGroundingReference)?;
+        if (
+            self.context_package_id,
+            self.hybrid_result_id,
+            self.query_id,
+        ) != (
+            context.context_package_id,
+            context.hybrid_result_id,
+            context.query_id,
+        ) || (
+            self.citation_set_id,
+            self.context_package_id,
+            self.hybrid_result_id,
+            self.query_id,
+        ) != (
+            citations.citation_set_id,
+            citations.context_package_id,
+            citations.hybrid_result_id,
+            citations.query_id,
+        ) || self.governance_policy_version != context.governance_policy_version
+            || self.citation_policy_version != citations.citation_policy_version
+        {
+            return Err(AdmissionError::PlanningEvidenceProvenance);
+        }
+        Ok(())
+    }
 }
 
 impl fmt::Debug for TrustedPlanningAuthority {
@@ -333,6 +371,32 @@ pub fn admit_model_output(
     context: &ContextPackage,
     citations: &CitationResult,
 ) -> Result<AdmissionResult, AdmissionError> {
+    validate_admission_preflight(
+        descriptor,
+        request,
+        compilation,
+        authority,
+        context,
+        citations,
+    )?;
+    admit_model_output_after_preflight(
+        request,
+        response,
+        compilation,
+        authority,
+        context,
+        citations,
+    )
+}
+
+pub(crate) fn validate_admission_preflight(
+    descriptor: &ModelDescriptor,
+    request: &ModelRequest,
+    compilation: &PromptCompilationResult,
+    authority: &TrustedPlanningAuthority,
+    context: &ContextPackage,
+    citations: &CitationResult,
+) -> Result<(), AdmissionError> {
     descriptor
         .validate()
         .map_err(|_| AdmissionError::InvalidDescriptorRequest)?;
@@ -357,6 +421,18 @@ pub fn admit_model_output(
     if request.input != compilation.model_input {
         return Err(AdmissionError::PromptAssociationReplayMismatch);
     }
+    authority.validate_against(context, citations)?;
+    Ok(())
+}
+
+pub(crate) fn admit_model_output_after_preflight(
+    request: &ModelRequest,
+    response: &ModelResponse,
+    compilation: &PromptCompilationResult,
+    authority: &TrustedPlanningAuthority,
+    context: &ContextPackage,
+    citations: &CitationResult,
+) -> Result<AdmissionResult, AdmissionError> {
     response
         .validate_for(request)
         .map_err(|error| match error.kind {
@@ -369,8 +445,6 @@ pub fn admit_model_output(
     if response.finish_reason != FinishReason::Complete {
         return Err(AdmissionError::IncompleteOutput);
     }
-    authority.validate()?;
-
     let mut deserializer = serde_json::Deserializer::from_str(response.output.as_str());
     let candidate =
         CandidateOutputV1::deserialize(&mut deserializer).map_err(|error| {

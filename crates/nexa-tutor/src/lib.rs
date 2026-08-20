@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 
 pub mod admission;
+pub mod generation;
 pub mod model;
 pub mod prompt;
 
@@ -1785,6 +1786,182 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(!serde_error.contains(secret));
+    }
+
+    #[test]
+    fn invocation_admission_is_single_attempt_and_matches_direct_admission() {
+        use crate::generation::invoke_and_admit_model_output;
+        use crate::model::{ScriptedModelProvider, ScriptedOutcome};
+        let f = admission_fixture();
+        let expected = f.admit().unwrap();
+        let provider = ScriptedModelProvider::new(
+            f.descriptor.clone(),
+            [
+                ScriptedOutcome::Response(f.response.clone()),
+                ScriptedOutcome::Error(crate::model::ModelErrorKind::Internal),
+            ],
+        )
+        .unwrap();
+        let actual = invoke_and_admit_model_output(
+            &provider,
+            &f.request,
+            &f.compilation,
+            &f.authority,
+            &f.context,
+            &f.citations,
+        )
+        .unwrap();
+        assert_eq!(actual, expected);
+        assert_eq!(provider.remaining(), 1);
+        assert_eq!(actual.evidence.provider_id, f.request.provider_id);
+        assert_eq!(actual.evidence.model_id, f.request.model_id);
+        assert_eq!(actual.evidence.invocation_id, f.request.invocation_id);
+        assert_eq!(
+            actual.evidence.prompt_compilation_replay_anchor,
+            f.compilation.replay_anchor
+        );
+        assert_eq!(actual.evidence.raw_output_sha256.len(), 64);
+        assert_eq!(
+            actual.evidence.tutor_response_replay_anchor,
+            actual.response.replay_anchor
+        );
+        assert_eq!(actual.evidence.admission_replay_anchor.len(), 64);
+    }
+
+    #[test]
+    fn invocation_admission_preflight_failures_do_not_consume_outcomes() {
+        use crate::admission::AdmissionError;
+        use crate::generation::{invoke_and_admit_model_output, InvocationAdmissionError};
+        use crate::model::{ModelInput, ScriptedModelProvider, ScriptedOutcome};
+        use nexa_domain::{ContextPackageId, ModelId};
+
+        for mutation in 0..8 {
+            let mut f = admission_fixture();
+            match mutation {
+                0 => f.request.model_id = id(900, ModelId::new),
+                1 => f.request.required_capabilities.structured_output = false,
+                2 => f.request.maximum_output_tokens = 0,
+                3 => f.request.input = ModelInput::new("different compiled input").unwrap(),
+                4 => f.compilation.replay_anchor = "a".repeat(64),
+                5 => f.compilation.output_schema_version = ProtocolVersion::new(2, 0),
+                6 => f.authority.context_package_id = id(901, ContextPackageId::new),
+                _ => f.authority.limits.maximum_sections = 0,
+            }
+            let provider = ScriptedModelProvider::new(
+                f.descriptor.clone(),
+                [ScriptedOutcome::Response(f.response.clone())],
+            )
+            .unwrap();
+            let error = invoke_and_admit_model_output(
+                &provider,
+                &f.request,
+                &f.compilation,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            )
+            .unwrap_err();
+            assert!(matches!(error, InvocationAdmissionError::Preflight(_)));
+            assert_eq!(provider.remaining(), 1, "mutation {mutation}");
+            assert_ne!(
+                error,
+                InvocationAdmissionError::Preflight(AdmissionError::InternalFraming)
+            );
+        }
+    }
+
+    #[test]
+    fn invocation_errors_consume_one_outcome_and_preserve_closed_kind() {
+        use crate::generation::{invoke_and_admit_model_output, InvocationAdmissionError};
+        use crate::model::{ModelErrorKind, ScriptedModelProvider, ScriptedOutcome};
+        for kind in [
+            ModelErrorKind::Timeout,
+            ModelErrorKind::Unavailable,
+            ModelErrorKind::RateLimited,
+            ModelErrorKind::Internal,
+        ] {
+            let f = admission_fixture();
+            let provider = ScriptedModelProvider::new(
+                f.descriptor.clone(),
+                [
+                    ScriptedOutcome::Error(kind),
+                    ScriptedOutcome::Error(ModelErrorKind::Internal),
+                ],
+            )
+            .unwrap();
+            assert_eq!(
+                invoke_and_admit_model_output(
+                    &provider,
+                    &f.request,
+                    &f.compilation,
+                    &f.authority,
+                    &f.context,
+                    &f.citations,
+                ),
+                Err(InvocationAdmissionError::Invocation(kind))
+            );
+            assert_eq!(provider.remaining(), 1);
+        }
+    }
+
+    #[test]
+    fn post_invocation_admission_failure_consumes_one_outcome_without_retry() {
+        use crate::admission::AdmissionError;
+        use crate::generation::{invoke_and_admit_model_output, InvocationAdmissionError};
+        use crate::model::{FinishReason, ScriptedModelProvider, ScriptedOutcome};
+        let mut f = admission_fixture();
+        f.response.finish_reason = FinishReason::OutputLimit;
+        let provider = ScriptedModelProvider::new(
+            f.descriptor.clone(),
+            [
+                ScriptedOutcome::Response(f.response.clone()),
+                ScriptedOutcome::Response(admission_fixture().response),
+            ],
+        )
+        .unwrap();
+        assert_eq!(
+            invoke_and_admit_model_output(
+                &provider,
+                &f.request,
+                &f.compilation,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            ),
+            Err(InvocationAdmissionError::Admission(
+                AdmissionError::IncompleteOutput
+            ))
+        );
+        assert_eq!(provider.remaining(), 1);
+    }
+
+    #[test]
+    fn invocation_admission_diagnostics_are_content_free() {
+        use crate::generation::{invoke_and_admit_model_output, InvocationAdmissionError};
+        use crate::model::{ModelErrorKind, ScriptedModelProvider, ScriptedOutcome};
+        let f = admission_fixture();
+        let provider = ScriptedModelProvider::new(
+            f.descriptor.clone(),
+            [ScriptedOutcome::Error(ModelErrorKind::Unavailable)],
+        )
+        .unwrap();
+        let error = invoke_and_admit_model_output(
+            &provider,
+            &f.request,
+            &f.compilation,
+            &f.authority,
+            &f.context,
+            &f.citations,
+        )
+        .unwrap_err();
+        assert_eq!(
+            error,
+            InvocationAdmissionError::Invocation(ModelErrorKind::Unavailable)
+        );
+        for diagnostic in [format!("{error}"), format!("{error:?}")] {
+            assert!(!diagnostic.contains("distinctive private"));
+            assert!(!diagnostic.contains("Caller supplied explanation"));
+        }
     }
 
     #[test]

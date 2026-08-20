@@ -1,6 +1,6 @@
 # Nexa project status
 
-Updated from the verified repository `main` checkpoint at merge commit `c11a001f0efa869e06dd95455fdc46b8d2c8c72b` (PR #24). This is a checkpoint, not an additional specification or ADR.
+Updated from the verified predecessor checkpoint at merge commit `eccf21d8e4a3f1b7c6da6b5c0e97a2df6155d4ef` (PR #27). This is a checkpoint, not an additional specification or ADR. The change containing this status update adds the narrow ADR-0025 capability without assuming a future merge SHA.
 
 ## Verified checkpoint
 
@@ -8,7 +8,7 @@ Updated from the verified repository `main` checkpoint at merge commit `c11a001f
 - **Phase 1:** the contract kernel is implemented in `nexa-domain`, `nexa-events`, and `nexa-nbp`, with canonical values, event envelopes, NBP messages, wire fixtures, and boundary enforcement.
 - **Phase 2:** complete. `nexa-avatar` owns renderer-neutral ports; `nexa-3d` supplies the headless runtime/adapter; `nexa-3d-validate` is the headless validator; and `nexa-3d-viewer` is the GPU/window composition root.
 - **Phase 3:** complete for the deterministic headless exit gate. Student evidence/replay, pedagogy policy, curriculum transitions, assessment/scoring, and atomic learning-core composition are implemented. Durable production persistence and outbox behavior are not implied.
-- **Phase 4:** in progress. `nexa-knowledge` implements governed ingestion, lexical and vector retrieval, hybrid fusion, whole-chunk context assembly, and deterministic citation resolution. `nexa-tutor` implements provider-neutral deterministic response planning, bounded synchronous model-invocation contracts with a deterministic scripted adapter, deterministic versioned prompt compilation into `ModelInput`, and strict provider-neutral output admission into the existing planner. Admission covers syntax, schema, identity, provenance, policy references, capability, citation references, and ADR-0021 structural validation only. No concrete inference, provider integration, truth, entailment, instructional quality, or semantic safety is implied.
+- **Phase 4:** in progress. `nexa-knowledge` implements governed ingestion, lexical and vector retrieval, hybrid fusion, whole-chunk context assembly, and deterministic citation resolution. `nexa-tutor` implements provider-neutral deterministic response planning, bounded synchronous model-invocation contracts with a deterministic scripted adapter, deterministic versioned prompt compilation into `ModelInput`, strict provider-neutral output admission into the existing planner, and ADR-0025 single-attempt composition of shared preflight, one supplied-provider invocation, and admission. Admission covers syntax, schema, identity, provenance, policy references, capability, citation references, and ADR-0021 structural validation only. No concrete inference, provider integration, truth, entailment, instructional quality, or semantic safety is implied.
 
 The current Cargo workspace contains the contract kernel; avatar/3D; student, pedagogy, lessons, assessment, and learning-core; knowledge and tutor crates; plus the 3D viewer and validator. Reserved `.gitkeep`-only directories are not implemented capabilities. Dependency direction and exact allowed normal edges are enforced by [`scripts/check-contract-boundaries.sh`](../scripts/check-contract-boundaries.sh).
 
@@ -17,7 +17,7 @@ The current Cargo workspace contains the contract kernel; avatar/3D; student, pe
 - Governance and precedence: [`BASELINE.md`](BASELINE.md) and the [`specification registry`](SPECIFICATION-REGISTRY.md).
 - Delivery gates: [`IMPLEMENTATION-ROADMAP.md`](architecture/IMPLEMENTATION-ROADMAP.md).
 - Implemented-slice evidence: [Phase 1](architecture/PHASE-1-TRACEABILITY.md), [Phase 2](architecture/PHASE-2-TRACEABILITY.md), [Phase 3](architecture/PHASE-3-TRACEABILITY.md), and [Phase 4](architecture/PHASE-4-TRACEABILITY.md) traceability.
-- Cross-cutting decisions: the [accepted ADRs](adr/), including [ADR-0021](adr/0021-provider-neutral-tutor-response-planning.md) for response planning, [ADR-0022](adr/0022-provider-neutral-model-invocation.md) for model invocation, [ADR-0023](adr/0023-deterministic-provider-neutral-prompt-compilation.md) for prompt compilation, and [ADR-0024](adr/0024-provider-neutral-model-output-admission.md) for model-output admission.
+- Cross-cutting decisions: the [accepted ADRs](adr/), including [ADR-0021](adr/0021-provider-neutral-tutor-response-planning.md) for response planning, [ADR-0022](adr/0022-provider-neutral-model-invocation.md) for model invocation, [ADR-0023](adr/0023-deterministic-provider-neutral-prompt-compilation.md) for prompt compilation, [ADR-0024](adr/0024-provider-neutral-model-output-admission.md) for model-output admission, and [ADR-0025](adr/0025-single-attempt-provider-neutral-invocation-admission.md) for single-attempt invocation-to-admission composition.
 - Reconstructed design sources remain governed source evidence; their authority/status is stated in the registry.
 
 ## Recorded gaps and unresolved decisions (verified)
@@ -38,6 +38,6 @@ The current Cargo workspace contains the contract kernel; avatar/3D; student, pe
 ## How to resume work
 
 1. Start from the current `main`; read [`CHATGPT_WORKFLOW.md`](../CHATGPT_WORKFLOW.md), [`AGENTS.md`](../AGENTS.md), and [`PROJECT-STATUS.md`](PROJECT-STATUS.md), in that order, followed by the applicable baseline, registry, roadmap, traceability, specifications, and ADRs routed to by those files.
-2. Confirm PR #24 / `c11a001f0efa869e06dd95455fdc46b8d2c8c72b` is merged on `main` and includes the ADR-0024 output-admission increment, then inspect intervening merges.
+2. Confirm PR #27 / `eccf21d8e4a3f1b7c6da6b5c0e97a2df6155d4ef` is the verified predecessor on `main`, then inspect intervening merges and read ADR-0025 after ADRs 0021–0024.
 3. Choose one evidence-backed incomplete Phase 4 increment after deterministic prompt compilation and structural output admission, state its exclusions, and identify specification/ADR/traceability impact before coding.
 4. Keep the PR independently reviewable, report documentation/implementation conflicts, and run every validation command in `AGENTS.md`.
