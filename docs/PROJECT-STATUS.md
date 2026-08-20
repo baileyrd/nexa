@@ -1,6 +1,6 @@
 # Nexa project status
 
-Updated from the verified task base on repository `main` at merge commit `5bf2c2a6923cd88e6f4c51215e6e7b97a49ee796` (PR #23), with the ADR-0024 implementation described here as the current task-branch increment layered on that base. This does not claim an unmerged future commit. This is a checkpoint, not an additional specification or ADR.
+Updated from the verified repository `main` checkpoint at merge commit `c11a001f0efa869e06dd95455fdc46b8d2c8c72b` (PR #24). This is a checkpoint, not an additional specification or ADR.
 
 ## Verified checkpoint
 
@@ -38,6 +38,6 @@ The current Cargo workspace contains the contract kernel; avatar/3D; student, pe
 ## How to resume work
 
 1. Start from the current `main`; read [`CHATGPT_WORKFLOW.md`](../CHATGPT_WORKFLOW.md), [`AGENTS.md`](../AGENTS.md), and [`PROJECT-STATUS.md`](PROJECT-STATUS.md), in that order, followed by the applicable baseline, registry, roadmap, traceability, specifications, and ADRs routed to by those files.
-2. Confirm PR #23 / `5bf2c2a6923cd88e6f4c51215e6e7b97a49ee796` includes ADR-0023, then confirm the ADR-0024 output-admission increment is present and inspect intervening merges.
+2. Confirm PR #24 / `c11a001f0efa869e06dd95455fdc46b8d2c8c72b` is merged on `main` and includes the ADR-0024 output-admission increment, then inspect intervening merges.
 3. Choose one evidence-backed incomplete Phase 4 increment after deterministic prompt compilation and structural output admission, state its exclusions, and identify specification/ADR/traceability impact before coding.
 4. Keep the PR independently reviewable, report documentation/implementation conflicts, and run every validation command in `AGENTS.md`.
