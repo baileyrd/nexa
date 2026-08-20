@@ -542,6 +542,30 @@ fn expected_capability(k: SectionKind) -> Capability {
         SectionKind::ConstrainedResponse => Capability::Constrain,
     }
 }
+fn safety_is_compatible(
+    kind: SectionKind,
+    safety: SafetyClassification,
+    assessment_restriction: AssessmentRestriction,
+) -> bool {
+    match kind {
+        SectionKind::SafetyRefusal => safety == SafetyClassification::RefusalRequired,
+        SectionKind::ConstrainedResponse
+            if assessment_restriction != AssessmentRestriction::None =>
+        {
+            safety == SafetyClassification::AssessmentProtected
+        }
+        SectionKind::ConstrainedResponse => safety == SafetyClassification::ConstrainedRequired,
+        SectionKind::Hint | SectionKind::CheckForUnderstanding
+            if assessment_restriction != AssessmentRestriction::None =>
+        {
+            safety == SafetyClassification::AssessmentProtected
+        }
+        _ => {
+            safety == SafetyClassification::Ordinary
+                && assessment_restriction == AssessmentRestriction::None
+        }
+    }
+}
 fn anchor<T: Serialize>(value: &T) -> Result<String, TutorError> {
     let bytes = serde_json::to_vec(value).map_err(|_| TutorError::InvalidStructure)?;
     Ok(Sha256::digest(bytes)
@@ -797,26 +821,8 @@ impl PlanningRequest {
             {
                 return Err(TutorError::InvalidEvidence);
             }
-            match s.safety {
-                SafetyClassification::RefusalRequired if s.kind != SectionKind::SafetyRefusal => {
-                    return Err(TutorError::InvalidEvidence)
-                }
-                SafetyClassification::ConstrainedRequired
-                    if s.kind != SectionKind::ConstrainedResponse =>
-                {
-                    return Err(TutorError::InvalidEvidence)
-                }
-                SafetyClassification::AssessmentProtected
-                    if !matches!(
-                        s.kind,
-                        SectionKind::Hint
-                            | SectionKind::CheckForUnderstanding
-                            | SectionKind::ConstrainedResponse
-                    ) =>
-                {
-                    return Err(TutorError::InvalidEvidence)
-                }
-                _ => {}
+            if !safety_is_compatible(s.kind, s.safety, self.evidence.assessment_restriction) {
+                return Err(TutorError::InvalidEvidence);
             }
         }
         if total > self.limits.maximum_response_bytes {
@@ -996,27 +1002,7 @@ impl TutorResponse {
             return Err(TutorError::InvalidEvidence);
         }
         for s in &self.sections {
-            let compatible = match s.kind {
-                SectionKind::SafetyRefusal => s.safety == SafetyClassification::RefusalRequired,
-                SectionKind::ConstrainedResponse
-                    if self.evidence.assessment_restriction != AssessmentRestriction::None =>
-                {
-                    s.safety == SafetyClassification::AssessmentProtected
-                }
-                SectionKind::ConstrainedResponse => {
-                    s.safety == SafetyClassification::ConstrainedRequired
-                }
-                SectionKind::Hint | SectionKind::CheckForUnderstanding
-                    if self.evidence.assessment_restriction != AssessmentRestriction::None =>
-                {
-                    s.safety == SafetyClassification::AssessmentProtected
-                }
-                _ => {
-                    s.safety == SafetyClassification::Ordinary
-                        && self.evidence.assessment_restriction == AssessmentRestriction::None
-                }
-            };
-            if !compatible {
+            if !safety_is_compatible(s.kind, s.safety, self.evidence.assessment_restriction) {
                 return Err(TutorError::InvalidEvidence);
             }
         }
@@ -1125,6 +1111,8 @@ impl<'de> Deserialize<'de> for TutorResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nexa_knowledge::{resolve_citations, CitationRequest, ContentHash};
+    use serde_json::json;
     use uuid::Uuid;
     fn id<T>(n: u128, make: impl FnOnce(Uuid) -> Result<T, nexa_domain::ValueError>) -> T {
         make(Uuid::from_u128(n)).unwrap()
@@ -1235,6 +1223,59 @@ mod tests {
             .unwrap()
             .remove("position");
         value
+    }
+    fn planning_request(mut r: TutorResponse) -> PlanningRequest {
+        r.replay_anchor = r.compute_anchor().unwrap();
+        serde_json::from_value({
+            let mut value = serde_json::to_value(r).unwrap();
+            let object = value.as_object_mut().unwrap();
+            for response_only in [
+                "context_was_empty",
+                "ordered_section_ids",
+                "citation_anchors",
+                "citation_manifest",
+                "status",
+                "rationale",
+                "replay_anchor",
+            ] {
+                object.remove(response_only);
+            }
+            object["sections"][0]
+                .as_object_mut()
+                .unwrap()
+                .remove("position");
+            value
+        })
+        .unwrap()
+    }
+    fn governed_inputs() -> (ContextPackage, CitationResult) {
+        let fingerprint = serde_json::to_value(ContentHash::sha256(b"a")).unwrap();
+        let context: ContextPackage = serde_json::from_value(json!({
+            "contract_version":"1.0", "context_package_id":id(9, ContextPackageId::new),
+            "hybrid_result_id":id(11, HybridRetrievalResultId::new),
+            "query_id":id(12, RetrievalQueryId::new), "assembly_policy_version":"1.0",
+            "governance_policy_version":"1.0", "tokenizer_profile_id":"test",
+            "tokenizer_fingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "maximum_tokens":10, "maximum_chunk_tokens":null, "maximum_chunks":null,
+            "ordering_policy":"hybrid_rank", "packing_policy":"ranked_greedy_whole_chunk",
+            "accounting":{"policy_version":"1.0","fixed_package_overhead":0,"per_chunk_overhead":0,"separator_tokens":0,"metadata_reference_overhead":0},
+            "hybrid_candidate_count":1, "used_tokens":1, "remaining_tokens":9,
+            "included":[{"chunk_id":"00000000-0000-0000-0000-000000000021","artifact_id":"00000000-0000-0000-0000-000000000022","source_id":"00000000-0000-0000-0000-000000000023","source_version":1,"hybrid_rank":1,"content_fingerprint":fingerprint,"exact_token_count":1,"overhead_tokens":0,"total_contribution":1,"final_context_position":1}],
+            "exclusions":[], "content":[{"chunk_id":"00000000-0000-0000-0000-000000000021","final_context_position":1,"content":"a"}]
+        })).unwrap();
+        let citation_request: CitationRequest = serde_json::from_value(json!({
+            "contract_version":"1.0", "citation_set_id":id(10, CitationSetId::new),
+            "context_package_id":id(9, ContextPackageId::new),
+            "hybrid_result_id":id(11, HybridRetrievalResultId::new),
+            "query_id":id(12, RetrievalQueryId::new), "citation_policy_version":"1.0",
+            "locator_policy_version":"1.0", "governance_policy_version":"1.0",
+            "integrity_profile_version":"1.0", "maximum_citations":2,
+            "maximum_citations_per_claim":2,
+            "claims":[{"claim_id":"00000000-0000-0000-0000-000000000024","evidence":[]}]
+        }))
+        .unwrap();
+        let citations = resolve_citations(&citation_request, &context).unwrap();
+        (context, citations)
     }
     #[test]
     fn planning_wire_rejects_all_intrinsic_contract_violations() {
@@ -1424,6 +1465,85 @@ mod tests {
                 AssessmentRestriction::WithholdHiddenEvaluation;
             recompute(&mut mismatch);
             assert!(mismatch.validate().is_err());
+        }
+    }
+    #[test]
+    fn planner_enforces_the_shared_exact_safety_pairings() {
+        let (context, citations) = governed_inputs();
+        for (kind, capability) in [
+            (SectionKind::Hint, Capability::Hint),
+            (
+                SectionKind::CheckForUnderstanding,
+                Capability::CheckUnderstanding,
+            ),
+        ] {
+            let mut fixture = response();
+            fixture.sections[0].kind = kind;
+            fixture.sections[0].capability = capability;
+            fixture.sections[0].safety = SafetyClassification::AssessmentProtected;
+            fixture.sections[0].assessment_restriction = AssessmentRestriction::WithholdAnswers;
+            fixture.permitted_capabilities = [capability].into();
+            fixture.evidence.allowed_section_kinds = [kind].into();
+            fixture.evidence.assessment_restriction = AssessmentRestriction::WithholdAnswers;
+
+            let valid = planning_request(fixture.clone());
+            let planned = plan_response(&valid, &context, &citations).unwrap();
+            assert_eq!(planned.validate(), Ok(()));
+            let wire = serde_json::to_string(&planned).unwrap();
+            assert!(serde_json::from_str::<TutorResponse>(&wire).is_ok());
+
+            fixture.sections[0].safety = SafetyClassification::Ordinary;
+            let downgraded = planning_request(fixture);
+            assert_eq!(
+                plan_response(&downgraded, &context, &citations),
+                Err(TutorError::InvalidEvidence)
+            );
+        }
+
+        for invalid_safety in [
+            SafetyClassification::Ordinary,
+            SafetyClassification::AssessmentProtected,
+        ] {
+            let mut fixture = response();
+            fixture.sections[0].kind = SectionKind::ConstrainedResponse;
+            fixture.sections[0].capability = Capability::Constrain;
+            fixture.sections[0].safety = invalid_safety;
+            fixture.permitted_capabilities = [Capability::Constrain].into();
+            fixture.evidence.allowed_section_kinds = [SectionKind::ConstrainedResponse].into();
+            let invalid = planning_request(fixture);
+            assert_eq!(
+                plan_response(&invalid, &context, &citations),
+                Err(TutorError::InvalidEvidence)
+            );
+        }
+    }
+
+    #[test]
+    fn every_accepted_planner_fixture_validates_and_round_trips() {
+        let (context, citations) = governed_inputs();
+        let mut fixtures = vec![response()];
+
+        let mut constrained = response();
+        constrained.sections[0].kind = SectionKind::ConstrainedResponse;
+        constrained.sections[0].capability = Capability::Constrain;
+        constrained.sections[0].safety = SafetyClassification::ConstrainedRequired;
+        constrained.permitted_capabilities = [Capability::Constrain].into();
+        constrained.evidence.allowed_section_kinds = [SectionKind::ConstrainedResponse].into();
+        fixtures.push(constrained);
+
+        let mut refused = response();
+        refused.sections[0].kind = SectionKind::SafetyRefusal;
+        refused.sections[0].capability = Capability::Refuse;
+        refused.sections[0].safety = SafetyClassification::RefusalRequired;
+        refused.permitted_capabilities = [Capability::Refuse].into();
+        refused.evidence.allowed_section_kinds = [SectionKind::SafetyRefusal].into();
+        fixtures.push(refused);
+
+        for fixture in fixtures {
+            let planned = plan_response(&planning_request(fixture), &context, &citations).unwrap();
+            assert_eq!(planned.validate(), Ok(()));
+            let wire = serde_json::to_string(&planned).unwrap();
+            assert!(serde_json::from_str::<TutorResponse>(&wire).is_ok());
         }
     }
     #[test]
