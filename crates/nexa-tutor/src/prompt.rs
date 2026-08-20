@@ -206,6 +206,39 @@ impl fmt::Debug for PromptCompilationResult {
     }
 }
 
+impl PromptCompilationResult {
+    /// Revalidates all content-bearing compilation evidence without exposing it.
+    pub fn validate(&self) -> Result<(), PromptError> {
+        let envelope: CanonicalEnvelope =
+            serde_json::from_str(self.model_input.as_str()).map_err(|_| PromptError::Framing)?;
+        let request = PromptCompilationRequest {
+            contract_version: self.contract_version,
+            prompt_package_version: self.prompt_package_version,
+            context_builder_version: self.context_builder_version,
+            output_schema_version: self.output_schema_version,
+            limits: self.limits,
+            layers: envelope
+                .layers
+                .into_iter()
+                .map(|layer| PromptLayer {
+                    kind: layer.kind,
+                    classification: layer.classification,
+                    content: PromptContent(layer.content),
+                })
+                .collect(),
+        };
+        let actual = compile_prompt(&request)?;
+        if actual.manifest != self.manifest
+            || actual.compiled_bytes != self.compiled_bytes
+            || actual.replay_anchor != self.replay_anchor
+            || actual.model_input != self.model_input
+        {
+            return Err(PromptError::Framing);
+        }
+        Ok(())
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ResultWire {
@@ -223,35 +256,19 @@ struct ResultWire {
 impl<'de> Deserialize<'de> for PromptCompilationResult {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let w = ResultWire::deserialize(d)?;
-        let envelope: CanonicalEnvelope = serde_json::from_str(w.model_input.as_str())
-            .map_err(|_| serde::de::Error::custom("invalid prompt compilation evidence"))?;
-        let request = PromptCompilationRequest {
+        let value = Self {
             contract_version: w.contract_version,
             prompt_package_version: w.prompt_package_version,
             context_builder_version: w.context_builder_version,
             output_schema_version: w.output_schema_version,
             limits: w.limits,
-            layers: envelope
-                .layers
-                .into_iter()
-                .map(|x| PromptLayer {
-                    kind: x.kind,
-                    classification: x.classification,
-                    content: PromptContent(x.content),
-                })
-                .collect(),
+            manifest: w.manifest,
+            compiled_bytes: w.compiled_bytes,
+            replay_anchor: w.replay_anchor,
+            model_input: w.model_input,
         };
-        let actual = compile_prompt(&request).map_err(serde::de::Error::custom)?;
-        if actual.manifest != w.manifest
-            || actual.compiled_bytes != w.compiled_bytes
-            || actual.replay_anchor != w.replay_anchor
-            || actual.model_input != w.model_input
-        {
-            return Err(serde::de::Error::custom(
-                "invalid prompt compilation evidence",
-            ));
-        }
-        Ok(actual)
+        value.validate().map_err(serde::de::Error::custom)?;
+        Ok(value)
     }
 }
 

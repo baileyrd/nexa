@@ -39,6 +39,7 @@ This registry is the navigation and governance authority for Nexa system specifi
 | ADR-0021 | [Provider-neutral tutor response planning](adr/0021-provider-neutral-tutor-response-planning.md) | Accepted | Phase 4 structured caller content, citation binding, structural safety, and replay |
 | ADR-0022 | [Provider-neutral model invocation](adr/0022-provider-neutral-model-invocation.md) | Accepted | Phase 4 dependency-light invocation contracts, capability validation, redaction, and deterministic mock |
 | ADR-0023 | [Deterministic provider-neutral prompt compilation](adr/0023-deterministic-provider-neutral-prompt-compilation.md) | Accepted | Phase 4 closed prompt layers, canonical compilation, redaction, and replay evidence |
+| ADR-0024 | [Provider-neutral model-output admission](adr/0024-provider-neutral-model-output-admission.md) | Accepted | Phase 4 strict candidate decoding, trusted planning authority, planner admission, and redacted replay evidence |
 | ADR-0014 | [Learning-core composition and atomicity](adr/0014-learning-core-composition-and-atomicity.md) | Accepted | Phase 3 policy composition, unit of work, idempotency, and deferred durable adapters |
 | ADR-0008 | [Controlled 3D workspace migration and ownership](adr/0008-controlled-3d-workspace-migration.md) | Accepted | 3D library, viewer, and validator ownership after migration |
 
@@ -88,3 +89,4 @@ Directories 13 through 27 reserve future specification namespaces. A reserved di
 - [ADR-0021](adr/0021-provider-neutral-tutor-response-planning.md) records the narrow provider-neutral tutor-response planning boundary. It implements structural validation only and does not supersede NEXA-TUTOR-001, NEXA-KNOW-001, NEXA-STU-001, NEXA-PED-001, or NEXA-ASMT-001.
 - [ADR-0022](adr/0022-provider-neutral-model-invocation.md) records the synchronous provider-neutral invocation port and deterministic scripted adapter. It does not implement inference, provider integration, generation, or semantic safety.
 - [ADR-0023](adr/0023-deterministic-provider-neutral-prompt-compilation.md) records deterministic compilation of classified, bounded prompt layers into ADR-0022 `ModelInput`. It does not invoke a provider, accept model output, or provide semantic safety.
+- [ADR-0024](adr/0024-provider-neutral-model-output-admission.md) records strict admission of model-owned candidate sections into the existing ADR-0021 planner under caller-owned authority. It provides structural validation, not inference, truth, entailment, instructional quality, or semantic safety.

@@ -61,7 +61,7 @@ See [ADR-0010](../adr/0010-learning-state-evidence-and-persistence.md),
 
 ## Phase 4 — Add knowledge and tutor intelligence
 
-**Status:** In progress. The knowledge slices through deterministic citation resolution (ADRs 0015–0020), provider-neutral structured response planning (ADR-0021), provider-neutral model invocation contracts with a deterministic mock (ADR-0022), and deterministic provider-neutral prompt compilation (ADR-0023) are implemented. Learned reranking, partial truncation, provider tokenization, semantic citation fidelity and safety, generative tutor intelligence, concrete provider integration, networking, vector databases, and durable adapters remain unimplemented.
+**Status:** In progress. The knowledge slices through deterministic citation resolution (ADRs 0015–0020), provider-neutral structured response planning (ADR-0021), provider-neutral model invocation contracts with a deterministic mock (ADR-0022), deterministic provider-neutral prompt compilation (ADR-0023), and strict structural model-output admission (ADR-0024) are implemented. Learned reranking, partial truncation, provider tokenization, semantic safety and prompt-injection detection, factual correctness, grounding entailment and hallucination control, generative inference, concrete provider integration, response repair, tool execution, async/streaming, networking, vector databases, and durable adapters remain unimplemented.
 
 - Source ingestion and provenance
 - [x] deterministic governed lexical retrieval
@@ -70,7 +70,8 @@ See [ADR-0010](../adr/0010-learning-state-evidence-and-persistence.md),
 - context assembly and token budgeting
 - [x] provider-neutral structured tutor response planning contracts
 - provider-neutral model invocation contracts implemented; concrete provider integration and safety gates remain
-- [x] deterministic provider-neutral prompt compilation; inference and model-output admission remain deferred
+- [x] deterministic provider-neutral prompt compilation
+- [x] strict provider-neutral model-output decoding and structural admission; inference and semantic validation remain deferred
 
 Exit: grounded responses carry citations, confidence, and machine-validated tutor/behavior output.
 
@@ -117,3 +118,7 @@ ADR-0022 adds a synchronous provider-neutral invocation port, bounded untrusted 
 ### Phase 4 narrow increment: prompt compilation
 
 ADR-0023 adds closed classified prompt layers, canonical version-bound compilation into ADR-0022 `ModelInput`, byte accounting, redaction, and standalone replay evidence. It does **not** invoke a model, route providers, tokenize, decode or admit output, connect raw output to ADR-0021, establish semantic safety/grounding/entailment, repair responses, stream, network, or persist data.
+
+### Phase 4 narrow increment: model-output admission
+
+ADR-0024 adds a caller-owned planning-authority envelope, a closed candidate-section schema, exact descriptor/request/response/prompt binding, fail-closed output-limit handling, and redacted deterministic admission evidence before delegating to ADR-0021. It validates syntax, schema, identity, provenance, policy references, capabilities, citation references, and existing planner structure only. Inference and concrete providers; routing and tokenization; semantic safety and prompt-injection detection; factual correctness, entailment, and hallucination control; repair/regeneration; tool execution; async/streaming; networking; and persistence remain deferred.
