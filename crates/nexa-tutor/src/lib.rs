@@ -1,6 +1,8 @@
 //! Provider-neutral, synchronous response planning over caller-supplied text.
 #![forbid(unsafe_code)]
 
+pub mod model;
+
 use nexa_domain::{
     CitationId, CitationSetId, ClaimId, ContextPackageId, CourseId, EvidenceId,
     HybridRetrievalResultId, InteractionId, LessonId, ProtocolVersion, RetrievalQueryId, SessionId,
@@ -1599,7 +1601,7 @@ mod tests {
             .contains("provider.example"))
     }
     #[test]
-    fn implementation_has_no_generation_provider_or_async_surface() {
+    fn response_planner_has_no_generation_or_async_surface() {
         let source = include_str!("lib.rs");
         let prohibited = [
             ["req", "west"].concat(),
