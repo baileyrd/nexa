@@ -6,6 +6,14 @@ Work from a requirement, accepted ADR, approved/baseline specification, or focus
 
 Do not silently reconcile a conflict between documents or between documentation and implementation: report it and obtain review. Preserve reconstructed documents as source evidence. Do not rewrite, delete, or supersede their meaning without traceability through review, an ADR, or specification history.
 
+## ChatGPT–Codex coordination
+
+When development uses the human-coordinated ChatGPT and Codex workflow, follow [`CHATGPT_WORKFLOW.md`](CHATGPT_WORKFLOW.md).
+
+`CHATGPT_WORKFLOW.md` governs task handoffs, pull-request review, correction cycles, and workflow trigger messages. It does not supersede the repository authorities, engineering constraints, validation requirements, or completion rules in this file.
+
+Do not duplicate the complete workflow elsewhere in `AGENTS.md`.
+
 ## Repository map and boundaries
 
 - `crates/nexa-domain`, `nexa-events`, and `nexa-nbp` are the shared contract kernel. `nexa-domain` is the dependency-light leaf; events and NBP may depend on it, never on each other.
