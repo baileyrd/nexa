@@ -4,9 +4,9 @@
 
 This document defines the human-coordinated workflow used to develop Nexa with ChatGPT and Codex.
 
-- **ChatGPT** acts as the repository-aware planner, instruction author, pull-request reviewer, correction author, and merge gatekeeper.
-- **Codex** implements the bounded task described in the instruction prompt.
-- **The user** transfers instructions between ChatGPT and Codex, opens or updates pull requests, and provides the workflow trigger messages.
+- **ChatGPT** acts as the repository-aware planner, initial-instruction author, pull-request reviewer, correction-comment author, and merge gatekeeper. It posts implementation corrections as top-level `@codex` comments on the existing pull request.
+- **Codex** implements the bounded initial increment and, when invoked by a correction comment, commits and pushes corrections to that pull request's existing branch.
+- **The user** transfers only the initial new-increment instruction from ChatGPT to Codex, opens or updates pull requests, and provides the workflow trigger messages. The user does not transfer pull-request corrections into a separate Codex task.
 
 This document governs the collaboration process. It does not supersede `AGENTS.md`, accepted ADRs, approved specifications, the specification registry, or other repository authorities.
 
@@ -69,28 +69,38 @@ The review must include:
 
 - pull-request base and head branches;
 - the exact head commit;
-- the complete diff;
+- the complete actual diff and surrounding affected source;
 - the approved task scope and exclusions;
 - applicable specifications, ADRs, traceability, and architecture boundaries;
 - implementation and test correctness;
 - required documentation changes;
-- GitHub Actions and all required checks;
-- unresolved review comments;
+- GitHub Actions, with every required job and step associated with the exact reviewed head SHA;
+- reviews, comments, and unresolved review threads;
 - regressions, omissions, or unrelated changes.
 
-If the exact reviewed head is correct and all required checks are green, ChatGPT may merge it.
+If the exact reviewed head is correct, unchanged, and all required checks are green, ChatGPT may merge it.
 
-If corrections are required, ChatGPT must provide a complete correction prompt for Codex. The correction prompt must identify:
+If corrections are required, ChatGPT must prepare one complete, consolidated correction instruction and post it as a top-level, non-review comment on the existing pull request. It must begin with an implementation instruction such as:
 
-- each finding;
-- the required outcome;
-- relevant constraints and authorities;
-- prohibited scope expansion;
-- tests and validation that must be rerun.
+> `@codex Fix the merge-blocking findings below on this PR’s existing branch.`
+
+Do not use `@codex review` to request implementation. The correction comment must include:
+
+- the exact reviewed head SHA;
+- every finding and affected location;
+- the evidence and violated invariant, where applicable;
+- every required outcome;
+- scope constraints and exclusions;
+- required tests;
+- exact validation commands;
+- an explicit instruction to commit and push to the existing pull-request branch; and
+- an explicit prohibition against creating another branch or pull request.
+
+If connected GitHub access cannot post the comment, ChatGPT must give the user the exact, complete, paste-ready text, labeled **GitHub PR comment**, to paste into that existing pull request's comment box. It must not label or describe the fallback as a prompt for a separate Codex task or discussion.
 
 ### 5. Codex corrects the existing pull-request branch
 
-The user gives the correction prompt to Codex.
+The top-level `@codex` correction comment invokes Codex on the existing pull request. Corrections must not be routed through a separate Codex task.
 
 Codex must:
 
@@ -98,8 +108,13 @@ Codex must:
 2. Avoid unrelated changes.
 3. Rerun the applicable validation.
 4. Review the resulting diff.
-5. Commit the corrections.
-6. Report the new commit and validation results.
+5. Commit and push the corrections to the existing pull-request branch.
+6. Do not create another branch or pull request.
+7. Report the new commit and validation results.
+
+If Codex cannot push to the existing branch, verify branch ownership, permissions, head movement, and whether maintainers may modify it. Do not automatically create or recommend a replacement pull request. A replacement branch or pull request is permitted only after the existing branch is confirmed unusable and the user explicitly authorizes replacement.
+
+While a correction task is expected to update the branch, avoid manual rebases, force pushes, branch renames, and GitHub **Update branch** operations. Never discard user changes to restore branch ownership.
 
 The user then tells ChatGPT:
 
@@ -109,14 +124,16 @@ The user then tells ChatGPT:
 
 When the user says `branch updated`, ChatGPT must:
 
-1. Fetch the pull request’s new exact head.
+1. Re-fetch the pull request and record its new exact head.
 2. Confirm that every requested correction was addressed.
-3. Inspect all newly changed and affected code.
-4. Check for regressions or scope expansion.
-5. Verify required CI against the new exact head.
-6. Merge only when the exact reviewed commit is correct and green.
+3. Review the complete actual diff and surrounding affected source, including all newly changed and affected code.
+4. Inspect reviews, comments, and unresolved review threads.
+5. Check for regressions or scope expansion.
+6. Associate CI with the new exact head and inspect every required job and step.
+7. Immediately before merging, re-fetch the pull request and confirm that the head remains the exact reviewed commit, all required checks for that head are green, and no blocking feedback remains.
+8. Use expected-head protection when the GitHub merge operation supports it.
 
-If problems remain, ChatGPT provides another correction prompt and the inner loop repeats.
+If problems remain, ChatGPT posts another single consolidated top-level `@codex` correction comment on the same pull request, and the inner loop repeats. The user supplies `branch updated` after Codex updates the existing branch.
 
 ## Completion and continuation
 
@@ -138,7 +155,7 @@ This starts a new outer implementation loop based on the newly updated `main`.
 | --- | --- |
 | `next` | Inspect current `main` and produce the next bounded Codex instruction prompt. |
 | `PR created` | Locate and review the new pull request’s exact head, complete diff, approved scope, and CI. |
-| `branch updated` | Re-review the corrected pull-request head and either merge it or provide further corrections. |
+| `branch updated` | Re-fetch and re-review the corrected pull request's new exact head, complete affected surface, unresolved feedback, and head-specific CI; then merge or post one consolidated correction comment. |
 | `Is it green yet?` | Check the current pull request’s latest CI state without assuming previous results remain valid. |
 
 Trigger phrases are case-insensitive. Minor punctuation or formatting differences do not change their meaning.
@@ -160,6 +177,8 @@ If the pull-request head changes after approval or review, ChatGPT must review t
 
 A previously green check does not establish that a newer commit is green.
 
+Immediately before merging, ChatGPT must re-fetch the pull request and verify that its head is unchanged from the exact reviewed SHA, every required check and step is green for that SHA, and no blocking feedback remains. ChatGPT must never merge based on successful CI from an older SHA and must use expected-head protection when the merge operation supports it.
+
 ## Responsibility boundaries
 
 ChatGPT must not:
@@ -168,12 +187,15 @@ ChatGPT must not:
 - treat prior conversation history as more authoritative than the repository;
 - invent project status, requirements, or completed capabilities;
 - silently resolve conflicts between implementation and governing documents;
+- route corrections to an open pull request through a separate Codex task;
+- automatically create or recommend a replacement branch or pull request for correction work;
 - merge a commit different from the exact commit it reviewed.
 
 Codex must not:
 
 - expand the approved task without explicit authorization;
 - silently resolve conflicting requirements;
+- create another branch or pull request for correction work unless the existing branch is confirmed unusable and the user explicitly authorizes replacement;
 - treat reconstructed or draft material as approved authority unless the repository governance documents say so;
 - declare completion without running and reporting applicable validation.
 
