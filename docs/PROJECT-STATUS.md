@@ -37,7 +37,7 @@ The current Cargo workspace contains the contract kernel; avatar/3D; student, pe
 
 ## How to resume work
 
-1. Start from the current `main`; read `AGENTS.md`, the baseline, registry, roadmap, Phase 4 traceability, and ADR-0021.
+1. Start from the current `main`; read [`CHATGPT_WORKFLOW.md`](../CHATGPT_WORKFLOW.md), [`AGENTS.md`](../AGENTS.md), and [`PROJECT-STATUS.md`](PROJECT-STATUS.md), in that order, followed by the applicable baseline, registry, roadmap, traceability, specifications, and ADRs routed to by those files.
 2. Confirm PR #20 / `1d70ed351ca1012395196a4c6e41684ac77a759c` and the eventual ADR-0022 merge are present, then inspect intervening merges.
 3. Choose one evidence-backed incomplete Phase 4 increment after the provider-neutral invocation contract, state its exclusions, and identify specification/ADR/traceability impact before coding.
 4. Keep the PR independently reviewable, report documentation/implementation conflicts, and run every validation command in `AGENTS.md`.
