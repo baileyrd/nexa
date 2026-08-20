@@ -12,6 +12,7 @@ members = [
     "crates/nexa-nbp",
     "crates/nexa-pedagogy",
     "crates/nexa-student",
+    "crates/nexa-tutor",
     "tools/nexa-3d-validate",
 ]
 resolver = "2"

@@ -25,3 +25,14 @@
 | Model providers, networking, vector databases, and durable adapters | Explicitly deferred by ADR-0017 | Not implemented |
 
 Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministic vector retrieval are implemented. Learned/cross-encoder reranking, authority/freshness ranking, partial truncation, provider tokenization, semantic citation fidelity, tutor intelligence and tutor-response generation, provider integration, networking, vector databases, and durable adapters remain unimplemented. The reconstructed knowledge and tutor specifications retain their registry authority; these increments do not promote them.
+
+## Tutor-response planning increment
+
+| Requirement | Contract/evidence | Status |
+|---|---|---|
+| Provider-neutral structured tutor boundary | `nexa-tutor` request, closed sections/capabilities, and response package; ADR-0021 | Implemented slice |
+| Deterministic knowledge citation binding | Exact context/citation/query/hybrid identities and ordered claim/citation positions | Implemented slice |
+| Reference-only learner and pedagogy integration | Versioned `DecisionEvidence` with exact learner/course/lesson/session scope | Implemented slice |
+| Structural safety and assessment precedence | Closed classifications, fail-closed restrictions, constrained/refusal status | Implemented slice |
+| Standalone replay and privacy | SHA-256 replay anchor, validating decode, redacted content Debug | Implemented slice |
+| Semantic safety, entailment, prose/model generation, providers and durable adapters | Explicitly deferred by ADR-0021 | Not implemented |
