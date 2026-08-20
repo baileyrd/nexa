@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 
 pub mod admission;
+pub mod generation;
 pub mod model;
 pub mod prompt;
 
@@ -1435,6 +1436,40 @@ mod tests {
         }
     }
 
+    struct CountingProvider {
+        descriptor: crate::model::ModelDescriptor,
+        response: crate::model::ModelResponse,
+        calls: std::sync::atomic::AtomicUsize,
+    }
+
+    impl CountingProvider {
+        fn new(fixture: &AdmissionFixture) -> Self {
+            Self {
+                descriptor: fixture.descriptor.clone(),
+                response: fixture.response.clone(),
+                calls: std::sync::atomic::AtomicUsize::new(0),
+            }
+        }
+
+        fn calls(&self) -> usize {
+            self.calls.load(std::sync::atomic::Ordering::SeqCst)
+        }
+    }
+
+    impl crate::model::LanguageModelProvider for CountingProvider {
+        fn descriptor(&self) -> &crate::model::ModelDescriptor {
+            &self.descriptor
+        }
+
+        fn generate(
+            &self,
+            _request: &crate::model::ModelRequest,
+        ) -> Result<crate::model::ModelResponse, crate::model::ModelError> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(self.response.clone())
+        }
+    }
+
     #[test]
     fn admission_rejects_descriptor_request_and_response_identity_mismatches() {
         use crate::admission::AdmissionError;
@@ -1785,6 +1820,497 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(!serde_error.contains(secret));
+    }
+
+    #[test]
+    fn invocation_admission_is_single_attempt_and_matches_direct_admission() {
+        use crate::generation::invoke_and_admit_model_output;
+        use crate::model::{ScriptedModelProvider, ScriptedOutcome};
+        let f = admission_fixture();
+        let expected = f.admit().unwrap();
+        let provider = ScriptedModelProvider::new(
+            f.descriptor.clone(),
+            [
+                ScriptedOutcome::Response(f.response.clone()),
+                ScriptedOutcome::Error(crate::model::ModelErrorKind::Internal),
+            ],
+        )
+        .unwrap();
+        let actual = invoke_and_admit_model_output(
+            &provider,
+            &f.request,
+            &f.compilation,
+            &f.authority,
+            &f.context,
+            &f.citations,
+        )
+        .unwrap();
+        assert_eq!(actual, expected);
+        assert_eq!(provider.remaining(), 1);
+        assert_eq!(actual.evidence.provider_id, f.request.provider_id);
+        assert_eq!(actual.evidence.model_id, f.request.model_id);
+        assert_eq!(actual.evidence.invocation_id, f.request.invocation_id);
+        assert_eq!(
+            actual.evidence.prompt_compilation_replay_anchor,
+            f.compilation.replay_anchor
+        );
+        assert_eq!(actual.evidence.raw_output_sha256.len(), 64);
+        assert_eq!(
+            actual.evidence.tutor_response_replay_anchor,
+            actual.response.replay_anchor
+        );
+        assert_eq!(actual.evidence.admission_replay_anchor.len(), 64);
+    }
+
+    #[test]
+    fn invocation_admission_preflight_failures_do_not_consume_outcomes() {
+        use crate::admission::AdmissionError;
+        use crate::generation::{invoke_and_admit_model_output, InvocationAdmissionError};
+        use crate::model::ModelInput;
+        use nexa_domain::{
+            CitationSetId, ContextPackageId, HybridRetrievalResultId, ModelId, ModelProviderId,
+            RetrievalQueryId, StudentId,
+        };
+
+        // Each index isolates one host-controlled preflight class. The counting provider is
+        // intentionally non-validating so invalid descriptors can reach coordinator preflight.
+        for mutation in 0..33 {
+            let mut f = admission_fixture();
+            let expected = match mutation {
+                0 => {
+                    f.descriptor.contract_version = ProtocolVersion::new(2, 0);
+                    AdmissionError::InvalidDescriptorRequest
+                }
+                1 => {
+                    f.descriptor.capabilities.streaming = true;
+                    AdmissionError::InvalidDescriptorRequest
+                }
+                2 => {
+                    f.descriptor.capabilities.structured_output = false;
+                    AdmissionError::UnsupportedStructuredOutput
+                }
+                3 => {
+                    f.request.contract_version = ProtocolVersion::new(2, 0);
+                    AdmissionError::InvalidDescriptorRequest
+                }
+                4 => {
+                    f.request.provider_id = id(900, ModelProviderId::new);
+                    AdmissionError::InvalidDescriptorRequest
+                }
+                5 => {
+                    f.request.model_id = id(901, ModelId::new);
+                    AdmissionError::InvalidDescriptorRequest
+                }
+                6 => {
+                    f.request.required_capabilities.structured_output = false;
+                    AdmissionError::UnsupportedStructuredOutput
+                }
+                7 => {
+                    f.request.required_capabilities.tool_calling = true;
+                    AdmissionError::InvalidDescriptorRequest
+                }
+                8 => {
+                    f.request.maximum_output_tokens =
+                        f.descriptor.capabilities.maximum_output_tokens + 1;
+                    AdmissionError::InvalidDescriptorRequest
+                }
+                9 => {
+                    f.descriptor.capabilities.context_window_tokens =
+                        f.request.input.as_str().len() as u32;
+                    AdmissionError::InvalidDescriptorRequest
+                }
+                10..=13 => {
+                    match mutation {
+                        10 => f.compilation.contract_version = ProtocolVersion::new(2, 0),
+                        11 => f.compilation.prompt_package_version = ProtocolVersion::new(2, 0),
+                        12 => f.compilation.context_builder_version = ProtocolVersion::new(2, 0),
+                        _ => f.compilation.output_schema_version = ProtocolVersion::new(2, 0),
+                    }
+                    AdmissionError::UnsupportedVersion
+                }
+                14..=17 => {
+                    match mutation {
+                        14 => f.compilation.manifest[0].content_bytes += 1,
+                        15 => f.compilation.compiled_bytes += 1,
+                        16 => f.compilation.replay_anchor = "a".repeat(64),
+                        _ => f.compilation.model_input = ModelInput::new("tampered input").unwrap(),
+                    }
+                    AdmissionError::PromptAssociationReplayMismatch
+                }
+                18 => {
+                    f.request.input = ModelInput::new("exact input mismatch").unwrap();
+                    AdmissionError::PromptAssociationReplayMismatch
+                }
+                19 => {
+                    f.authority.response_policy_version = ProtocolVersion::new(2, 0);
+                    AdmissionError::UnsupportedVersion
+                }
+                20 => {
+                    f.authority.permitted_capabilities.clear();
+                    AdmissionError::PolicyPedagogySafetyCapability
+                }
+                21 => {
+                    f.authority.evidence.scope.student_id = id(902, StudentId::new);
+                    AdmissionError::PlanningEvidenceProvenance
+                }
+                22 => {
+                    f.authority.limits.maximum_sections = 0;
+                    AdmissionError::PlanningEvidenceProvenance
+                }
+                23 => {
+                    f.authority.context_package_id = id(903, ContextPackageId::new);
+                    AdmissionError::PlanningEvidenceProvenance
+                }
+                24 => {
+                    f.authority.citation_set_id = id(904, CitationSetId::new);
+                    AdmissionError::PlanningEvidenceProvenance
+                }
+                25 => {
+                    f.authority.hybrid_result_id = id(905, HybridRetrievalResultId::new);
+                    AdmissionError::PlanningEvidenceProvenance
+                }
+                26 => {
+                    f.authority.query_id = id(906, RetrievalQueryId::new);
+                    AdmissionError::PlanningEvidenceProvenance
+                }
+                27 => {
+                    f.authority.governance_policy_version = ProtocolVersion::new(2, 0);
+                    AdmissionError::UnsupportedVersion
+                }
+                28 => {
+                    f.authority.citation_policy_version = ProtocolVersion::new(2, 0);
+                    AdmissionError::UnsupportedVersion
+                }
+                29 => {
+                    f.context.governance_policy_version = ProtocolVersion::new(2, 0);
+                    AdmissionError::PlanningEvidenceProvenance
+                }
+                30 => {
+                    f.citations.citation_policy_version = ProtocolVersion::new(2, 0);
+                    AdmissionError::CitationGroundingReference
+                }
+                31 => {
+                    f.context.maximum_tokens = 0;
+                    AdmissionError::PlanningEvidenceProvenance
+                }
+                _ => {
+                    f.citations.maximum_citations = 0;
+                    AdmissionError::CitationGroundingReference
+                }
+            };
+            // Governance and citation policy versions are fixed to V1 by both evidence
+            // contracts, so a differing value is intrinsically invalid before association.
+            let provider = CountingProvider::new(&f);
+            assert_eq!(
+                invoke_and_admit_model_output(
+                    &provider,
+                    &f.request,
+                    &f.compilation,
+                    &f.authority,
+                    &f.context,
+                    &f.citations,
+                ),
+                Err(InvocationAdmissionError::Preflight(expected)),
+                "mutation {mutation}"
+            );
+            assert_eq!(provider.calls(), 0, "mutation {mutation}");
+        }
+    }
+
+    #[test]
+    fn invocation_errors_consume_one_outcome_and_preserve_closed_kind() {
+        use crate::generation::{invoke_and_admit_model_output, InvocationAdmissionError};
+        use crate::model::{ModelErrorKind, ScriptedModelProvider, ScriptedOutcome};
+        for kind in [
+            ModelErrorKind::Timeout,
+            ModelErrorKind::Unavailable,
+            ModelErrorKind::RateLimited,
+            ModelErrorKind::Internal,
+        ] {
+            let f = admission_fixture();
+            let provider = ScriptedModelProvider::new(
+                f.descriptor.clone(),
+                [
+                    ScriptedOutcome::Error(kind),
+                    ScriptedOutcome::Error(ModelErrorKind::Internal),
+                ],
+            )
+            .unwrap();
+            assert_eq!(
+                invoke_and_admit_model_output(
+                    &provider,
+                    &f.request,
+                    &f.compilation,
+                    &f.authority,
+                    &f.context,
+                    &f.citations,
+                ),
+                Err(InvocationAdmissionError::Invocation(kind))
+            );
+            assert_eq!(provider.remaining(), 1);
+        }
+    }
+
+    #[test]
+    fn post_invocation_admission_failure_consumes_one_outcome_without_retry() {
+        use crate::admission::AdmissionError;
+        use crate::generation::{invoke_and_admit_model_output, InvocationAdmissionError};
+        use crate::model::{FinishReason, ModelUsage, RawModelOutput};
+        use nexa_domain::{ModelId, ModelInvocationId};
+
+        for mutation in 0..19 {
+            let mut f = admission_fixture();
+            let expected = match mutation {
+                0 => {
+                    f.response.output = RawModelOutput::new("not json").unwrap();
+                    AdmissionError::MalformedSyntax
+                }
+                1 => {
+                    f.response.output =
+                        RawModelOutput::new("{\"candidate_schema_version\":\"1.0\",\"sections\":[")
+                            .unwrap();
+                    AdmissionError::MalformedSyntax
+                }
+                2 => {
+                    f.response.output = RawModelOutput::new(
+                        "{\"candidate_schema_version\":\"1.0\",\"sections\":[]} trailing",
+                    )
+                    .unwrap();
+                    AdmissionError::MalformedSyntax
+                }
+                3 => {
+                    f.set_candidate(
+                        json!({"candidate_schema_version":"2.0", "sections":[f.section.clone()]}),
+                    );
+                    AdmissionError::UnsupportedVersion
+                }
+                4 => {
+                    f.set_candidate(json!({"candidate_schema_version":"1.0", "sections":[f.section.clone()], "response_id":"model-owned"}));
+                    AdmissionError::InvalidCandidateSchema
+                }
+                5 => {
+                    f.section["unknown_section_field"] = json!(true);
+                    f.set_sections(vec![f.section.clone()]);
+                    AdmissionError::InvalidCandidateSchema
+                }
+                6 => {
+                    f.authority.limits.maximum_section_bytes = 3;
+                    AdmissionError::PlanningEvidenceProvenance
+                }
+                7 => {
+                    f.authority.limits.maximum_response_bytes =
+                        f.section["content"].as_str().unwrap().len();
+                    let mut second = f.section.clone();
+                    second["section_id"] = json!(Uuid::from_u128(910));
+                    f.set_sections(vec![f.section.clone(), second]);
+                    AdmissionError::PlanningEvidenceProvenance
+                }
+                8 => {
+                    f.authority.limits.maximum_sections = 1;
+                    let mut second = f.section.clone();
+                    second["section_id"] = json!(Uuid::from_u128(911));
+                    f.set_sections(vec![f.section.clone(), second]);
+                    AdmissionError::PlanningEvidenceProvenance
+                }
+                9 => {
+                    f.authority.limits.maximum_references_per_section = 1;
+                    f.section["claims"] = json!([Uuid::from_u128(912), Uuid::from_u128(913)]);
+                    f.set_sections(vec![f.section.clone()]);
+                    AdmissionError::PlanningEvidenceProvenance
+                }
+                10 => {
+                    f.section["capability"] = json!("summarize");
+                    f.set_sections(vec![f.section.clone()]);
+                    AdmissionError::PolicyPedagogySafetyCapability
+                }
+                11 => {
+                    f.section["scaffolding"] = json!(9);
+                    f.set_sections(vec![f.section.clone()]);
+                    AdmissionError::PolicyPedagogySafetyCapability
+                }
+                12 => {
+                    f.section["pedagogy_decision_evidence_id"] = json!(Uuid::from_u128(918));
+                    f.set_sections(vec![f.section.clone()]);
+                    AdmissionError::PolicyPedagogySafetyCapability
+                }
+                13 => {
+                    f.section["assessment_restriction"] = json!("withhold_answers");
+                    f.set_sections(vec![f.section.clone()]);
+                    AdmissionError::PolicyPedagogySafetyCapability
+                }
+                14 => {
+                    f.section["safety"] = json!("refusal_required");
+                    f.set_sections(vec![f.section.clone()]);
+                    AdmissionError::PolicyPedagogySafetyCapability
+                }
+                15 => {
+                    f.section["claims"] = json!([Uuid::from_u128(914)]);
+                    f.section["citations"] = json!([{"claim_id":Uuid::from_u128(914), "citation_id":Uuid::from_u128(915), "claim_position":1, "citation_position":1}]);
+                    f.set_sections(vec![f.section.clone()]);
+                    AdmissionError::CitationGroundingReference
+                }
+                16 => {
+                    f.response.invocation_id = id(916, ModelInvocationId::new);
+                    AdmissionError::ModelResponseIdentityMismatch
+                }
+                17 => {
+                    f.response.model_id = id(917, ModelId::new);
+                    AdmissionError::ModelResponseIdentityMismatch
+                }
+                _ => {
+                    f.response.contract_version = ProtocolVersion::new(2, 0);
+                    f.response.reported_usage = Some(ModelUsage {
+                        input_tokens: 1,
+                        output_tokens: 1,
+                    });
+                    AdmissionError::UnsupportedVersion
+                }
+            };
+            if mutation == 6 {
+                // The planner's response-size limit bounds the admitted raw section content;
+                // RawModelOutput's larger intrinsic wire cap cannot be bypassed by construction,
+                // so an over-cap raw response cannot exist for a LanguageModelProvider to return.
+            }
+            // Host-owned provenance mismatches are deliberately absent: shared preflight
+            // rejects them before invocation, as covered by the preflight table above.
+            let provider = CountingProvider::new(&f);
+            assert_eq!(provider.calls(), 0, "preflight mutation {mutation}");
+            assert_eq!(
+                invoke_and_admit_model_output(
+                    &provider,
+                    &f.request,
+                    &f.compilation,
+                    &f.authority,
+                    &f.context,
+                    &f.citations,
+                ),
+                Err(InvocationAdmissionError::Admission(expected)),
+                "mutation {mutation}"
+            );
+            assert_eq!(provider.calls(), 1, "mutation {mutation}");
+        }
+
+        let mut f = admission_fixture();
+        f.response.finish_reason = FinishReason::OutputLimit;
+        let provider = CountingProvider::new(&f);
+        assert_eq!(
+            invoke_and_admit_model_output(
+                &provider,
+                &f.request,
+                &f.compilation,
+                &f.authority,
+                &f.context,
+                &f.citations
+            ),
+            Err(InvocationAdmissionError::Admission(
+                AdmissionError::IncompleteOutput
+            ))
+        );
+        assert_eq!(provider.calls(), 1);
+    }
+
+    #[test]
+    fn invocation_admission_diagnostics_are_content_free() {
+        use crate::generation::{invoke_and_admit_model_output, InvocationAdmissionError};
+        use crate::model::{
+            ModelErrorKind, ModelInput, RawModelOutput, ScriptedModelProvider, ScriptedOutcome,
+        };
+
+        let f = admission_fixture();
+        let provider = ScriptedModelProvider::new(
+            f.descriptor.clone(),
+            [ScriptedOutcome::Error(ModelErrorKind::Unavailable)],
+        )
+        .unwrap();
+        let invocation_error = invoke_and_admit_model_output(
+            &provider,
+            &f.request,
+            &f.compilation,
+            &f.authority,
+            &f.context,
+            &f.citations,
+        )
+        .unwrap_err();
+        assert_eq!(
+            invocation_error,
+            InvocationAdmissionError::Invocation(ModelErrorKind::Unavailable)
+        );
+
+        let prompt_secret = "coordinator-distinctive-prompt-secret";
+        let mut preflight = admission_fixture();
+        preflight.request.input = ModelInput::new(prompt_secret).unwrap();
+        let preflight_provider = CountingProvider::new(&preflight);
+        let preflight_error = invoke_and_admit_model_output(
+            &preflight_provider,
+            &preflight.request,
+            &preflight.compilation,
+            &preflight.authority,
+            &preflight.context,
+            &preflight.citations,
+        )
+        .unwrap_err();
+
+        let context_secret = "coordinator-distinctive-governed-context-secret";
+        let mut governed = admission_fixture();
+        governed.context.content[0].content = context_secret.into();
+        let governed_provider = CountingProvider::new(&governed);
+        let governed_error = invoke_and_admit_model_output(
+            &governed_provider,
+            &governed.request,
+            &governed.compilation,
+            &governed.authority,
+            &governed.context,
+            &governed.citations,
+        )
+        .unwrap_err();
+
+        let raw_secret = "coordinator-distinctive-raw-output-secret";
+        let mut post = admission_fixture();
+        post.response.output =
+            RawModelOutput::new(format!("{{\"unknown\":\"{raw_secret}\"}}")).unwrap();
+        let post_provider = CountingProvider::new(&post);
+        let post_error = invoke_and_admit_model_output(
+            &post_provider,
+            &post.request,
+            &post.compilation,
+            &post.authority,
+            &post.context,
+            &post.citations,
+        )
+        .unwrap_err();
+
+        let secrets = [
+            prompt_secret,
+            raw_secret,
+            context_secret,
+            "distinctive private platform prompt",
+            "distinctive private learner prompt",
+            "Caller supplied explanation",
+        ];
+        let diagnostics = [
+            format!("{invocation_error}"),
+            format!("{invocation_error:?}"),
+            format!("{preflight_error}"),
+            format!("{preflight_error:?}"),
+            format!("{governed_error}"),
+            format!("{governed_error:?}"),
+            format!("{post_error}"),
+            format!("{post_error:?}"),
+            format!("{:?}", preflight.request),
+            format!("{:?}", post.response),
+            format!("{:?}", post.authority),
+            format!("{:?}", post.context),
+            format!("{:?}", governed.context),
+            format!("{:?}", post.citations),
+        ];
+        for diagnostic in diagnostics {
+            for secret in secrets {
+                assert!(!diagnostic.contains(secret), "diagnostic leaked {secret}");
+            }
+        }
+        assert_eq!(preflight_provider.calls(), 0);
+        assert_eq!(governed_provider.calls(), 0);
+        assert_eq!(post_provider.calls(), 1);
     }
 
     #[test]
