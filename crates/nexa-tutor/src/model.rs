@@ -2,7 +2,7 @@
 
 use nexa_domain::{ModelId, ModelInvocationId, ModelProviderId, ProtocolVersion};
 use serde::{Deserialize, Serialize};
-use std::{collections::VecDeque, fmt};
+use std::{collections::VecDeque, fmt, sync::Mutex};
 use thiserror::Error;
 
 pub const MODEL_INVOCATION_V1: ProtocolVersion = ProtocolVersion::new(1, 0);
@@ -17,7 +17,7 @@ pub enum PrivacyClass {
     RestrictedRemote,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ModelCapabilities {
     pub streaming: bool,
@@ -30,11 +30,41 @@ pub struct ModelCapabilities {
 
 impl ModelCapabilities {
     fn validate(&self) -> Result<(), ModelError> {
-        if self.context_window_tokens == 0 || self.maximum_output_tokens == 0 {
+        if self.streaming
+            || self.context_window_tokens == 0
+            || self.maximum_output_tokens == 0
+            || self.maximum_output_tokens > self.context_window_tokens
+        {
             Err(ModelError::new(ModelErrorKind::InvalidContract))
         } else {
             Ok(())
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for ModelCapabilities {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Wire {
+            streaming: bool,
+            structured_output: bool,
+            tool_calling: bool,
+            vision: bool,
+            context_window_tokens: u32,
+            maximum_output_tokens: u32,
+        }
+        let wire = Wire::deserialize(deserializer)?;
+        let value = Self {
+            streaming: wire.streaming,
+            structured_output: wire.structured_output,
+            tool_calling: wire.tool_calling,
+            vision: wire.vision,
+            context_window_tokens: wire.context_window_tokens,
+            maximum_output_tokens: wire.maximum_output_tokens,
+        };
+        value.validate().map_err(serde::de::Error::custom)?;
+        Ok(value)
     }
 }
 
@@ -191,6 +221,16 @@ impl ModelRequest {
         }
         if self.maximum_output_tokens == 0
             || self.maximum_output_tokens > descriptor.capabilities.maximum_output_tokens
+        {
+            return Err(ModelError::new(ModelErrorKind::ContextTooLarge));
+        }
+        // V1 deliberately treats each UTF-8 input byte as one provider-neutral context unit.
+        // This conservative evidence is checkable without selecting a provider tokenizer.
+        let input_units = u32::try_from(self.input.as_str().len())
+            .map_err(|_| ModelError::new(ModelErrorKind::ContextTooLarge))?;
+        if input_units
+            .checked_add(self.maximum_output_tokens)
+            .is_none_or(|total| total > descriptor.capabilities.context_window_tokens)
         {
             return Err(ModelError::new(ModelErrorKind::ContextTooLarge));
         }
@@ -368,9 +408,9 @@ impl ModelError {
     }
 }
 
-pub trait LanguageModelProvider {
+pub trait LanguageModelProvider: Send + Sync {
     fn descriptor(&self) -> &ModelDescriptor;
-    fn generate(&mut self, request: &ModelRequest) -> Result<ModelResponse, ModelError>;
+    fn generate(&self, request: &ModelRequest) -> Result<ModelResponse, ModelError>;
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -379,10 +419,10 @@ pub enum ScriptedOutcome {
     Error(ModelErrorKind),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ScriptedModelProvider {
     descriptor: ModelDescriptor,
-    outcomes: VecDeque<ScriptedOutcome>,
+    outcomes: Mutex<VecDeque<ScriptedOutcome>>,
 }
 
 impl ScriptedModelProvider {
@@ -393,12 +433,12 @@ impl ScriptedModelProvider {
         descriptor.validate()?;
         Ok(Self {
             descriptor,
-            outcomes: outcomes.into_iter().collect(),
+            outcomes: Mutex::new(outcomes.into_iter().collect()),
         })
     }
 
     pub fn remaining(&self) -> usize {
-        self.outcomes.len()
+        self.outcomes.lock().map_or(0, |outcomes| outcomes.len())
     }
 }
 
@@ -407,9 +447,14 @@ impl LanguageModelProvider for ScriptedModelProvider {
         &self.descriptor
     }
 
-    fn generate(&mut self, request: &ModelRequest) -> Result<ModelResponse, ModelError> {
+    fn generate(&self, request: &ModelRequest) -> Result<ModelResponse, ModelError> {
         request.validate_for(&self.descriptor)?;
-        match self.outcomes.pop_front() {
+        let outcome = self
+            .outcomes
+            .lock()
+            .map_err(|_| ModelError::new(ModelErrorKind::Internal))?
+            .pop_front();
+        match outcome {
             Some(ScriptedOutcome::Response(response)) => {
                 response.validate_for(request)?;
                 Ok(response)
@@ -482,7 +527,7 @@ mod tests {
 
     #[test]
     fn scripted_provider_is_fifo_and_deterministic() {
-        let mut provider = ScriptedModelProvider::new(
+        let provider = ScriptedModelProvider::new(
             descriptor(),
             [
                 ScriptedOutcome::Response(response(10, "first secret output")),
@@ -508,7 +553,7 @@ mod tests {
     fn invalid_request_does_not_consume_script() {
         let mut invalid = request(10);
         invalid.model_id = model_id(99);
-        let mut provider = ScriptedModelProvider::new(
+        let provider = ScriptedModelProvider::new(
             descriptor(),
             [ScriptedOutcome::Response(response(10, "output"))],
         )
@@ -544,6 +589,64 @@ mod tests {
             request.validate_for(&descriptor()).unwrap_err().kind,
             ModelErrorKind::UnsupportedCapability
         );
+    }
+
+    #[test]
+    fn capabilities_wire_enforces_all_v1_intrinsic_invariants() {
+        let valid = serde_json::json!({
+            "streaming": false,
+            "structured_output": false,
+            "tool_calling": false,
+            "vision": false,
+            "context_window_tokens": 8,
+            "maximum_output_tokens": 4
+        });
+        assert!(serde_json::from_value::<ModelCapabilities>(valid.clone()).is_ok());
+
+        for invalid in [
+            serde_json::json!({ "streaming": true }),
+            serde_json::json!({ "context_window_tokens": 0 }),
+            serde_json::json!({ "maximum_output_tokens": 0 }),
+            serde_json::json!({ "context_window_tokens": 3, "maximum_output_tokens": 4 }),
+        ] {
+            let mut wire = valid.clone();
+            for (key, value) in invalid.as_object().unwrap() {
+                wire[key] = value.clone();
+            }
+            assert!(serde_json::from_value::<ModelCapabilities>(wire).is_err());
+        }
+    }
+
+    #[test]
+    fn over_context_request_does_not_consume_scripted_work() {
+        let mut small_descriptor = descriptor();
+        small_descriptor.capabilities.context_window_tokens = 20;
+        small_descriptor.capabilities.maximum_output_tokens = 10;
+        let provider = ScriptedModelProvider::new(
+            small_descriptor,
+            [ScriptedOutcome::Response(response(10, "output"))],
+        )
+        .unwrap();
+        let mut over_context = request(10);
+        over_context.input = ModelInput::new("eleven bytes").unwrap();
+        over_context.maximum_output_tokens = 10;
+
+        assert_eq!(
+            provider.generate(&over_context).unwrap_err().kind,
+            ModelErrorKind::ContextTooLarge
+        );
+        assert_eq!(provider.remaining(), 1);
+    }
+
+    #[test]
+    fn provider_port_supports_shared_send_sync_trait_objects() {
+        fn assert_send_sync<T: Send + Sync + ?Sized>() {}
+        assert_send_sync::<dyn LanguageModelProvider>();
+
+        let provider: std::sync::Arc<dyn LanguageModelProvider> = std::sync::Arc::new(
+            ScriptedModelProvider::new(descriptor(), std::iter::empty()).unwrap(),
+        );
+        let _shared = std::sync::Arc::clone(&provider);
     }
 
     #[test]

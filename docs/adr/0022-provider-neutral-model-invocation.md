@@ -29,14 +29,23 @@ versions, and identity mismatches fail before an adapter consumes work. A respon
 bound identities and contains bounded opaque output, a closed finish reason, and optional
 adapter-reported usage. Usage is evidence, not independently verified tokenizer truth.
 
+V1 capability decoding enforces non-zero limits, requires the maximum output limit not to exceed
+the context window, and rejects streaming advertisement because streaming execution is deferred.
+Until provider tokenization is introduced, request validation uses a deterministic conservative
+budget: every UTF-8 input byte consumes one context unit, and those units plus the requested output
+tokens must fit within `context_window_tokens`. This provider-neutral unit is preflight evidence,
+not a claim about a provider's tokenizer; a concrete adapter may enforce a stricter tokenized limit.
+
 Input and output remain untrusted and are redacted from `Debug` and errors. Successful invocation
 does not create or validate a `TutorResponse`; no implicit conversion joins these contracts. The
 scripted adapter exists for deterministic testing without inference, clocks, randomness,
 filesystem access, or networking. Invalid requests do not consume its next scripted outcome.
 
-The synchronous port is the dependency-light semantic boundary, not a production execution
-strategy. Concrete adapters may wrap it from composition layers, and a later decision may add an
-asynchronous execution port without changing V1 wire representations.
+The synchronous, `Send + Sync` port is the dependency-light semantic boundary, uses shared access,
+and is not a production execution strategy. Adapters own any synchronization required for mutable
+state; the scripted adapter synchronizes its FIFO internally. Concrete adapters may wrap the port
+from composition layers, and a later decision may add an asynchronous execution port without
+changing V1 wire representations.
 
 ## Consequences and deferrals
 
