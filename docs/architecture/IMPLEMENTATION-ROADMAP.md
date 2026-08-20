@@ -61,7 +61,7 @@ See [ADR-0010](../adr/0010-learning-state-evidence-and-persistence.md),
 
 ## Phase 4 — Add knowledge and tutor intelligence
 
-**Status:** In progress. The knowledge slices through deterministic citation resolution (ADRs 0015–0020), provider-neutral structured response planning (ADR-0021), provider-neutral model invocation contracts with a deterministic mock (ADR-0022), deterministic provider-neutral prompt compilation (ADR-0023), strict structural model-output admission (ADR-0024), and single-attempt invocation-to-admission composition (ADR-0025) are implemented. Learned reranking, partial truncation, provider tokenization, semantic safety and prompt-injection detection, factual correctness, grounding entailment and hallucination control, generative inference, concrete provider integration, provider selection/routing/fallback, privacy filtering and remote-provider authorization, response repair/regeneration, tool execution, async/streaming, networking, vector databases, persistence, and durable adapters remain unimplemented.
+**Status:** In progress. The knowledge slices through deterministic citation resolution (ADRs 0015–0020), provider-neutral structured response planning (ADR-0021), provider-neutral model invocation contracts with a deterministic mock (ADR-0022), deterministic provider-neutral prompt compilation (ADR-0023), strict structural model-output admission (ADR-0024), single-attempt invocation-to-admission composition (ADR-0025), and provider-neutral in-memory registry mechanics (ADR-0026) are implemented. Learned reranking, partial truncation, provider tokenization, semantic safety and prompt-injection detection, factual correctness, grounding entailment and hallucination control, generative inference, concrete provider integration, provider selection/routing/local-first preference/fallback, privacy filtering and remote-provider authorization, response repair/regeneration, tool execution, async/streaming, networking, vector databases, persistence, and durable adapters remain unimplemented.
 
 - Source ingestion and provenance
 - [x] deterministic governed lexical retrieval
@@ -73,6 +73,7 @@ See [ADR-0010](../adr/0010-learning-state-evidence-and-persistence.md),
 - [x] deterministic provider-neutral prompt compilation
 - [x] strict provider-neutral model-output decoding and structural admission; inference and semantic validation remain deferred
 - [x] deterministic synchronous single-attempt invocation-to-admission composition; concrete providers, selection/routing/fallback, retry, repair, and semantic validation remain deferred
+- [x] immutable provider-neutral model registry with validated exact lookup and deterministic inventory; ADR-0025 still requires an explicitly supplied provider
 
 Exit: grounded responses carry citations, confidence, and machine-validated tutor/behavior output.
 
@@ -127,3 +128,7 @@ ADR-0024 adds a caller-owned planning-authority envelope, a closed candidate-sec
 ### Phase 4 narrow increment: invocation-to-admission composition
 
 ADR-0025 adds shared host-input preflight, exactly one synchronous call to a caller-supplied provider, and reuse of ADR-0024 admission with closed preflight, invocation, and admission failures. It does not complete the Phase 4 exit gate. Actual inference and concrete providers; selection, routing, fallback, provider tokenization, and privacy filtering/authorization; semantic safety, correctness, entailment, and prompt-injection resistance; repair/regeneration; async/streaming; networking; and persistence remain deferred.
+
+### Phase 4 narrow increment: model registry mechanics
+
+ADR-0026 adds atomic validated construction of an immutable in-memory registry, canonical provider-then-model inventory, and exact shared-provider resolution with no invocation. ADR-0025 still accepts an explicitly supplied provider. Selection, routing, local-first preference, fallback, privacy authorization, concrete provider integration, inference, partial truncation, and the other Phase 4 deferrals remain unimplemented; NEXA-TUTOR-001 remains Baseline Draft.

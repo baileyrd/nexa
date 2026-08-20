@@ -24,7 +24,7 @@
 | Semantic citation fidelity and tutor behavior | Explicitly deferred by ADR-0020 | Not implemented |
 | Model providers, networking, vector databases, and durable adapters | Explicitly deferred by ADR-0017 | Not implemented |
 
-Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministic vector retrieval are implemented, as are deterministic prompt compilation, strict structural output admission, and single-attempt invocation-to-admission composition. Learned/cross-encoder reranking, authority/freshness ranking, partial truncation, provider tokenization, semantic citation fidelity/entailment, semantic safety, tutor inference and concrete providers, networking, vector databases, and durable adapters remain unimplemented. The reconstructed knowledge and tutor specifications retain their registry authority; these increments do not promote them. The known inconsistency between implemented ingestion/context evidence here and unchecked corresponding roadmap bullets is intentionally not resolved by this increment.
+Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministic vector retrieval are implemented, as are deterministic prompt compilation, strict structural output admission, single-attempt invocation-to-admission composition, and provider-neutral in-memory registry mechanics. Learned/cross-encoder reranking, authority/freshness ranking, partial truncation, provider selection/routing/local-first preference/fallback, privacy authorization, provider tokenization, semantic citation fidelity/entailment, semantic safety, tutor inference and concrete providers, networking, vector databases, and durable adapters remain unimplemented. ADR-0025 still requires an explicitly supplied provider. The reconstructed knowledge and tutor specifications retain their registry authority; NEXA-TUTOR-001 remains Baseline Draft and these increments do not promote it. The known inconsistency between implemented ingestion/context evidence here and unchecked corresponding roadmap bullets is intentionally not resolved by this increment.
 
 ## Tutor-response planning increment
 
@@ -82,3 +82,13 @@ Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministi
 | Closed, content-free failure separation | `InvocationAdmissionError::{Preflight, Invocation, Admission}` and redaction tests | Implemented slice |
 | Deterministic mock evidence without provider selection | Caller-supplied `ScriptedModelProvider` tests retain the second outcome | Implemented slice |
 | Inference/providers, selection/routing/fallback, tokenization, privacy authorization, semantic safety/correctness, retry/repair/regeneration, async/streaming, networking/persistence | Explicitly deferred by ADR-0025; partial truncation remains deferred | Not implemented |
+
+## Model registry mechanics
+
+| Requirement | Evidence | Status |
+|---|---|---|
+| Atomic validation and duplicate rejection | `ModelRegistry::try_from_providers`; ADR-0022 descriptor validation; focused invalid/version/duplicate tests | Implemented slice |
+| Deterministic read-only inventory | Canonical `ModelProviderId`, then `ModelId`, ordering independent of insertion | Implemented slice |
+| Exact shared-provider resolution | Exact-pair lookup, missing-pair errors, and `Arc::ptr_eq` identity evidence | Implemented slice |
+| No provider consumption and content-free diagnostics | Scripted FIFO preservation, counting-provider boundary, and redaction tests; ADR-0026 | Implemented slice |
+| Selection, routing, local-first preference, fallback, privacy authorization, concrete providers, and inference | Explicitly deferred by ADR-0026; ADR-0025 continues to require an explicitly supplied provider | Not implemented |

@@ -5,6 +5,7 @@ pub mod admission;
 pub mod generation;
 pub mod model;
 pub mod prompt;
+pub mod registry;
 
 use nexa_domain::{
     CitationId, CitationSetId, ClaimId, ContextPackageId, CourseId, EvidenceId,
