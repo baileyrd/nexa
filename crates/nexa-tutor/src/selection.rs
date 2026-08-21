@@ -159,8 +159,12 @@ pub fn select_model(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{ModelCapabilities, ModelRequest, ScriptedModelProvider, ScriptedOutcome};
+    use crate::model::{
+        ModelCapabilities, ModelError, ModelRequest, ModelResponse, ScriptedModelProvider,
+        ScriptedOutcome,
+    };
     use nexa_domain::{ModelId, ModelProviderId};
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use uuid::Uuid;
 
     fn provider_id(value: u128) -> ModelProviderId {
@@ -194,6 +198,28 @@ mod tests {
     }
     fn provider(descriptor: ModelDescriptor) -> Arc<dyn LanguageModelProvider> {
         Arc::new(ScriptedModelProvider::new(descriptor, std::iter::empty()).unwrap())
+    }
+
+    struct InconsistentDescriptorProvider {
+        registered: ModelDescriptor,
+        changed: ModelDescriptor,
+        descriptor_calls: AtomicUsize,
+        generate_calls: AtomicUsize,
+    }
+
+    impl LanguageModelProvider for InconsistentDescriptorProvider {
+        fn descriptor(&self) -> &ModelDescriptor {
+            if self.descriptor_calls.fetch_add(1, Ordering::SeqCst) < 2 {
+                &self.registered
+            } else {
+                &self.changed
+            }
+        }
+
+        fn generate(&self, _request: &ModelRequest) -> Result<ModelResponse, ModelError> {
+            self.generate_calls.fetch_add(1, Ordering::SeqCst);
+            Err(ModelError::new(ModelErrorKind::Internal))
+        }
     }
     fn requirements(
         capabilities: (bool, bool, bool),
@@ -243,6 +269,18 @@ mod tests {
             &serde_json::to_string(&unsupported).unwrap()
         )
         .is_err());
+
+        let mut zero_output = valid.clone();
+        zero_output.maximum_output_tokens = 0;
+        assert_eq!(
+            zero_output.validate(),
+            Err(ModelSelectionError::InvalidRequirements)
+        );
+        assert!(serde_json::from_str::<ModelSelectionRequirements>(
+            &serde_json::to_string(&zero_output).unwrap()
+        )
+        .is_err());
+
         for privacy in [
             vec![],
             vec![PrivacyClass::LocalOnly, PrivacyClass::LocalOnly],
@@ -326,6 +364,24 @@ mod tests {
                 model_id(2)
             );
         }
+        let output_limited = provider(descriptor(
+            1,
+            1,
+            PrivacyClass::LocalOnly,
+            (false, false, false),
+            20,
+            2,
+        ));
+        assert_eq!(
+            select(
+                vec![output_limited],
+                "x",
+                &requirements((false, false, false), 3, vec![PrivacyClass::LocalOnly])
+            )
+            .unwrap_err(),
+            ModelSelectionError::NoEligibleModel
+        );
+
         let limited = provider(descriptor(
             1,
             1,
@@ -334,12 +390,6 @@ mod tests {
             5,
             2,
         ));
-        assert!(select(
-            vec![Arc::clone(&limited)],
-            "abc",
-            &requirements((false, false, false), 3, vec![PrivacyClass::LocalOnly])
-        )
-        .is_err());
         assert!(select(
             vec![Arc::clone(&limited)],
             "abc",
@@ -432,7 +482,49 @@ mod tests {
                 &requirements((false, false, false), 1, vec![privacy])
             )
             .is_ok());
+            let omitted = match privacy {
+                PrivacyClass::LocalOnly => PrivacyClass::ApprovedRemote,
+                PrivacyClass::ApprovedRemote | PrivacyClass::RestrictedRemote => {
+                    PrivacyClass::LocalOnly
+                }
+            };
+            let only = provider(descriptor(3, 3, privacy, (false, false, false), 20, 10));
+            assert_eq!(
+                select(
+                    vec![only],
+                    "x",
+                    &requirements((false, false, false), 1, vec![omitted])
+                )
+                .unwrap_err(),
+                ModelSelectionError::NoEligibleModel
+            );
         }
+    }
+
+    #[test]
+    fn inconsistent_descriptor_reference_fails_closed_without_generation() {
+        let registered = descriptor(7, 7, PrivacyClass::LocalOnly, (false, false, false), 20, 10);
+        let mut changed = registered.clone();
+        changed.privacy_class = PrivacyClass::ApprovedRemote;
+        let inconsistent = Arc::new(InconsistentDescriptorProvider {
+            registered,
+            changed,
+            descriptor_calls: AtomicUsize::new(0),
+            generate_calls: AtomicUsize::new(0),
+        });
+        let handle: Arc<dyn LanguageModelProvider> = inconsistent.clone();
+        let registry = ModelRegistry::try_from_providers([handle]).unwrap();
+
+        assert_eq!(
+            select_model(
+                &registry,
+                &ModelInput::new("x").unwrap(),
+                &requirements((false, false, false), 1, vec![PrivacyClass::LocalOnly])
+            )
+            .unwrap_err(),
+            ModelSelectionError::RegistryInconsistency
+        );
+        assert_eq!(inconsistent.generate_calls.load(Ordering::SeqCst), 0);
     }
 
     #[test]
