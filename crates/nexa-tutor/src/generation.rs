@@ -4,6 +4,9 @@ use crate::admission::{
     admit_model_output_after_preflight, validate_admission_preflight, AdmissionError,
     AdmissionResult, TrustedPlanningAuthority,
 };
+use crate::authorization::{
+    select_authorized_available_remote_model, RemoteAuthorizationError, RemoteModelAuthorization,
+};
 use crate::availability::{
     select_available_model, ModelAvailabilityError, ModelAvailabilitySnapshot,
 };
@@ -49,6 +52,15 @@ pub enum AvailableLocalInvocationAdmissionError {
     #[error("available local-only model selection failed")]
     AvailabilitySelection(ModelAvailabilityError),
     #[error("selected available model invocation or admission failed")]
+    InvocationAdmission(InvocationAdmissionError),
+}
+
+/// Closed failure categories for authorized, availability-gated remote execution.
+#[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
+pub enum AuthorizedAvailableRemoteInvocationAdmissionError {
+    #[error("authorized available remote model selection failed")]
+    AuthorizationAvailabilitySelection(RemoteAuthorizationError),
+    #[error("selected authorized available remote model invocation or admission failed")]
     InvocationAdmission(InvocationAdmissionError),
 }
 
@@ -187,4 +199,46 @@ pub fn select_available_local_model_invoke_and_admit(
         citations,
     )
     .map_err(AvailableLocalInvocationAdmissionError::InvocationAdmission)
+}
+
+/// Selects one explicitly authorized, caller-marked-available remote model, invokes it once, and
+/// admits its exact response.
+#[allow(clippy::too_many_arguments)]
+pub fn select_authorized_available_remote_model_invoke_and_admit(
+    registry: &ModelRegistry,
+    invocation_id: ModelInvocationId,
+    requirements: &ModelSelectionRequirements,
+    availability: &ModelAvailabilitySnapshot,
+    authorization: &RemoteModelAuthorization,
+    compilation: &PromptCompilationResult,
+    authority: &TrustedPlanningAuthority,
+    context: &ContextPackage,
+    citations: &CitationResult,
+) -> Result<AdmissionResult, AuthorizedAvailableRemoteInvocationAdmissionError> {
+    let selected = select_authorized_available_remote_model(
+        registry,
+        requirements,
+        availability,
+        authorization,
+        compilation,
+    )
+    .map_err(
+        AuthorizedAvailableRemoteInvocationAdmissionError::AuthorizationAvailabilitySelection,
+    )?;
+    let request = request_for_selected(
+        invocation_id,
+        &selected.descriptor,
+        requirements,
+        compilation,
+    );
+
+    invoke_and_admit_model_output(
+        selected.provider.as_ref(),
+        &request,
+        compilation,
+        authority,
+        context,
+        citations,
+    )
+    .map_err(AuthorizedAvailableRemoteInvocationAdmissionError::InvocationAdmission)
 }
