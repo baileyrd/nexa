@@ -9,7 +9,7 @@ use crate::{
 };
 use nexa_domain::{ModelId, ModelProviderId, ProtocolVersion};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt};
 use thiserror::Error;
 
 pub const MODEL_AVAILABILITY_V1: ProtocolVersion = ProtocolVersion::new(1, 0);
@@ -40,6 +40,9 @@ pub struct ModelAvailabilitySnapshot {
 impl ModelAvailabilitySnapshot {
     /// Constructs a valid snapshot, canonicalizing provider/model order.
     pub fn new(mut entries: Vec<ModelAvailabilityEntry>) -> Result<Self, ModelAvailabilityError> {
+        if entries.len() > MAX_MODEL_AVAILABILITY_ENTRIES {
+            return Err(ModelAvailabilityError::InvalidAvailability);
+        }
         entries.sort_by_key(|entry| (entry.provider_id, entry.model_id));
         let snapshot = Self {
             contract_version: MODEL_AVAILABILITY_V1,
@@ -69,16 +72,58 @@ impl ModelAvailabilitySnapshot {
 
 impl<'de> Deserialize<'de> for ModelAvailabilitySnapshot {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct BoundedEntries(Vec<ModelAvailabilityEntry>);
+
+        impl<'de> Deserialize<'de> for BoundedEntries {
+            fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+                struct EntriesVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for EntriesVisitor {
+                    type Value = BoundedEntries;
+
+                    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                        write!(
+                            formatter,
+                            "at most {MAX_MODEL_AVAILABILITY_ENTRIES} model availability entries"
+                        )
+                    }
+
+                    fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                        self,
+                        mut sequence: A,
+                    ) -> Result<Self::Value, A::Error> {
+                        let mut entries = Vec::with_capacity(
+                            sequence
+                                .size_hint()
+                                .unwrap_or(0)
+                                .min(MAX_MODEL_AVAILABILITY_ENTRIES),
+                        );
+                        while let Some(entry) = sequence.next_element()? {
+                            if entries.len() == MAX_MODEL_AVAILABILITY_ENTRIES {
+                                return Err(serde::de::Error::custom(
+                                    ModelAvailabilityError::InvalidAvailability,
+                                ));
+                            }
+                            entries.push(entry);
+                        }
+                        Ok(BoundedEntries(entries))
+                    }
+                }
+
+                deserializer.deserialize_seq(EntriesVisitor)
+            }
+        }
+
         #[derive(Deserialize)]
         #[serde(deny_unknown_fields)]
         struct Wire {
             contract_version: ProtocolVersion,
-            entries: Vec<ModelAvailabilityEntry>,
+            entries: BoundedEntries,
         }
         let wire = Wire::deserialize(deserializer)?;
         let snapshot = Self {
             contract_version: wire.contract_version,
-            entries: wire.entries,
+            entries: wire.entries.0,
         };
         snapshot.validate().map_err(serde::de::Error::custom)?;
         Ok(snapshot)
@@ -251,6 +296,14 @@ mod tests {
             r#"{"contract_version":{"major":1,"minor":0},"entries":[],"diagnostic":"private"}"#
         )
         .is_err());
+        assert!(serde_json::from_str::<ModelAvailabilitySnapshot>(
+            r#"{"contract_version":{"major":1,"minor":0},"entries":[{"provider_id":"00000000-0000-0000-0000-000000000001","model_id":"00000000-0000-0000-0000-000000000001","state":"available","diagnostic":"private"}]}"#
+        )
+        .is_err());
+        assert!(serde_json::from_str::<ModelAvailabilitySnapshot>(
+            r#"{"contract_version":{"major":1,"minor":0},"entries":[{"provider_id":"00000000-0000-0000-0000-000000000001","model_id":"00000000-0000-0000-0000-000000000001","state":"unknown"}]}"#
+        )
+        .is_err());
         for entries in [
             vec![
                 entry(1, 1, ModelAvailabilityState::Available),
@@ -288,6 +341,24 @@ mod tests {
             &serde_json::to_string(&over_limit).unwrap()
         )
         .is_err());
+        let at_limit = ModelAvailabilitySnapshot::new(
+            (1..=MAX_MODEL_AVAILABILITY_ENTRIES as u128)
+                .map(|id| entry(id, 1, ModelAvailabilityState::Available))
+                .collect(),
+        )
+        .unwrap();
+        assert_eq!(at_limit.entries.len(), MAX_MODEL_AVAILABILITY_ENTRIES);
+        assert_eq!(
+            serde_json::from_str::<ModelAvailabilitySnapshot>(
+                &serde_json::to_string(&at_limit).unwrap()
+            )
+            .unwrap(),
+            at_limit
+        );
+        assert_eq!(
+            ModelAvailabilitySnapshot::new(over_limit.entries),
+            Err(ModelAvailabilityError::InvalidAvailability)
+        );
     }
 
     #[test]
@@ -392,23 +463,52 @@ mod tests {
         assert_eq!(next_script.remaining(), 1);
         assert_eq!(local_script.remaining(), 1);
 
-        let (_, limited) = scripted(descriptor(
-            9,
+        let (remote_script, remote) = scripted(descriptor(
+            3,
             1,
-            PrivacyClass::LocalOnly,
-            (false, false, false),
+            PrivacyClass::ApprovedRemote,
+            (true, true, true),
             100,
             20,
         ));
-        let limited_registry = ModelRegistry::try_from_providers([limited]).unwrap();
-        let limited_snapshot =
-            ModelAvailabilitySnapshot::new(vec![entry(9, 1, ModelAvailabilityState::Available)])
-                .unwrap();
+        let remote_registry = ModelRegistry::try_from_providers([remote]).unwrap();
+        assert_eq!(
+            select_available_model(
+                &remote_registry,
+                &ModelInput::new("x").unwrap(),
+                &requirements((false, false, false), 1, vec![PrivacyClass::LocalOnly]),
+                &ModelAvailabilitySnapshot::new(vec![entry(
+                    3,
+                    1,
+                    ModelAvailabilityState::Available
+                )])
+                .unwrap(),
+            )
+            .unwrap_err(),
+            ModelAvailabilityError::Selection(ModelSelectionError::NoEligibleModel)
+        );
+        assert_eq!(remote_script.remaining(), 1);
+
         for (caps, output, input) in [
             ((false, true, false), 1, "x"),
             ((false, false, false), 21, "x"),
             ((false, false, false), 2, &"x".repeat(99)),
         ] {
+            let (limited_script, limited) = scripted(descriptor(
+                9,
+                1,
+                PrivacyClass::LocalOnly,
+                (false, false, false),
+                100,
+                20,
+            ));
+            let limited_registry = ModelRegistry::try_from_providers([limited]).unwrap();
+            let limited_snapshot = ModelAvailabilitySnapshot::new(vec![entry(
+                9,
+                1,
+                ModelAvailabilityState::Available,
+            )])
+            .unwrap();
             assert_eq!(
                 select_available_model(
                     &limited_registry,
@@ -419,8 +519,61 @@ mod tests {
                 .unwrap_err(),
                 ModelAvailabilityError::Selection(ModelSelectionError::NoEligibleModel)
             );
+            assert_eq!(limited_script.remaining(), 1);
         }
         assert_eq!(MODEL_SELECTION_V1, ProtocolVersion::new(1, 0));
+    }
+
+    #[test]
+    fn invalid_requirements_fail_with_nested_errors_without_consumption() {
+        let (local_script, local) = scripted(descriptor(
+            1,
+            1,
+            PrivacyClass::LocalOnly,
+            (false, false, false),
+            20,
+            10,
+        ));
+        let (remote_script, remote) = scripted(descriptor(
+            2,
+            1,
+            PrivacyClass::ApprovedRemote,
+            (false, false, false),
+            20,
+            10,
+        ));
+        let registry = ModelRegistry::try_from_providers([local, remote]).unwrap();
+        let snapshot = ModelAvailabilitySnapshot::new(vec![
+            entry(1, 1, ModelAvailabilityState::Available),
+            entry(2, 1, ModelAvailabilityState::Available),
+        ])
+        .unwrap();
+        let valid = requirements((false, false, false), 1, vec![PrivacyClass::LocalOnly]);
+        let mut unsupported = valid.clone();
+        unsupported.contract_version = ProtocolVersion::new(2, 0);
+        let mut invalid = valid;
+        invalid.maximum_output_tokens = 0;
+
+        for (requirements, expected) in [
+            (invalid, ModelSelectionError::InvalidRequirements),
+            (
+                unsupported,
+                ModelSelectionError::UnsupportedRequirementsVersion,
+            ),
+        ] {
+            assert_eq!(
+                select_available_model(
+                    &registry,
+                    &ModelInput::new("private prompt").unwrap(),
+                    &requirements,
+                    &snapshot,
+                )
+                .unwrap_err(),
+                ModelAvailabilityError::Selection(expected)
+            );
+            assert_eq!(local_script.remaining(), 1);
+            assert_eq!(remote_script.remaining(), 1);
+        }
     }
 
     #[test]

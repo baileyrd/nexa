@@ -1,6 +1,6 @@
 # Nexa project status
 
-Updated from the verified latest `main` checkpoint at merge commit `0e0fb4fce1643c5c642a30cb0bbe4c6e9c7592f7` (PR #31). This is a checkpoint, not an additional specification or ADR. The change containing this status update adds the narrow ADR-0029 capability without assuming a future merge SHA. No later local commits or configured-remote evidence intervene between that checkpoint and this task branch; open pull requests could not be verified because this checkout has no Git remote and GitHub CLI authentication is unavailable.
+Updated from the verified predecessor checkpoint at merge commit `0e0fb4fce1643c5c642a30cb0bbe4c6e9c7592f7` (PR #31). This is a checkpoint, not an additional specification or ADR. The change containing this status update adds the narrow ADR-0029 capability without assuming a future merge SHA.
 
 ## Verified checkpoint
 
