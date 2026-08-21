@@ -5480,6 +5480,60 @@ mod tests {
         filter_and_compile_remote_prompt(&source, &policy).unwrap()
     }
 
+    /// Provider used to observe ADR-0025 admission failures without performing adapter-side
+    /// response validation before the host admission boundary.
+    struct RawRecordingModelProvider {
+        descriptor: crate::model::ModelDescriptor,
+        requests: std::sync::Mutex<Vec<crate::model::ModelRequest>>,
+        outcomes: std::sync::Mutex<
+            std::collections::VecDeque<
+                Result<crate::model::ModelResponse, crate::model::ModelErrorKind>,
+            >,
+        >,
+    }
+
+    impl RawRecordingModelProvider {
+        fn new(
+            descriptor: crate::model::ModelDescriptor,
+            outcomes: impl IntoIterator<
+                Item = Result<crate::model::ModelResponse, crate::model::ModelErrorKind>,
+            >,
+        ) -> Self {
+            Self {
+                descriptor,
+                requests: std::sync::Mutex::new(Vec::new()),
+                outcomes: std::sync::Mutex::new(outcomes.into_iter().collect()),
+            }
+        }
+
+        fn request_count(&self) -> usize {
+            self.requests.lock().unwrap().len()
+        }
+        fn remaining(&self) -> usize {
+            self.outcomes.lock().unwrap().len()
+        }
+    }
+
+    impl crate::model::LanguageModelProvider for RawRecordingModelProvider {
+        fn descriptor(&self) -> &crate::model::ModelDescriptor {
+            &self.descriptor
+        }
+
+        fn generate(
+            &self,
+            request: &crate::model::ModelRequest,
+        ) -> Result<crate::model::ModelResponse, crate::model::ModelError> {
+            self.requests.lock().unwrap().push(request.clone());
+            match self.outcomes.lock().unwrap().pop_front() {
+                Some(Ok(response)) => Ok(response),
+                Some(Err(kind)) => Err(crate::model::ModelError::new(kind)),
+                None => Err(crate::model::ModelError::new(
+                    crate::model::ModelErrorKind::ScriptExhausted,
+                )),
+            }
+        }
+    }
+
     #[test]
     fn filtered_authorized_available_remote_invocation_constructs_exact_filtered_request_for_both_privacy_classes(
     ) {
@@ -5577,6 +5631,450 @@ mod tests {
                 "tool-private-sentinel",
             ] {
                 assert!(!request.input.as_str().contains(omitted));
+            }
+        }
+    }
+
+    #[test]
+    fn filtered_authorized_available_remote_invocation_all_preselection_gates_are_non_consuming() {
+        use crate::authorization::{RemoteModelAuthorization, RemoteModelAuthorizationEntry};
+        use crate::availability::{
+            ModelAvailabilityEntry, ModelAvailabilitySnapshot, ModelAvailabilityState,
+        };
+        use crate::generation::select_filtered_authorized_available_remote_model_invoke_and_admit;
+        use crate::model::{
+            LanguageModelProvider, PrivacyClass, ScriptedModelProvider, ScriptedOutcome,
+        };
+        use crate::prompt::PromptLayerKind;
+        use crate::registry::ModelRegistry;
+        use nexa_domain::{ModelInvocationId, ModelProviderId, ProtocolVersion};
+        use std::sync::Arc;
+
+        #[derive(Clone, Copy)]
+        enum Gate {
+            Policy,
+            Inventory,
+            Partition,
+            CompilationEvidence,
+            NestedCompilation,
+            FinalAnchor,
+            EmptyPrivacy,
+            Local,
+            Mixed,
+            MultipleRemote,
+            Mismatch,
+            Version,
+            SourceAuthorization,
+            EmptyAuthorization,
+            UnknownAuthorization,
+            PrivacyDisagreement,
+            Unavailable,
+            AvailabilityOmission,
+            UnknownAvailability,
+            Capability,
+            Context,
+            Output,
+        }
+        let gates = [
+            Gate::Policy,
+            Gate::Inventory,
+            Gate::Partition,
+            Gate::CompilationEvidence,
+            Gate::NestedCompilation,
+            Gate::FinalAnchor,
+            Gate::EmptyPrivacy,
+            Gate::Local,
+            Gate::Mixed,
+            Gate::MultipleRemote,
+            Gate::Mismatch,
+            Gate::Version,
+            Gate::SourceAuthorization,
+            Gate::EmptyAuthorization,
+            Gate::UnknownAuthorization,
+            Gate::PrivacyDisagreement,
+            Gate::Unavailable,
+            Gate::AvailabilityOmission,
+            Gate::UnknownAvailability,
+            Gate::Capability,
+            Gate::Context,
+            Gate::Output,
+        ];
+        for (index, gate) in gates.into_iter().enumerate() {
+            let f = admission_fixture();
+            let mut filtered = filtered_remote_fixture(PrivacyClass::ApprovedRemote);
+            let mut descriptor = f.descriptor.clone();
+            descriptor.privacy_class = PrivacyClass::ApprovedRemote;
+            if matches!(gate, Gate::Capability) {
+                descriptor.capabilities.vision = false;
+            }
+            if matches!(gate, Gate::Context) {
+                descriptor.capabilities.context_window_tokens = 1000;
+            }
+            if matches!(gate, Gate::Output) {
+                descriptor.capabilities.maximum_output_tokens = 1;
+            }
+            let provider = Arc::new(
+                ScriptedModelProvider::new(
+                    descriptor.clone(),
+                    [ScriptedOutcome::Error(
+                        crate::model::ModelErrorKind::Internal,
+                    )],
+                )
+                .unwrap(),
+            );
+            let registry = ModelRegistry::try_from_providers([
+                provider.clone() as Arc<dyn LanguageModelProvider>
+            ])
+            .unwrap();
+            let state = if matches!(gate, Gate::Unavailable) {
+                ModelAvailabilityState::Unavailable
+            } else {
+                ModelAvailabilityState::Available
+            };
+            let availability_id = if matches!(gate, Gate::UnknownAvailability) {
+                id(999, ModelProviderId::new)
+            } else {
+                descriptor.provider_id
+            };
+            let availability =
+                ModelAvailabilitySnapshot::new(if matches!(gate, Gate::AvailabilityOmission) {
+                    vec![]
+                } else {
+                    vec![ModelAvailabilityEntry {
+                        provider_id: availability_id,
+                        model_id: descriptor.model_id,
+                        state,
+                    }]
+                })
+                .unwrap();
+            let authorization_anchor = if matches!(gate, Gate::SourceAuthorization) {
+                filtered.evidence.source_compilation_replay_anchor.clone()
+            } else {
+                filtered.filtered_compilation.replay_anchor.clone()
+            };
+            let authorization_id = if matches!(gate, Gate::UnknownAuthorization) {
+                id(998, ModelProviderId::new)
+            } else {
+                descriptor.provider_id
+            };
+            let auth_privacy = if matches!(gate, Gate::PrivacyDisagreement) {
+                PrivacyClass::RestrictedRemote
+            } else {
+                PrivacyClass::ApprovedRemote
+            };
+            let mut authorization = RemoteModelAuthorization::new(
+                authorization_anchor,
+                vec![RemoteModelAuthorizationEntry {
+                    provider_id: authorization_id,
+                    model_id: descriptor.model_id,
+                    privacy_class: auth_privacy,
+                }],
+            )
+            .unwrap();
+            if matches!(gate, Gate::EmptyAuthorization) {
+                authorization.entries.clear();
+            }
+            let mut requirements =
+                remote_selection_requirements(vec![PrivacyClass::ApprovedRemote]);
+            match gate {
+                Gate::Policy => filtered.evidence.policy_replay_anchor = "0".repeat(64),
+                Gate::Inventory => {
+                    filtered.evidence.source_present_layer_kinds.pop();
+                }
+                Gate::Partition => filtered
+                    .evidence
+                    .included_layer_kinds
+                    .push(PromptLayerKind::LearnerContext),
+                Gate::CompilationEvidence => {
+                    filtered.evidence.filtered_compilation_replay_anchor = "0".repeat(64)
+                }
+                Gate::NestedCompilation => {
+                    filtered.filtered_compilation.replay_anchor = "0".repeat(64)
+                }
+                Gate::FinalAnchor => filtered.evidence.filter_replay_anchor = "0".repeat(64),
+                Gate::EmptyPrivacy => requirements.privacy_preference.clear(),
+                Gate::Local => requirements.privacy_preference = vec![PrivacyClass::LocalOnly],
+                Gate::Mixed => {
+                    requirements.privacy_preference =
+                        vec![PrivacyClass::LocalOnly, PrivacyClass::ApprovedRemote]
+                }
+                Gate::MultipleRemote => {
+                    requirements.privacy_preference =
+                        vec![PrivacyClass::ApprovedRemote, PrivacyClass::RestrictedRemote]
+                }
+                Gate::Mismatch => {
+                    requirements.privacy_preference = vec![PrivacyClass::RestrictedRemote]
+                }
+                Gate::Version => requirements.contract_version = ProtocolVersion::new(9, 9),
+                Gate::Capability => requirements.required_capabilities.vision = true,
+                Gate::Output => requirements.maximum_output_tokens = 1000,
+                _ => {}
+            }
+            let result = select_filtered_authorized_available_remote_model_invoke_and_admit(
+                &registry,
+                id(1400 + index as u128, ModelInvocationId::new),
+                &requirements,
+                &availability,
+                &authorization,
+                &filtered,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            );
+            assert!(result.is_err(), "gate {index} must fail closed");
+            assert_eq!(
+                provider.remaining(),
+                1,
+                "gate {index} consumed a provider outcome"
+            );
+        }
+    }
+
+    #[test]
+    fn filtered_authorized_available_remote_invocation_adr0025_preflight_is_non_consuming() {
+        use crate::authorization::{RemoteModelAuthorization, RemoteModelAuthorizationEntry};
+        use crate::availability::{
+            ModelAvailabilityEntry, ModelAvailabilitySnapshot, ModelAvailabilityState,
+        };
+        use crate::generation::select_filtered_authorized_available_remote_model_invoke_and_admit;
+        use crate::model::{LanguageModelProvider, PrivacyClass, ScriptedOutcome};
+        use crate::registry::ModelRegistry;
+        use nexa_domain::{CitationSetId, ContextPackageId, ModelInvocationId, ProtocolVersion};
+        use std::sync::Arc;
+
+        for case in 0..3 {
+            let f = admission_fixture();
+            let filtered = filtered_remote_fixture(PrivacyClass::ApprovedRemote);
+            let mut descriptor = f.descriptor.clone();
+            descriptor.privacy_class = PrivacyClass::ApprovedRemote;
+            let provider = Arc::new(RecordingModelProvider::new(
+                descriptor.clone(),
+                [ScriptedOutcome::Error(
+                    crate::model::ModelErrorKind::Internal,
+                )],
+            ));
+            let registry = ModelRegistry::try_from_providers([
+                provider.clone() as Arc<dyn LanguageModelProvider>
+            ])
+            .unwrap();
+            let availability = ModelAvailabilitySnapshot::new(vec![ModelAvailabilityEntry {
+                provider_id: descriptor.provider_id,
+                model_id: descriptor.model_id,
+                state: ModelAvailabilityState::Available,
+            }])
+            .unwrap();
+            let authorization = RemoteModelAuthorization::new(
+                filtered.filtered_compilation.replay_anchor.clone(),
+                vec![RemoteModelAuthorizationEntry {
+                    provider_id: descriptor.provider_id,
+                    model_id: descriptor.model_id,
+                    privacy_class: PrivacyClass::ApprovedRemote,
+                }],
+            )
+            .unwrap();
+            let mut authority = f.authority.clone();
+            match case {
+                0 => authority.contract_version = ProtocolVersion::new(9, 9),
+                1 => authority.context_package_id = id(991, ContextPackageId::new),
+                _ => authority.citation_set_id = id(992, CitationSetId::new),
+            }
+            assert!(
+                select_filtered_authorized_available_remote_model_invoke_and_admit(
+                    &registry,
+                    id(1500 + case, ModelInvocationId::new),
+                    &remote_selection_requirements(vec![PrivacyClass::ApprovedRemote]),
+                    &availability,
+                    &authorization,
+                    &filtered,
+                    &authority,
+                    &f.context,
+                    &f.citations
+                )
+                .is_err()
+            );
+            assert!(provider.requests().is_empty());
+            assert_eq!(provider.remaining(), 1);
+        }
+    }
+
+    #[test]
+    fn filtered_authorized_available_remote_invocation_is_exactly_once_strict_and_has_no_fallback()
+    {
+        use crate::authorization::{RemoteModelAuthorization, RemoteModelAuthorizationEntry};
+        use crate::availability::{
+            ModelAvailabilityEntry, ModelAvailabilitySnapshot, ModelAvailabilityState,
+        };
+        use crate::generation::{
+            select_filtered_authorized_available_remote_model_invoke_and_admit,
+            FilteredAuthorizedAvailableRemoteInvocationAdmissionError as Outer,
+            InvocationAdmissionError,
+        };
+        use crate::model::{
+            FinishReason, LanguageModelProvider, ModelErrorKind, PrivacyClass, RawModelOutput,
+        };
+        use crate::registry::ModelRegistry;
+        use nexa_domain::{ModelId, ModelInvocationId, ModelProviderId};
+        use std::sync::Arc;
+
+        #[derive(Clone, Copy)]
+        enum Case {
+            Invocation,
+            Provider,
+            Model,
+            InvocationIdentity,
+            Incomplete,
+            Malformed,
+            InvalidCandidate,
+        }
+        for (index, case) in [
+            Case::Invocation,
+            Case::Provider,
+            Case::Model,
+            Case::InvocationIdentity,
+            Case::Incomplete,
+            Case::Malformed,
+            Case::InvalidCandidate,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let f = admission_fixture();
+            let filtered = filtered_remote_fixture(PrivacyClass::ApprovedRemote);
+            let invocation_id = id(1300 + index as u128, ModelInvocationId::new);
+            let mut selected_descriptor = f.descriptor.clone();
+            selected_descriptor.provider_id = id(10, ModelProviderId::new);
+            selected_descriptor.model_id = id(10, ModelId::new);
+            selected_descriptor.privacy_class = PrivacyClass::ApprovedRemote;
+            let mut other_descriptor = selected_descriptor.clone();
+            other_descriptor.provider_id = id(20, ModelProviderId::new);
+            other_descriptor.model_id = id(20, ModelId::new);
+            let mut response = f.response.clone();
+            response.invocation_id = invocation_id;
+            response.provider_id = selected_descriptor.provider_id;
+            response.model_id = selected_descriptor.model_id;
+            match case {
+                Case::Provider => response.provider_id = other_descriptor.provider_id,
+                Case::Model => response.model_id = other_descriptor.model_id,
+                Case::InvocationIdentity => {
+                    response.invocation_id = id(9999, ModelInvocationId::new)
+                }
+                Case::Incomplete => response.finish_reason = FinishReason::OutputLimit,
+                Case::Malformed => {
+                    response.output = RawModelOutput::new("{sentinel-malformed").unwrap()
+                }
+                Case::InvalidCandidate => {
+                    response.output = RawModelOutput::new(
+                        "{\"candidate_schema_version\":\"1.0\",\"sections\":[]}",
+                    )
+                    .unwrap()
+                }
+                Case::Invocation => {}
+            }
+            let first = if matches!(case, Case::Invocation) {
+                Err(ModelErrorKind::Internal)
+            } else {
+                Ok(response)
+            };
+            let selected = Arc::new(RawRecordingModelProvider::new(
+                selected_descriptor.clone(),
+                [first, Err(ModelErrorKind::Unavailable)],
+            ));
+            let other = Arc::new(RawRecordingModelProvider::new(
+                other_descriptor.clone(),
+                [
+                    Err(ModelErrorKind::Internal),
+                    Err(ModelErrorKind::Unavailable),
+                ],
+            ));
+            let handles: Vec<Arc<dyn LanguageModelProvider>> = if index % 2 == 0 {
+                vec![other.clone(), selected.clone()]
+            } else {
+                vec![selected.clone(), other.clone()]
+            };
+            let registry = ModelRegistry::try_from_providers(handles).unwrap();
+            let availability = ModelAvailabilitySnapshot::new(vec![
+                ModelAvailabilityEntry {
+                    provider_id: other_descriptor.provider_id,
+                    model_id: other_descriptor.model_id,
+                    state: ModelAvailabilityState::Available,
+                },
+                ModelAvailabilityEntry {
+                    provider_id: selected_descriptor.provider_id,
+                    model_id: selected_descriptor.model_id,
+                    state: ModelAvailabilityState::Available,
+                },
+            ])
+            .unwrap();
+            let authorization = RemoteModelAuthorization::new(
+                filtered.filtered_compilation.replay_anchor.clone(),
+                vec![
+                    RemoteModelAuthorizationEntry {
+                        provider_id: other_descriptor.provider_id,
+                        model_id: other_descriptor.model_id,
+                        privacy_class: PrivacyClass::ApprovedRemote,
+                    },
+                    RemoteModelAuthorizationEntry {
+                        provider_id: selected_descriptor.provider_id,
+                        model_id: selected_descriptor.model_id,
+                        privacy_class: PrivacyClass::ApprovedRemote,
+                    },
+                ],
+            )
+            .unwrap();
+            let error = select_filtered_authorized_available_remote_model_invoke_and_admit(
+                &registry,
+                invocation_id,
+                &remote_selection_requirements(vec![PrivacyClass::ApprovedRemote]),
+                &availability,
+                &authorization,
+                &filtered,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            )
+            .unwrap_err();
+            assert!(
+                matches!(
+                    error,
+                    Outer::InvocationAdmission(InvocationAdmissionError::Invocation(_))
+                ) || matches!(
+                    error,
+                    Outer::InvocationAdmission(InvocationAdmissionError::Admission(_))
+                )
+            );
+            assert_eq!(
+                selected.request_count(),
+                1,
+                "selected provider must be invoked exactly once"
+            );
+            assert_eq!(
+                selected.remaining(),
+                1,
+                "selected provider's second outcome must remain"
+            );
+            assert_eq!(
+                other.request_count(),
+                0,
+                "no fallback or non-selected invocation"
+            );
+            assert_eq!(
+                other.remaining(),
+                2,
+                "non-selected provider state must be preserved"
+            );
+            let diagnostics = format!("{error:?} {error}");
+            for sentinel in [
+                "prompt-private-sentinel",
+                "learner-private-sentinel",
+                "conversation-private-sentinel",
+                "knowledge-private-sentinel",
+                "tool-private-sentinel",
+                "endpoint-private-sentinel",
+                "credential-private-sentinel",
+                "provider-private-sentinel",
+                "sentinel-malformed",
+            ] {
+                assert!(!diagnostics.contains(sentinel));
             }
         }
     }
