@@ -563,7 +563,10 @@ mod tests {
         // A deliberately large scripted token count is evidence only; ADR-0022 still uses bytes.
         let tokenizer = ScriptedModelInputTokenizer::new(
             capacity_descriptor.clone(),
-            [ScriptedTokenizationOutcome::TokenCount(999)],
+            [
+                ScriptedTokenizationOutcome::TokenCount(999),
+                ScriptedTokenizationOutcome::TokenCount(1),
+            ],
         )
         .unwrap();
         let token_evidence = tokenize_model_input(
@@ -609,11 +612,13 @@ mod tests {
         .unwrap();
         let requirements =
             ModelSelectionRequirements::new(required, 1, vec![PrivacyClass::LocalOnly]).unwrap();
+        assert_eq!(tokenizer.remaining().unwrap(), 1);
         assert!(select_model(&registry, &at_byte_limit, &requirements).is_ok());
         assert_eq!(
             select_model(&registry, &over_byte_limit, &requirements).unwrap_err(),
             ModelSelectionError::NoEligibleModel
         );
+        assert_eq!(tokenizer.remaining().unwrap(), 1);
         // Neither tokenization nor ADR-0027 selection consumes a provider outcome.
         assert_eq!(provider.remaining(), 1);
     }
