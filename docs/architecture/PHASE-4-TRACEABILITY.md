@@ -192,3 +192,17 @@ NEXA-TUTOR-001 remains Baseline Draft; the reserved privacy specification namesp
 | ADR-0032 invocation, general privacy policy/correctness, semantic filtering/redaction, partial truncation, and existing provider/routing/networking/persistence scope | Explicitly deferred by ADR-0034 | Not implemented |
 
 NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy namespace remains reserved. The known ingestion/context roadmap inconsistency is preserved.
+
+
+## Filtered authorized available remote invocation and admission
+
+| Requirement | Evidence | Status |
+| --- | --- | --- |
+| Mandatory complete ADR-0033 evidence and only ADR-0034 selection | `select_filtered_authorized_available_remote_model_invoke_and_admit`; focused `filtered_authorized_available_remote_invocation` tests; ADR-0035 | Implemented slice |
+| Exact filtered ADR-0022 request and replay binding | Shared `request_for_selected`; filtered input and `AdmissionResult` anchor assertions | Implemented slice |
+| Unchanged ADR-0025 preflight, one invocation, and strict admission | Direct `invoke_and_admit_model_output` delegation; selected second-outcome and non-consumption evidence | Implemented slice |
+| Closed content-free nested failures | `FilteredAuthorizedAvailableRemoteInvocationAdmissionError` | Implemented slice |
+| Existing API boundaries | ADR-0034 remains non-invoking; ADR-0032 remains callable without ADR-0033 evidence | Preserved |
+| General privacy correctness, semantic minimization/redaction/anonymization, authorization authenticity/freshness, partial truncation, routing/fallback/retry/repair/recovery, concrete providers/inference/networking, tools, async/streaming, telemetry, persistence | Explicitly deferred by ADR-0035 | Not implemented |
+
+NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy namespace remains reserved and unimplemented. The known ingestion/context roadmap inconsistency is preserved.

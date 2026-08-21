@@ -15,6 +15,10 @@ use crate::model::{
 };
 use crate::prompt::PromptCompilationResult;
 use crate::registry::ModelRegistry;
+use crate::remote_prompt::{
+    select_filtered_authorized_available_remote_model, FilteredRemoteSelectionError,
+    RemotePromptFilterResult,
+};
 use crate::selection::{
     select_model, ModelSelectionError, ModelSelectionRequirements, MODEL_SELECTION_V1,
 };
@@ -61,6 +65,15 @@ pub enum AuthorizedAvailableRemoteInvocationAdmissionError {
     #[error("authorized available remote model selection failed")]
     AuthorizationAvailabilitySelection(RemoteAuthorizationError),
     #[error("selected authorized available remote model invocation or admission failed")]
+    InvocationAdmission(InvocationAdmissionError),
+}
+
+/// Closed failure categories for filtered, authorized, availability-gated remote execution.
+#[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
+pub enum FilteredAuthorizedAvailableRemoteInvocationAdmissionError {
+    #[error("filtered authorized available remote model selection failed")]
+    FilteredSelection(FilteredRemoteSelectionError),
+    #[error("selected filtered authorized available remote model invocation or admission failed")]
     InvocationAdmission(InvocationAdmissionError),
 }
 
@@ -241,4 +254,44 @@ pub fn select_authorized_available_remote_model_invoke_and_admit(
         citations,
     )
     .map_err(AuthorizedAvailableRemoteInvocationAdmissionError::InvocationAdmission)
+}
+
+/// Selects through ADR-0034, invokes the selected provider once, and strictly admits its response.
+#[allow(clippy::too_many_arguments)]
+pub fn select_filtered_authorized_available_remote_model_invoke_and_admit(
+    registry: &ModelRegistry,
+    invocation_id: ModelInvocationId,
+    requirements: &ModelSelectionRequirements,
+    availability: &ModelAvailabilitySnapshot,
+    authorization: &RemoteModelAuthorization,
+    filtered_result: &RemotePromptFilterResult,
+    authority: &TrustedPlanningAuthority,
+    context: &ContextPackage,
+    citations: &CitationResult,
+) -> Result<AdmissionResult, FilteredAuthorizedAvailableRemoteInvocationAdmissionError> {
+    let selected = select_filtered_authorized_available_remote_model(
+        registry,
+        requirements,
+        availability,
+        authorization,
+        filtered_result,
+    )
+    .map_err(FilteredAuthorizedAvailableRemoteInvocationAdmissionError::FilteredSelection)?;
+    let compilation = &filtered_result.filtered_compilation;
+    let request = request_for_selected(
+        invocation_id,
+        &selected.descriptor,
+        requirements,
+        compilation,
+    );
+
+    invoke_and_admit_model_output(
+        selected.provider.as_ref(),
+        &request,
+        compilation,
+        authority,
+        context,
+        citations,
+    )
+    .map_err(FilteredAuthorizedAvailableRemoteInvocationAdmissionError::InvocationAdmission)
 }

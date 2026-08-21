@@ -50,6 +50,7 @@ This registry is the navigation and governance authority for Nexa system specifi
 | ADR-0032 | [Deterministic authorized available remote selection-to-invocation-to-admission composition](adr/0032-deterministic-authorized-available-remote-selection-invocation-admission.md) | Accepted | Phase 4 provider-neutral authorized available remote selection-to-single-attempt invocation/admission |
 | ADR-0033 | [Deterministic remote prompt layer disclosure filtering](adr/0033-deterministic-remote-prompt-layer-disclosure-filtering.md) | Accepted | Phase 4 caller-directed whole-layer remote disclosure filtering and filtered prompt compilation |
 | ADR-0034 | [Deterministic filtered authorized available remote-model selection](adr/0034-deterministic-filtered-authorized-available-remote-selection.md) | Accepted | Phase 4 non-invoking ADR-0033-evidence-gated ADR-0031 remote selection |
+| ADR-0035 | [Deterministic filtered authorized available remote invocation and admission](adr/0035-deterministic-filtered-authorized-available-remote-invocation-admission.md) | Accepted | Phase 4 ADR-0034 selection followed by one ADR-0025 invocation and strict admission |
 | ADR-0014 | [Learning-core composition and atomicity](adr/0014-learning-core-composition-and-atomicity.md) | Accepted | Phase 3 policy composition, unit of work, idempotency, and deferred durable adapters |
 | ADR-0008 | [Controlled 3D workspace migration and ownership](adr/0008-controlled-3d-workspace-migration.md) | Accepted | 3D library, viewer, and validator ownership after migration |
 
@@ -113,3 +114,5 @@ Directories 13 through 27 reserve future specification namespaces. A reserved di
 - [ADR-0033](adr/0033-deterministic-remote-prompt-layer-disclosure-filtering.md) adds deterministic caller-directed whole-layer disclosure filtering and filtered ADR-0023 compilation. It does not establish general privacy filtering, semantic minimization, sensitivity inference, redaction, transmission, or automatic ADR-0031/0032 integration.
 
 - [ADR-0034](adr/0034-deterministic-filtered-authorized-available-remote-selection.md) gates unchanged ADR-0031 selection on valid ADR-0033 evidence and exact singleton target privacy agreement. It is non-invoking and does not invoke ADR-0032 or add general privacy policy.
+
+- [ADR-0035](adr/0035-deterministic-filtered-authorized-available-remote-invocation-admission.md) composes unchanged ADR-0034 selection, shared exact ADR-0022 request construction from the filtered compilation, and unchanged ADR-0025 single-attempt strict admission. It is not general or automatic routing and adds no fallback or duplicate success evidence; ADR-0032 remains independently callable without ADR-0033 evidence.
