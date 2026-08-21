@@ -206,3 +206,15 @@ NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy 
 | General privacy correctness, semantic minimization/redaction/anonymization, authorization authenticity/freshness, partial truncation, routing/fallback/retry/repair/recovery, concrete providers/inference/networking, tools, async/streaming, telemetry, persistence | Explicitly deferred by ADR-0035 | Not implemented |
 
 NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy namespace remains reserved and unimplemented. The known ingestion/context roadmap inconsistency is preserved.
+
+## ADR-0036 provider-neutral model-input tokenization boundary
+
+| Requirement | Evidence | Status |
+|---|---|---|
+| Exact-model synchronous counting boundary | `ModelInputTokenizer`, existing ADR-0022 `ModelDescriptor` and `ModelInput`, checked `u32` count | Implemented slice |
+| Standalone content-free association and replay evidence | `ModelInputTokenizationEvidence`, strict validating decode, UTF-8 byte count, SHA-256 input hash and replay anchor | Implemented slice |
+| Deterministic provider-independent testing | FIFO `ScriptedModelInputTokenizer`, preflight non-consumption and exactly-once outcome tests | Implemented slice |
+| Conservative capacity behavior preserved | No changes to ADR-0022 validation or ADR-0027 selection; no existing API consumes tokenization evidence | Preserved |
+| Concrete tokenizers and token-count integration | Explicitly deferred by ADR-0036 | Not implemented |
+
+NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy namespace remains reserved. Partial truncation and the known ingestion/context roadmap inconsistency remain preserved, along with all existing privacy, provider, inference, routing, networking, semantic-validation, async/streaming, telemetry, and persistence deferrals.

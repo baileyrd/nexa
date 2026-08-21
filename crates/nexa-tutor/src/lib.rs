@@ -10,6 +10,7 @@ pub mod prompt;
 pub mod registry;
 pub mod remote_prompt;
 pub mod selection;
+pub mod tokenization;
 
 use nexa_domain::{
     CitationId, CitationSetId, ClaimId, ContextPackageId, CourseId, EvidenceId,
