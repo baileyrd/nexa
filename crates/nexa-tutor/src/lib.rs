@@ -3014,38 +3014,183 @@ mod tests {
     }
 
     #[test]
-    fn local_selection_preflight_and_admission_errors_are_content_free_and_single_attempt() {
-        use crate::admission::AdmissionError;
+    fn local_selection_ineligible_and_remote_only_registries_consume_nothing() {
         use crate::generation::{
-            select_local_model_invoke_and_admit, InvocationAdmissionError,
-            SelectedInvocationAdmissionError,
+            select_local_model_invoke_and_admit, SelectedInvocationAdmissionError,
         };
         use crate::model::{
-            LanguageModelProvider, ModelInput, RawModelOutput, ScriptedModelProvider,
-            ScriptedOutcome,
+            LanguageModelProvider, PrivacyClass, ScriptedModelProvider, ScriptedOutcome,
         };
         use crate::registry::ModelRegistry;
-        use nexa_domain::ModelInvocationId;
+        use crate::selection::ModelSelectionError;
+        use nexa_domain::{ModelInvocationId, ModelProviderId};
         use std::sync::Arc;
 
-        for post_invocation in [false, true] {
-            let mut f = admission_fixture();
-            let secret = "distinctive-selected-composition-secret";
-            if post_invocation {
-                f.response.output =
-                    RawModelOutput::new(format!("{{\"unknown\":\"{secret}\"}}")).unwrap();
-            } else {
-                f.compilation.model_input = ModelInput::new(secret).unwrap();
+        for mutation in 0..4 {
+            let f = admission_fixture();
+            let mut descriptor = f.descriptor.clone();
+            match mutation {
+                0 => descriptor.privacy_class = PrivacyClass::ApprovedRemote,
+                1 => descriptor.capabilities.structured_output = false,
+                2 => descriptor.capabilities.maximum_output_tokens = 999,
+                _ => {
+                    descriptor.capabilities.context_window_tokens =
+                        f.compilation.model_input.as_str().len() as u32 + 999
+                }
             }
+            descriptor.provider_id = id(70 + mutation, ModelProviderId::new);
             let provider = Arc::new(
                 ScriptedModelProvider::new(
-                    f.descriptor.clone(),
+                    descriptor,
                     [ScriptedOutcome::Response(f.response.clone())],
                 )
                 .unwrap(),
             );
             let registry = ModelRegistry::try_from_providers([
                 provider.clone() as Arc<dyn LanguageModelProvider>
+            ])
+            .unwrap();
+            assert_eq!(
+                select_local_model_invoke_and_admit(
+                    &registry,
+                    id(804, ModelInvocationId::new),
+                    &local_selection_requirements(),
+                    &f.compilation,
+                    &f.authority,
+                    &f.context,
+                    &f.citations,
+                ),
+                Err(SelectedInvocationAdmissionError::Selection(
+                    ModelSelectionError::NoEligibleModel
+                )),
+                "mutation {mutation}"
+            );
+            assert_eq!(provider.remaining(), 1, "mutation {mutation}");
+        }
+    }
+
+    #[test]
+    fn local_selection_preflight_association_matrix_consumes_no_provider() {
+        use crate::admission::AdmissionError;
+        use crate::generation::{
+            select_local_model_invoke_and_admit, InvocationAdmissionError,
+            SelectedInvocationAdmissionError,
+        };
+        use crate::model::{
+            LanguageModelProvider, ModelInput, PrivacyClass, ScriptedModelProvider, ScriptedOutcome,
+        };
+        use crate::registry::ModelRegistry;
+        use nexa_domain::{
+            CitationSetId, ContextPackageId, ModelId, ModelInvocationId, ModelProviderId,
+            ProtocolVersion, StudentId,
+        };
+        use std::sync::Arc;
+
+        for mutation in 0..17 {
+            let mut f = admission_fixture();
+            let secret = "distinctive-selected-composition-secret";
+            let expected = match mutation {
+                0 => {
+                    f.compilation.manifest[0].content_bytes += 1;
+                    AdmissionError::PromptAssociationReplayMismatch
+                }
+                1 => {
+                    f.compilation.compiled_bytes += 1;
+                    AdmissionError::PromptAssociationReplayMismatch
+                }
+                2 => {
+                    f.compilation.replay_anchor = "a".repeat(64);
+                    AdmissionError::PromptAssociationReplayMismatch
+                }
+                3 => {
+                    f.compilation.model_input = ModelInput::new(secret).unwrap();
+                    AdmissionError::PromptAssociationReplayMismatch
+                }
+                4 => {
+                    f.compilation.contract_version = ProtocolVersion::new(2, 0);
+                    AdmissionError::UnsupportedVersion
+                }
+                5 => {
+                    f.compilation.prompt_package_version = ProtocolVersion::new(2, 0);
+                    AdmissionError::UnsupportedVersion
+                }
+                6 => {
+                    f.compilation.context_builder_version = ProtocolVersion::new(2, 0);
+                    AdmissionError::UnsupportedVersion
+                }
+                7 => {
+                    f.compilation.output_schema_version = ProtocolVersion::new(2, 0);
+                    AdmissionError::UnsupportedVersion
+                }
+                8 => {
+                    f.authority.response_policy_version = ProtocolVersion::new(2, 0);
+                    AdmissionError::UnsupportedVersion
+                }
+                9 => {
+                    f.authority.permitted_capabilities.clear();
+                    AdmissionError::PolicyPedagogySafetyCapability
+                }
+                10 => {
+                    f.authority.evidence.scope.student_id = id(820, StudentId::new);
+                    AdmissionError::PlanningEvidenceProvenance
+                }
+                11 => {
+                    f.authority.context_package_id = id(821, ContextPackageId::new);
+                    AdmissionError::PlanningEvidenceProvenance
+                }
+                12 => {
+                    f.authority.citation_set_id = id(822, CitationSetId::new);
+                    AdmissionError::PlanningEvidenceProvenance
+                }
+                13 => {
+                    f.context.governance_policy_version = ProtocolVersion::new(2, 0);
+                    AdmissionError::PlanningEvidenceProvenance
+                }
+                14 => {
+                    f.context.maximum_tokens = 0;
+                    AdmissionError::PlanningEvidenceProvenance
+                }
+                15 => {
+                    f.citations.citation_policy_version = ProtocolVersion::new(2, 0);
+                    AdmissionError::CitationGroundingReference
+                }
+                _ => {
+                    f.citations.maximum_citations = 0;
+                    AdmissionError::CitationGroundingReference
+                }
+            };
+            let selected = Arc::new(
+                ScriptedModelProvider::new(
+                    f.descriptor.clone(),
+                    [ScriptedOutcome::Response(f.response.clone())],
+                )
+                .unwrap(),
+            );
+            let mut other_descriptor = f.descriptor.clone();
+            other_descriptor.provider_id = id(900, ModelProviderId::new);
+            other_descriptor.model_id = id(901, ModelId::new);
+            let other = Arc::new(
+                ScriptedModelProvider::new(
+                    other_descriptor,
+                    [ScriptedOutcome::Response(f.response.clone())],
+                )
+                .unwrap(),
+            );
+            let mut remote_descriptor = f.descriptor.clone();
+            remote_descriptor.provider_id = id(902, ModelProviderId::new);
+            remote_descriptor.model_id = id(903, ModelId::new);
+            remote_descriptor.privacy_class = PrivacyClass::ApprovedRemote;
+            let remote = Arc::new(
+                ScriptedModelProvider::new(
+                    remote_descriptor,
+                    [ScriptedOutcome::Response(f.response.clone())],
+                )
+                .unwrap(),
+            );
+            let registry = ModelRegistry::try_from_providers([
+                selected.clone() as Arc<dyn LanguageModelProvider>,
+                other.clone() as Arc<dyn LanguageModelProvider>,
+                remote.clone() as Arc<dyn LanguageModelProvider>,
             ])
             .unwrap();
             let error = select_local_model_invoke_and_admit(
@@ -3058,23 +3203,208 @@ mod tests {
                 &f.citations,
             )
             .unwrap_err();
-            let expected = if post_invocation {
+            assert_eq!(
+                error,
                 SelectedInvocationAdmissionError::InvocationAdmission(
-                    InvocationAdmissionError::Invocation(
-                        crate::model::ModelErrorKind::IdentityMismatch,
-                    ),
-                )
-            } else {
-                SelectedInvocationAdmissionError::InvocationAdmission(
-                    InvocationAdmissionError::Preflight(
-                        AdmissionError::PromptAssociationReplayMismatch,
-                    ),
-                )
-            };
-            assert_eq!(error, expected);
-            assert_eq!(provider.remaining(), usize::from(!post_invocation));
-            assert!(!format!("{error} {error:?}").contains(secret));
+                    InvocationAdmissionError::Preflight(expected)
+                ),
+                "mutation {mutation}"
+            );
+            assert_eq!(selected.remaining(), 1, "mutation {mutation}");
+            assert_eq!(other.remaining(), 1, "mutation {mutation}");
+            assert_eq!(remote.remaining(), 1, "mutation {mutation}");
+            let diagnostic = format!("{error} {error:?}");
+            for sensitive in [secret, "distinctive private platform prompt"] {
+                assert!(!diagnostic.contains(sensitive), "mutation {mutation}");
+            }
         }
+    }
+
+    #[test]
+    fn local_selection_post_invocation_admission_failures_are_single_attempt() {
+        use crate::admission::AdmissionError;
+        use crate::generation::{
+            select_local_model_invoke_and_admit, InvocationAdmissionError,
+            SelectedInvocationAdmissionError,
+        };
+        use crate::model::{
+            FinishReason, LanguageModelProvider, ModelErrorKind, PrivacyClass, RawModelOutput,
+            ScriptedModelProvider, ScriptedOutcome,
+        };
+        use crate::registry::ModelRegistry;
+        use nexa_domain::{ModelId, ModelInvocationId, ModelProviderId};
+        use std::sync::Arc;
+
+        for mutation in 0..5 {
+            let mut f = admission_fixture();
+            let invocation_id = id(805, ModelInvocationId::new);
+            f.response.invocation_id = invocation_id;
+            f.response.provider_id = f.descriptor.provider_id;
+            f.response.model_id = f.descriptor.model_id;
+            let expected = match mutation {
+                0 => {
+                    f.response.output = RawModelOutput::new("not json").unwrap();
+                    AdmissionError::MalformedSyntax
+                }
+                1 => {
+                    f.response.output =
+                        RawModelOutput::new("{\"candidate_schema_version\":\"1.0\",\"sections\":[")
+                            .unwrap();
+                    AdmissionError::MalformedSyntax
+                }
+                2 => {
+                    f.response.output = RawModelOutput::new(
+                        "{\"candidate_schema_version\":\"1.0\",\"sections\":[]} trailing",
+                    )
+                    .unwrap();
+                    AdmissionError::MalformedSyntax
+                }
+                3 => {
+                    f.set_candidate(json!({"candidate_schema_version":"1.0", "sections":[f.section.clone()], "unknown":"closed"}));
+                    AdmissionError::InvalidCandidateSchema
+                }
+                4 => {
+                    f.response.finish_reason = FinishReason::OutputLimit;
+                    AdmissionError::IncompleteOutput
+                }
+                _ => unreachable!(),
+            };
+            let selected = Arc::new(
+                ScriptedModelProvider::new(
+                    f.descriptor.clone(),
+                    [
+                        ScriptedOutcome::Response(f.response.clone()),
+                        ScriptedOutcome::Error(ModelErrorKind::Internal),
+                    ],
+                )
+                .unwrap(),
+            );
+            let mut other_descriptor = f.descriptor.clone();
+            other_descriptor.provider_id = id(910, ModelProviderId::new);
+            other_descriptor.model_id = id(911, ModelId::new);
+            let other = Arc::new(
+                ScriptedModelProvider::new(
+                    other_descriptor,
+                    [ScriptedOutcome::Error(ModelErrorKind::Internal)],
+                )
+                .unwrap(),
+            );
+            let mut remote_descriptor = f.descriptor.clone();
+            remote_descriptor.provider_id = id(912, ModelProviderId::new);
+            remote_descriptor.model_id = id(913, ModelId::new);
+            remote_descriptor.privacy_class = PrivacyClass::ApprovedRemote;
+            let remote = Arc::new(
+                ScriptedModelProvider::new(
+                    remote_descriptor,
+                    [ScriptedOutcome::Error(ModelErrorKind::Internal)],
+                )
+                .unwrap(),
+            );
+            let registry = ModelRegistry::try_from_providers([
+                selected.clone() as Arc<dyn LanguageModelProvider>,
+                other.clone() as Arc<dyn LanguageModelProvider>,
+                remote.clone() as Arc<dyn LanguageModelProvider>,
+            ])
+            .unwrap();
+            let error = select_local_model_invoke_and_admit(
+                &registry,
+                invocation_id,
+                &local_selection_requirements(),
+                &f.compilation,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            )
+            .unwrap_err();
+            assert_eq!(
+                error,
+                SelectedInvocationAdmissionError::InvocationAdmission(
+                    InvocationAdmissionError::Admission(expected)
+                ),
+                "mutation {mutation}"
+            );
+            assert_eq!(selected.remaining(), 1, "mutation {mutation}");
+            assert_eq!(other.remaining(), 1, "mutation {mutation}");
+            assert_eq!(remote.remaining(), 1, "mutation {mutation}");
+            let diagnostic = format!("{error} {error:?}");
+            for sensitive in [
+                "not json",
+                "candidate_schema_version",
+                "trailing",
+                "closed",
+                "distinctive private platform prompt",
+            ] {
+                assert!(!diagnostic.contains(sensitive), "mutation {mutation}");
+            }
+        }
+    }
+
+    #[test]
+    fn local_selection_response_identity_mismatch_reaches_admission_once() {
+        use crate::admission::AdmissionError;
+        use crate::generation::{
+            select_local_model_invoke_and_admit, InvocationAdmissionError,
+            SelectedInvocationAdmissionError,
+        };
+        use crate::model::{
+            LanguageModelProvider, ModelErrorKind, PrivacyClass, ScriptedModelProvider,
+            ScriptedOutcome,
+        };
+        use crate::registry::ModelRegistry;
+        use nexa_domain::{ModelId, ModelInvocationId, ModelProviderId};
+        use std::sync::Arc;
+
+        let mut f = admission_fixture();
+        let invocation_id = id(806, ModelInvocationId::new);
+        f.response.invocation_id = id(807, ModelInvocationId::new);
+        let selected = Arc::new(CountingProvider::new(&f));
+        let mut other_descriptor = f.descriptor.clone();
+        other_descriptor.provider_id = id(920, ModelProviderId::new);
+        other_descriptor.model_id = id(921, ModelId::new);
+        let other = Arc::new(
+            ScriptedModelProvider::new(
+                other_descriptor,
+                [ScriptedOutcome::Error(ModelErrorKind::Internal)],
+            )
+            .unwrap(),
+        );
+        let mut remote_descriptor = f.descriptor.clone();
+        remote_descriptor.provider_id = id(922, ModelProviderId::new);
+        remote_descriptor.model_id = id(923, ModelId::new);
+        remote_descriptor.privacy_class = PrivacyClass::ApprovedRemote;
+        let remote = Arc::new(
+            ScriptedModelProvider::new(
+                remote_descriptor,
+                [ScriptedOutcome::Error(ModelErrorKind::Internal)],
+            )
+            .unwrap(),
+        );
+        let registry = ModelRegistry::try_from_providers([
+            selected.clone() as Arc<dyn LanguageModelProvider>,
+            other.clone() as Arc<dyn LanguageModelProvider>,
+            remote.clone() as Arc<dyn LanguageModelProvider>,
+        ])
+        .unwrap();
+        let error = select_local_model_invoke_and_admit(
+            &registry,
+            invocation_id,
+            &local_selection_requirements(),
+            &f.compilation,
+            &f.authority,
+            &f.context,
+            &f.citations,
+        )
+        .unwrap_err();
+        assert_eq!(
+            error,
+            SelectedInvocationAdmissionError::InvocationAdmission(
+                InvocationAdmissionError::Admission(AdmissionError::ModelResponseIdentityMismatch)
+            )
+        );
+        assert_eq!(selected.calls(), 1);
+        assert_eq!(other.remaining(), 1);
+        assert_eq!(remote.remaining(), 1);
+        assert!(!format!("{error} {error:?}").contains("distinctive private"));
     }
     #[test]
     fn response_planner_has_no_generation_or_async_surface() {

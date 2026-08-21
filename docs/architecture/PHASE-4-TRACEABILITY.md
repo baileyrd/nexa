@@ -111,9 +111,9 @@ Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministi
 |---|---|---|
 | Fail-closed explicit local-only requirements | `select_local_model_invoke_and_admit`; version, output, structured-output, and exact singleton-privacy tests; ADR-0028 | Implemented slice |
 | Exact ADR-0027 selection and ADR-0022 request construction | Exact compiled `ModelInput`, unchanged requirements, selected descriptor identities, and caller invocation identity tests | Implemented slice |
-| Reuse of ADR-0025 single-attempt preflight/invocation/admission | Nested `SelectedInvocationAdmissionError`; preflight, invocation, and post-invocation failure tests | Implemented slice |
+| Reuse of ADR-0025 single-attempt preflight/invocation/admission | Nested `SelectedInvocationAdmissionError`; wrapper-specific `local_selection_preflight_association_matrix_consumes_no_provider`, `local_selection_post_invocation_admission_failures_are_single_attempt`, `local_selection_response_identity_mismatch_reaches_admission_once`, and invocation-failure tests | Implemented slice |
 | Canonical selection independent of registry insertion order | Multiple eligible local-provider order tests | Implemented slice |
-| Local-only privacy and untouched non-selected state | Scripted outcome retention for non-selected local and remote providers | Implemented slice |
+| Local-only privacy, eligibility, and untouched non-selected state | Wrapper-specific remote-only and independently ineligible capability/output/context tests; scripted outcome retention for selected preflight failures and non-selected local and remote providers on success and post-invocation failure | Implemented slice |
 | Original API boundaries | ADR-0025 remains explicitly supplied; ADR-0027 remains standalone and non-invoking | Preserved |
 | Automatic local-first routing, remote authorization/privacy filtering, dynamic routing, fallback/retry/repair, inference, tokenization, semantic safety, tools, async/networking/telemetry/persistence, partial truncation | Explicitly deferred by ADR-0028 | Not implemented |
 
