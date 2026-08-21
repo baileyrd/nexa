@@ -110,6 +110,38 @@ impl ModelDescriptor {
         }
         self.capabilities.validate()
     }
+
+    /// Applies the shared ADR-0022 capability and conservative capacity rules.
+    pub(crate) fn validate_eligibility(
+        &self,
+        input: &ModelInput,
+        required: &RequiredCapabilities,
+        maximum_output_tokens: u32,
+    ) -> Result<(), ModelError> {
+        self.validate()?;
+        if maximum_output_tokens == 0
+            || maximum_output_tokens > self.capabilities.maximum_output_tokens
+        {
+            return Err(ModelError::new(ModelErrorKind::ContextTooLarge));
+        }
+        // V1 deliberately treats each UTF-8 input byte as one provider-neutral context unit.
+        let input_units = u32::try_from(input.as_str().len())
+            .map_err(|_| ModelError::new(ModelErrorKind::ContextTooLarge))?;
+        if input_units
+            .checked_add(maximum_output_tokens)
+            .is_none_or(|total| total > self.capabilities.context_window_tokens)
+        {
+            return Err(ModelError::new(ModelErrorKind::ContextTooLarge));
+        }
+        let available = &self.capabilities;
+        if (required.structured_output && !available.structured_output)
+            || (required.tool_calling && !available.tool_calling)
+            || (required.vision && !available.vision)
+        {
+            return Err(ModelError::new(ModelErrorKind::UnsupportedCapability));
+        }
+        Ok(())
+    }
 }
 
 impl<'de> Deserialize<'de> for ModelDescriptor {
@@ -219,30 +251,11 @@ impl ModelRequest {
         if self.provider_id != descriptor.provider_id || self.model_id != descriptor.model_id {
             return Err(ModelError::new(ModelErrorKind::IdentityMismatch));
         }
-        if self.maximum_output_tokens == 0
-            || self.maximum_output_tokens > descriptor.capabilities.maximum_output_tokens
-        {
-            return Err(ModelError::new(ModelErrorKind::ContextTooLarge));
-        }
-        // V1 deliberately treats each UTF-8 input byte as one provider-neutral context unit.
-        // This conservative evidence is checkable without selecting a provider tokenizer.
-        let input_units = u32::try_from(self.input.as_str().len())
-            .map_err(|_| ModelError::new(ModelErrorKind::ContextTooLarge))?;
-        if input_units
-            .checked_add(self.maximum_output_tokens)
-            .is_none_or(|total| total > descriptor.capabilities.context_window_tokens)
-        {
-            return Err(ModelError::new(ModelErrorKind::ContextTooLarge));
-        }
-        let required = &self.required_capabilities;
-        let available = &descriptor.capabilities;
-        if (required.structured_output && !available.structured_output)
-            || (required.tool_calling && !available.tool_calling)
-            || (required.vision && !available.vision)
-        {
-            return Err(ModelError::new(ModelErrorKind::UnsupportedCapability));
-        }
-        Ok(())
+        descriptor.validate_eligibility(
+            &self.input,
+            &self.required_capabilities,
+            self.maximum_output_tokens,
+        )
     }
 }
 
