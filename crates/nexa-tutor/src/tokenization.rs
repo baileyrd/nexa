@@ -263,8 +263,17 @@ fn hex_hash(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{ModelCapabilities, PrivacyClass};
+    use crate::{
+        model::{
+            ModelCapabilities, ModelErrorKind, ModelRequest, PrivacyClass, RequiredCapabilities,
+            ScriptedModelProvider, ScriptedOutcome, MODEL_INVOCATION_V1,
+        },
+        registry::ModelRegistry,
+        selection::{select_model, ModelSelectionError, ModelSelectionRequirements},
+    };
+    use nexa_domain::ModelInvocationId;
     use serde_json::json;
+    use std::sync::Arc;
     use uuid::Uuid;
 
     fn descriptor(provider: u128, model: u128) -> ModelDescriptor {
@@ -326,7 +335,9 @@ mod tests {
             first.input_sha256,
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
-        assert_ne!(first.input_sha256, run("abd", 7).input_sha256);
+        let changed_input = run("abd", 7);
+        assert_ne!(first.input_sha256, changed_input.input_sha256);
+        assert_ne!(first.replay_anchor, changed_input.replay_anchor);
         assert_ne!(first.replay_anchor, run("abc", 8).replay_anchor);
     }
 
@@ -361,6 +372,18 @@ mod tests {
             changed["input_sha256"] = json!(bad_hash);
             assert!(serde_json::from_value::<ModelInputTokenizationEvidence>(changed).is_err());
         }
+        for bad_anchor in ["B".repeat(64), "b".repeat(63), "z".repeat(64)] {
+            let mut changed = value.clone();
+            changed["replay_anchor"] = json!(bad_anchor);
+            assert!(serde_json::from_value::<ModelInputTokenizationEvidence>(changed).is_err());
+        }
+        let mut zero_count = evidence.clone();
+        zero_count.input_token_count = 0;
+        zero_count.replay_anchor = zero_count.compute_anchor().unwrap();
+        assert!(serde_json::from_value::<ModelInputTokenizationEvidence>(
+            serde_json::to_value(zero_count).unwrap()
+        )
+        .is_err());
         let mut unknown = value;
         unknown["prompt"] = json!("secret");
         assert!(serde_json::from_value::<ModelInputTokenizationEvidence>(unknown).is_err());
@@ -472,19 +495,126 @@ mod tests {
             [ScriptedTokenizationOutcome::TokenCount(0)],
         )
         .unwrap();
-        let sentinel = "prompt-ENDPOINT-secret-CREDENTIAL-tokenizer-private";
-        let error = tokenize_model_input(
+        let sentinels = [
+            "PROMPT_LEARNER_SENTINEL_7c91",
+            "ENDPOINT_SENTINEL_4ad2",
+            "CREDENTIAL_SENTINEL_8be3",
+            "TOKENIZER_PRIVATE_SENTINEL_2fc4",
+            "PROVIDER_PRIVATE_SENTINEL_6de5",
+        ];
+        let input = ModelInput::new(sentinels.join("|")).unwrap();
+        let error =
+            tokenize_model_input(MODEL_INPUT_TOKENIZATION_V1, &descriptor, &input, &tokenizer)
+                .unwrap_err();
+        assert_eq!(error, ModelInputTokenizationError::InvalidEvidence);
+        let error_debug = format!("{error:?}");
+        let error_display = error.to_string();
+
+        let successful_tokenizer = ScriptedModelInputTokenizer::new(
+            descriptor.clone(),
+            [ScriptedTokenizationOutcome::TokenCount(2)],
+        )
+        .unwrap();
+        let evidence = tokenize_model_input(
             MODEL_INPUT_TOKENIZATION_V1,
             &descriptor,
-            &ModelInput::new(sentinel).unwrap(),
-            &tokenizer,
+            &input,
+            &successful_tokenizer,
         )
-        .unwrap_err();
-        assert_eq!(error, ModelInputTokenizationError::InvalidEvidence);
-        assert!(!format!("{error:?} {error}").contains(sentinel));
-        let wire = serde_json::to_string(&run(sentinel, 2)).unwrap();
-        assert!(!wire.contains(sentinel));
+        .unwrap();
+        let evidence_debug = format!("{evidence:?}");
+        let evidence_wire = serde_json::to_string(&evidence).unwrap();
+        let tokenizer_debug = format!("{successful_tokenizer:?}");
+        for sentinel in sentinels {
+            assert!(!error_debug.contains(sentinel));
+            assert!(!error_display.contains(sentinel));
+            assert!(!evidence_debug.contains(sentinel));
+            assert!(!evidence_wire.contains(sentinel));
+            assert!(!tokenizer_debug.contains(sentinel));
+        }
         fn assert_send_sync<T: Send + Sync + ?Sized>() {}
         assert_send_sync::<dyn ModelInputTokenizer>();
+    }
+
+    #[test]
+    fn model_input_tokenization_preserves_conservative_request_and_selection_capacity() {
+        let capacity_descriptor = ModelDescriptor::new(
+            ModelProviderId::new(Uuid::from_u128(11)).unwrap(),
+            ModelId::new(Uuid::from_u128(12)).unwrap(),
+            PrivacyClass::LocalOnly,
+            ModelCapabilities {
+                streaming: false,
+                structured_output: false,
+                tool_calling: false,
+                vision: false,
+                context_window_tokens: 5,
+                maximum_output_tokens: 1,
+            },
+        )
+        .unwrap();
+        let required = RequiredCapabilities {
+            structured_output: false,
+            tool_calling: false,
+            vision: false,
+        };
+        let at_byte_limit = ModelInput::new("éé").unwrap();
+        let over_byte_limit = ModelInput::new("ééa").unwrap();
+
+        // A deliberately large scripted token count is evidence only; ADR-0022 still uses bytes.
+        let tokenizer = ScriptedModelInputTokenizer::new(
+            capacity_descriptor.clone(),
+            [ScriptedTokenizationOutcome::TokenCount(999)],
+        )
+        .unwrap();
+        let token_evidence = tokenize_model_input(
+            MODEL_INPUT_TOKENIZATION_V1,
+            &capacity_descriptor,
+            &at_byte_limit,
+            &tokenizer,
+        )
+        .unwrap();
+        assert_eq!(token_evidence.input_byte_count, 4);
+        assert_eq!(token_evidence.input_token_count, 999);
+
+        let request = |input| ModelRequest {
+            invocation_id: ModelInvocationId::new(Uuid::from_u128(13)).unwrap(),
+            provider_id: capacity_descriptor.provider_id,
+            model_id: capacity_descriptor.model_id,
+            contract_version: MODEL_INVOCATION_V1,
+            input,
+            required_capabilities: required.clone(),
+            maximum_output_tokens: 1,
+        };
+        assert!(request(at_byte_limit.clone())
+            .validate_for(&capacity_descriptor)
+            .is_ok());
+        assert_eq!(
+            request(over_byte_limit.clone())
+                .validate_for(&capacity_descriptor)
+                .unwrap_err()
+                .kind,
+            ModelErrorKind::ContextTooLarge
+        );
+
+        let provider = Arc::new(
+            ScriptedModelProvider::new(
+                capacity_descriptor,
+                [ScriptedOutcome::Error(ModelErrorKind::Internal)],
+            )
+            .unwrap(),
+        );
+        let registry = ModelRegistry::try_from_providers([
+            provider.clone() as Arc<dyn crate::model::LanguageModelProvider>
+        ])
+        .unwrap();
+        let requirements =
+            ModelSelectionRequirements::new(required, 1, vec![PrivacyClass::LocalOnly]).unwrap();
+        assert!(select_model(&registry, &at_byte_limit, &requirements).is_ok());
+        assert_eq!(
+            select_model(&registry, &over_byte_limit, &requirements).unwrap_err(),
+            ModelSelectionError::NoEligibleModel
+        );
+        // Neither tokenization nor ADR-0027 selection consumes a provider outcome.
+        assert_eq!(provider.remaining(), 1);
     }
 }

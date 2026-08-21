@@ -51,6 +51,7 @@ This registry is the navigation and governance authority for Nexa system specifi
 | ADR-0033 | [Deterministic remote prompt layer disclosure filtering](adr/0033-deterministic-remote-prompt-layer-disclosure-filtering.md) | Accepted | Phase 4 caller-directed whole-layer remote disclosure filtering and filtered prompt compilation |
 | ADR-0034 | [Deterministic filtered authorized available remote-model selection](adr/0034-deterministic-filtered-authorized-available-remote-selection.md) | Accepted | Phase 4 non-invoking ADR-0033-evidence-gated ADR-0031 remote selection |
 | ADR-0035 | [Deterministic filtered authorized available remote invocation and admission](adr/0035-deterministic-filtered-authorized-available-remote-invocation-admission.md) | Accepted | Phase 4 ADR-0034 selection followed by one ADR-0025 invocation and strict admission |
+| ADR-0036 | [Provider-neutral model-input tokenization](adr/0036-provider-neutral-model-input-tokenization.md) | Accepted | Phase 4 synchronous exact-model token counting, content-free replay evidence, and deterministic scripted tokenizer |
 | ADR-0014 | [Learning-core composition and atomicity](adr/0014-learning-core-composition-and-atomicity.md) | Accepted | Phase 3 policy composition, unit of work, idempotency, and deferred durable adapters |
 | ADR-0008 | [Controlled 3D workspace migration and ownership](adr/0008-controlled-3d-workspace-migration.md) | Accepted | 3D library, viewer, and validator ownership after migration |
 
