@@ -24,7 +24,7 @@
 | Semantic citation fidelity and tutor behavior | Explicitly deferred by ADR-0020 | Not implemented |
 | Model providers, networking, vector databases, and durable adapters | Explicitly deferred by ADR-0017 | Not implemented |
 
-Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministic vector retrieval are implemented, as are deterministic prompt compilation, strict structural output admission, single-attempt invocation-to-admission composition, provider-neutral in-memory registry mechanics, static deterministic single-model selection, explicit local-only selection-to-single-attempt admission composition, and deterministic caller-supplied availability-gated selection. Learned/cross-encoder reranking, authority/freshness ranking, partial truncation, dynamic health/latency/cost/task-complexity routing, automatic local-first policy, fallback/retry, privacy filtering and remote authorization, provider tokenization, semantic citation fidelity/entailment, semantic safety, tutor inference and concrete providers, networking, vector databases, and durable adapters remain unimplemented. ADR-0025 still accepts an explicitly supplied provider; ADR-0028 adds a separate explicit local-only composition and does not implement automatic local-first routing. The reconstructed knowledge and tutor specifications retain their registry authority; NEXA-TUTOR-001 remains Baseline Draft and these increments do not promote it. The known inconsistency between implemented ingestion/context evidence here and unchecked corresponding roadmap bullets is intentionally not resolved by this increment.
+Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministic vector retrieval are implemented, as are deterministic prompt compilation, strict structural output admission, single-attempt invocation-to-admission composition, provider-neutral in-memory registry mechanics, static deterministic single-model selection, explicit local-only selection-to-single-attempt admission composition, deterministic caller-supplied availability-gated selection, and ADR-0031 prompt-bound caller-supplied remote authorization for non-invoking selection. Learned/cross-encoder reranking, authority/freshness ranking, partial truncation, dynamic health/latency/cost/task-complexity routing, automatic local-first policy, fallback/retry, context privacy filtering and minimization, remote execution, provider tokenization, semantic citation fidelity/entailment, semantic safety, tutor inference and concrete providers, networking, vector databases, and durable adapters remain unimplemented. ADR-0025 still accepts an explicitly supplied provider; ADR-0028 adds a separate explicit local-only composition and does not implement automatic local-first routing. The reconstructed knowledge and tutor specifications retain their registry authority; NEXA-TUTOR-001 remains Baseline Draft and these increments do not promote it. The known inconsistency between implemented ingestion/context evidence here and unchecked corresponding roadmap bullets is intentionally not resolved by this increment.
 
 ## Tutor-response planning increment
 
@@ -142,5 +142,18 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Remote exclusion and content-free diagnostics | Exact `LocalOnly` gate, available-remote untouched evidence, and sentinel diagnostic assertions | Implemented slice |
 | Existing API boundaries | ADR-0028 remains availability-free; ADR-0029 remains non-invoking; ADR-0025 remains explicitly supplied | Preserved |
 | Probing/monitoring, remote authorization, automatic/general routing, recovery/retry/repair, inference, semantic validation, persistence, partial truncation | Explicitly deferred by ADR-0030 | Not implemented |
+
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context roadmap inconsistency remains intentionally preserved.
+
+## Caller-authorized available remote-model selection
+
+| Requirement | Evidence | Status |
+|---|---|---|
+| Closed bounded prompt-bound authorization allowlist | `RemoteModelAuthorization`, standalone validating decode; ADR-0031 | Implemented slice |
+| Exact registry identity and privacy agreement | fail-closed authorization/registry association checks | Implemented slice |
+| Independent authorization and availability gates | intersection with ADR-0029 snapshot; omission denies/unavailable | Implemented slice |
+| Unchanged deterministic static eligibility and ordering | shared ADR-0027 selection implementation | Implemented slice |
+| Non-invoking original shared handle | `Arc::ptr_eq` and scripted FIFO preservation tests | Implemented slice |
+| Filtering/minimization, authenticity/freshness, remote execution, routing/fallback/recovery, partial truncation | Explicitly deferred by ADR-0031 | Not implemented |
 
 NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context roadmap inconsistency remains intentionally preserved.

@@ -149,6 +149,23 @@ pub fn select_available_model(
     requirements: &ModelSelectionRequirements,
     availability: &ModelAvailabilitySnapshot,
 ) -> Result<SelectedModel, ModelAvailabilityError> {
+    let states = availability_states_for_registry(registry, availability)?;
+    select_model_where(
+        registry,
+        input,
+        requirements,
+        |descriptor: &ModelDescriptor| {
+            states.get(&(descriptor.provider_id, descriptor.model_id))
+                == Some(&ModelAvailabilityState::Available)
+        },
+    )
+    .map_err(ModelAvailabilityError::Selection)
+}
+
+pub(crate) fn availability_states_for_registry(
+    registry: &ModelRegistry,
+    availability: &ModelAvailabilitySnapshot,
+) -> Result<BTreeMap<(ModelProviderId, ModelId), ModelAvailabilityState>, ModelAvailabilityError> {
     availability.validate()?;
     let states: BTreeMap<_, _> = availability
         .entries
@@ -166,16 +183,7 @@ pub fn select_available_model(
             return Err(ModelAvailabilityError::RegistryInconsistency);
         }
     }
-    select_model_where(
-        registry,
-        input,
-        requirements,
-        |descriptor: &ModelDescriptor| {
-            states.get(&(descriptor.provider_id, descriptor.model_id))
-                == Some(&ModelAvailabilityState::Available)
-        },
-    )
-    .map_err(ModelAvailabilityError::Selection)
+    Ok(states)
 }
 
 #[cfg(test)]
