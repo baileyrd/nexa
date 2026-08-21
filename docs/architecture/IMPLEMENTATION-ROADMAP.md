@@ -162,3 +162,7 @@ ADR-0031 adds bounded caller-supplied remote authorization bound to exact ADR-00
 ### Phase 4 narrow increment: authorized available remote selection and admission
 
 ADR-0032 composes unchanged ADR-0031 with exact ADR-0022 request construction and ADR-0025's single-attempt invocation and strict admission. Caller authorization of the exact compiled prompt is the permission boundary. There is no second selection, fallback, retry, filtering/minimization proof, concrete provider, inference, networking, endpoint, credential, or authenticity/freshness proof. Existing deferrals including `partial truncation` remain; NEXA-TUTOR-001 remains Baseline Draft.
+
+### Phase 4 narrow increment: remote prompt whole-layer disclosure filtering
+
+ADR-0033 adds deterministic caller-directed whole-layer disclosure filtering and filtered ADR-0023 compilation after ADR-0032. Mandatory ADR-0023 layers fail closed; optional layers are included byte-for-byte or omitted in full. This is non-invoking and does not change ADR-0031 or ADR-0032. General privacy policy/enforcement, semantic minimization or sensitivity inference, content redaction, and `partial truncation` remain unimplemented. NEXA-TUTOR-001 remains Baseline Draft, the privacy specification namespace remains reserved, and the known ingestion/context roadmap inconsistency is preserved.

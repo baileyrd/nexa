@@ -67,7 +67,8 @@ impl PromptLayerKind {
         }
     }
 
-    const fn required(self) -> bool {
+    /// Returns whether ADR-0023 requires this layer in every compilation.
+    pub const fn is_required(self) -> bool {
         matches!(
             self,
             Self::PlatformContract
@@ -356,7 +357,7 @@ pub fn compile_prompt(
     let mut raw_total = 0usize;
     for kind in CANONICAL_LAYER_ORDER {
         let Some(layer) = supplied.get(&kind) else {
-            if kind.required() {
+            if kind.is_required() {
                 return Err(PromptError::MissingLayer);
             }
             continue;

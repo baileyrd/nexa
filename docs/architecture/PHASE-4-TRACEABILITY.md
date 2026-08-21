@@ -169,3 +169,15 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Filtering/minimization/sensitivity inference, authenticity/freshness, automatic/general routing, fallback/recovery, concrete providers/inference/networking, partial truncation | Explicitly deferred by ADR-0032 | Not implemented |
 
 NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context roadmap inconsistency remains intentionally preserved.
+
+## Deterministic remote prompt whole-layer disclosure filtering
+
+| Requirement | Evidence | Status |
+| --- | --- | --- |
+| Explicit decision for every ADR-0023 layer and remote privacy target | `RemotePromptDisclosurePolicy`; ADR-0033 | Implemented slice |
+| Mandatory-layer fail-closed behavior and whole optional-layer omission | `filter_and_compile_remote_prompt`; focused `remote_prompt_filter` tests | Implemented slice |
+| Exact source, policy, filtered compilation, and content-free replay binding | `RemotePromptFilterEvidence`, standalone validation | Implemented slice |
+| Provider-neutral non-invoking boundary | No authorization, selection, availability, registry, or generation dependency | Preserved |
+| Semantic sensitivity inference, content/field redaction, privacy-policy correctness, automatic ADR-0031/0032 integration, partial truncation | Explicitly deferred by ADR-0033 | Not implemented |
+
+NEXA-TUTOR-001 remains Baseline Draft; the reserved privacy specification namespace remains unimplemented. The known ingestion/context roadmap inconsistency and all existing provider, inference, routing, fallback, semantic-validation, networking, async/streaming, telemetry, and persistence deferrals remain preserved.

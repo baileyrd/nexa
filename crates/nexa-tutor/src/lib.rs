@@ -8,6 +8,7 @@ pub mod generation;
 pub mod model;
 pub mod prompt;
 pub mod registry;
+pub mod remote_prompt;
 pub mod selection;
 
 use nexa_domain::{

@@ -1,6 +1,6 @@
 # Nexa project status
 
-Updated from the verified predecessor checkpoint at merge commit `681639f0db7c12a64c26782df33001c0a261c311` (PR #34). This is a checkpoint, not an additional specification or ADR. The change containing this status update adds the narrow ADR-0032 capability without assuming a future merge SHA.
+Updated from the verified predecessor checkpoint at merge commit `581a01290313248a541f881a87310299b105ad1c` (PR #35). This is a checkpoint, not an additional specification or ADR. The change containing this status update adds the narrow ADR-0033 capability without assuming a future merge SHA.
 
 ## Verified checkpoint
 
@@ -38,6 +38,10 @@ The current Cargo workspace contains the contract kernel; avatar/3D; student, pe
 ## How to resume work
 
 1. Start from the current `main`; read [`CHATGPT_WORKFLOW.md`](../CHATGPT_WORKFLOW.md), [`AGENTS.md`](../AGENTS.md), and [`PROJECT-STATUS.md`](PROJECT-STATUS.md), in that order, followed by the applicable baseline, registry, roadmap, traceability, specifications, and ADRs routed to by those files.
-2. Confirm PR #34 / `681639f0db7c12a64c26782df33001c0a261c311` is the verified predecessor on `main`, then inspect intervening merges and read ADR-0032 after ADRs 0021–0031.
-3. Choose one evidence-backed incomplete Phase 4 increment after ADR-0032's implemented authorized available remote invocation/admission composition, without assuming this task's eventual merge SHA; state its exclusions and identify specification/ADR/traceability impact before coding.
+2. Confirm PR #35 / `581a01290313248a541f881a87310299b105ad1c` is the verified predecessor on `main`, then inspect intervening merges and read ADR-0033 after ADRs 0021–0032.
+3. Choose one evidence-backed incomplete Phase 4 increment after ADR-0033's deterministic whole-layer disclosure filtering and filtered compilation, without assuming this task's eventual merge SHA; state its exclusions and identify specification/ADR/traceability impact before coding.
 4. Keep the PR independently reviewable, report documentation/implementation conflicts, and run every validation command in `AGENTS.md`.
+
+## ADR-0033 continuation checkpoint
+
+PR #35 / merge commit `581a01290313248a541f881a87310299b105ad1c` is the verified predecessor, with no later commits present when this increment began. ADR-0033 now adds deterministic caller-directed whole-layer disclosure filtering and filtered ADR-0023 prompt compilation after ADR-0032. It does not complete general privacy filtering, semantic minimization, sensitivity inference, redaction, privacy enforcement, or automatic remote-execution integration. NEXA-TUTOR-001 remains Baseline Draft; `docs/specifications/17-privacy` remains reserved and unimplemented; `partial truncation`, the known ingestion/context roadmap inconsistency, and every existing provider/inference/routing/fallback/semantic/network/async/telemetry/persistence deferral remain. Future continuation routes through ADR-0033 after ADR-0032.
