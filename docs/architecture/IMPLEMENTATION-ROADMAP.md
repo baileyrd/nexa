@@ -81,6 +81,7 @@ See [ADR-0010](../adr/0010-learning-state-evidence-and-persistence.md),
 - [x] deterministic caller-authorized available remote selection without provider invocation
 - [x] deterministic authorized available remote selection and single-attempt strict admission
 - [x] deterministic caller-directed whole-layer disclosure filtering and filtered prompt compilation
+- [x] deterministic ADR-0033-evidence-gated authorized available remote selection without invocation
 
 Exit: grounded responses carry citations, confidence, and machine-validated tutor/behavior output.
 
@@ -167,3 +168,7 @@ ADR-0032 composes unchanged ADR-0031 with exact ADR-0022 request construction an
 ### Phase 4 narrow increment: remote prompt whole-layer disclosure filtering
 
 ADR-0033 adds deterministic caller-directed whole-layer disclosure filtering and filtered ADR-0023 compilation after ADR-0032. Mandatory ADR-0023 layers fail closed; optional layers are included byte-for-byte or omitted in full. This is non-invoking and does not change ADR-0031 or ADR-0032. General privacy policy/enforcement, semantic minimization or sensitivity inference, content redaction, and `partial truncation` remain unimplemented. NEXA-TUTOR-001 remains Baseline Draft, the privacy specification namespace remains reserved, and the known ingestion/context roadmap inconsistency is preserved.
+
+### Phase 4 narrow increment: filtered authorized available remote selection
+
+ADR-0034 validates complete ADR-0033 evidence, requires exact singleton target-privacy agreement, and delegates the exact filtered compilation to unchanged ADR-0031 selection. It does not invoke ADR-0032. General privacy policy and correctness, sensitivity inference, semantic/content minimization, field/sub-string redaction, anonymization, partial truncation, and all concrete provider, routing, recovery, semantic-validation, tool, async/networking, telemetry, and persistence capabilities remain deferred. NEXA-TUTOR-001 remains Baseline Draft; the privacy namespace remains reserved; the known ingestion/context checklist inconsistency is preserved.

@@ -181,3 +181,14 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Semantic sensitivity inference, content/field redaction, privacy-policy correctness, automatic ADR-0031/0032 integration, partial truncation | Explicitly deferred by ADR-0033 | Not implemented |
 
 NEXA-TUTOR-001 remains Baseline Draft; the reserved privacy specification namespace remains unimplemented. The known ingestion/context roadmap inconsistency and all existing provider, inference, routing, fallback, semantic-validation, networking, async/streaming, telemetry, and persistence deferrals remain preserved.
+
+## Filter-evidence-gated authorized available remote selection
+
+| Requirement | Evidence | Status |
+| --- | --- | --- |
+| Complete ADR-0033 evidence and exact singleton target privacy gate | `select_filtered_authorized_available_remote_model`; focused `filtered_authorized_remote_selection` tests; ADR-0034 | Implemented slice |
+| Exact filtered compilation delegated to unchanged ADR-0031 | Prompt-anchor association and nested failure tests | Implemented slice |
+| Non-invoking original registered shared handle | `Arc::ptr_eq` and scripted FIFO preservation | Implemented slice |
+| ADR-0032 invocation, general privacy policy/correctness, semantic filtering/redaction, partial truncation, and existing provider/routing/networking/persistence scope | Explicitly deferred by ADR-0034 | Not implemented |
+
+NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy namespace remains reserved. The known ingestion/context roadmap inconsistency is preserved.
