@@ -61,7 +61,7 @@ See [ADR-0010](../adr/0010-learning-state-evidence-and-persistence.md),
 
 ## Phase 4 — Add knowledge and tutor intelligence
 
-**Status:** In progress. The knowledge slices through deterministic citation resolution (ADRs 0015–0020), provider-neutral structured response planning (ADR-0021), provider-neutral model invocation contracts with a deterministic mock (ADR-0022), deterministic provider-neutral prompt compilation (ADR-0023), strict structural model-output admission (ADR-0024), single-attempt invocation-to-admission composition (ADR-0025), provider-neutral in-memory registry mechanics (ADR-0026), and static deterministic single-model selection (ADR-0027) are implemented. Learned reranking, partial truncation, provider tokenization, semantic safety and prompt-injection detection, factual correctness, grounding entailment and hallucination control, generative inference, concrete provider integration, dynamic availability/latency/cost/task-complexity routing, automatic local-first routing, fallback, privacy filtering and remote-provider authorization, response repair/regeneration, tool execution, async/streaming, networking, vector databases, persistence, and durable adapters remain unimplemented.
+**Status:** In progress. The knowledge slices through deterministic citation resolution (ADRs 0015–0020), provider-neutral structured response planning (ADR-0021), provider-neutral model invocation contracts with a deterministic mock (ADR-0022), deterministic provider-neutral prompt compilation (ADR-0023), strict structural model-output admission (ADR-0024), single-attempt invocation-to-admission composition (ADR-0025), provider-neutral in-memory registry mechanics (ADR-0026), static deterministic single-model selection (ADR-0027), and explicit local-only selection-to-single-attempt admission composition (ADR-0028) are implemented. Learned reranking, partial truncation, provider tokenization, semantic safety and prompt-injection detection, factual correctness, grounding entailment and hallucination control, generative inference, concrete provider integration, dynamic availability/latency/cost/task-complexity routing, automatic local-first routing, fallback, privacy filtering and remote-provider authorization, response repair/regeneration, tool execution, async/streaming, networking, vector databases, persistence, and durable adapters remain unimplemented.
 
 - Source ingestion and provenance
 - [x] deterministic governed lexical retrieval
@@ -74,7 +74,8 @@ See [ADR-0010](../adr/0010-learning-state-evidence-and-persistence.md),
 - [x] strict provider-neutral model-output decoding and structural admission; inference and semantic validation remain deferred
 - [x] deterministic synchronous single-attempt invocation-to-admission composition; concrete providers, selection/routing/fallback, retry, repair, and semantic validation remain deferred
 - [x] immutable provider-neutral model registry with validated exact lookup and deterministic inventory; ADR-0025 still requires an explicitly supplied provider
-- [x] static provider-neutral eligibility and deterministic single-model selection with explicit caller privacy ordering; no invocation or ADR-0025 integration
+- [x] static provider-neutral eligibility and deterministic single-model selection with explicit caller privacy ordering
+- [x] explicit local-only selection, exact request construction, and single-attempt invocation/admission; ADR-0025 remains explicitly supplied and automatic local-first routing remains deferred
 
 Exit: grounded responses carry citations, confidence, and machine-validated tutor/behavior output.
 
@@ -137,3 +138,7 @@ ADR-0026 adds atomic validated construction of an immutable in-memory registry, 
 ### Phase 4 narrow increment: deterministic model selection
 
 ADR-0027 adds static descriptor eligibility and deterministic single-choice selection over ADR-0026. Caller-supplied privacy order precedes canonical provider/model identity tie-breaking, and the original registered `Arc` is returned without invocation. ADR-0025 remains unchanged and explicitly supplied. Dynamic availability, latency/cost/task-complexity routing, automatic local-first policy, fallback/retry, concrete providers/inference, provider tokenization, privacy filtering/remote authorization, semantic validation, tools, streaming, networking, persistence, and partial truncation remain deferred; NEXA-TUTOR-001 remains Baseline Draft.
+
+### Phase 4 narrow increment: explicit local-only selection and admission
+
+ADR-0028 adds deterministic explicit `LocalOnly` selection, exact ADR-0022 request construction, and reuse of ADR-0025's single-attempt invocation/admission operation. ADR-0025's original API remains explicitly supplied and ADR-0027 remains independently non-invoking. This is not automatic local-first routing. Remote authorization and privacy filtering; dynamic health/availability, latency, cost, and task-complexity routing; fallback/capability degradation; retry/repair/regeneration; concrete providers/inference; provider tokenization; semantic validation/safety; tools; async/streaming; networking; telemetry export; persistence/durable adapters; and partial truncation remain deferred. NEXA-TUTOR-001 remains Baseline Draft.

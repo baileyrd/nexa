@@ -2790,6 +2790,292 @@ mod tests {
             .to_string()
             .contains("provider.example"))
     }
+
+    fn local_selection_requirements() -> crate::selection::ModelSelectionRequirements {
+        crate::selection::ModelSelectionRequirements::new(
+            crate::model::RequiredCapabilities {
+                structured_output: true,
+                tool_calling: false,
+                vision: false,
+            },
+            1000,
+            vec![crate::model::PrivacyClass::LocalOnly],
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn local_selection_composes_canonical_selection_request_invocation_and_admission() {
+        use crate::generation::select_local_model_invoke_and_admit;
+        use crate::model::{LanguageModelProvider, ScriptedModelProvider, ScriptedOutcome};
+        use crate::registry::ModelRegistry;
+        use nexa_domain::{ModelId, ModelInvocationId, ModelProviderId};
+        use std::sync::Arc;
+
+        for reverse in [false, true] {
+            let f = admission_fixture();
+            let invocation_id = id(800, ModelInvocationId::new);
+            let mut selected_descriptor = f.descriptor.clone();
+            selected_descriptor.provider_id = id(40, ModelProviderId::new);
+            selected_descriptor.model_id = id(41, ModelId::new);
+            let mut selected_response = f.response.clone();
+            selected_response.invocation_id = invocation_id;
+            selected_response.provider_id = selected_descriptor.provider_id;
+            selected_response.model_id = selected_descriptor.model_id;
+            let selected = Arc::new(
+                ScriptedModelProvider::new(
+                    selected_descriptor.clone(),
+                    [ScriptedOutcome::Response(selected_response)],
+                )
+                .unwrap(),
+            );
+            let mut other_descriptor = f.descriptor.clone();
+            other_descriptor.provider_id = id(60, ModelProviderId::new);
+            other_descriptor.model_id = id(61, ModelId::new);
+            let other = Arc::new(
+                ScriptedModelProvider::new(
+                    other_descriptor,
+                    [ScriptedOutcome::Error(
+                        crate::model::ModelErrorKind::Internal,
+                    )],
+                )
+                .unwrap(),
+            );
+            let mut remote_descriptor = f.descriptor.clone();
+            remote_descriptor.provider_id = id(1, ModelProviderId::new);
+            remote_descriptor.model_id = id(1, ModelId::new);
+            remote_descriptor.privacy_class = crate::model::PrivacyClass::ApprovedRemote;
+            let remote = Arc::new(
+                ScriptedModelProvider::new(
+                    remote_descriptor,
+                    [ScriptedOutcome::Error(
+                        crate::model::ModelErrorKind::Internal,
+                    )],
+                )
+                .unwrap(),
+            );
+            let mut providers: Vec<Arc<dyn LanguageModelProvider>> =
+                vec![selected.clone(), other.clone(), remote.clone()];
+            if reverse {
+                providers.reverse();
+            }
+            let registry = ModelRegistry::try_from_providers(providers).unwrap();
+            let result = select_local_model_invoke_and_admit(
+                &registry,
+                invocation_id,
+                &local_selection_requirements(),
+                &f.compilation,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            )
+            .unwrap();
+            assert_eq!(result.evidence.provider_id, selected_descriptor.provider_id);
+            assert_eq!(result.evidence.model_id, selected_descriptor.model_id);
+            assert_eq!(result.evidence.invocation_id, invocation_id);
+            assert_eq!(
+                result.evidence.prompt_compilation_replay_anchor,
+                f.compilation.replay_anchor
+            );
+            assert_eq!(selected.remaining(), 0);
+            assert_eq!(other.remaining(), 1);
+            assert_eq!(remote.remaining(), 1);
+        }
+    }
+
+    #[test]
+    fn local_selection_rejects_nonlocal_and_malformed_requirements_without_invocation() {
+        use crate::generation::{
+            select_local_model_invoke_and_admit, SelectedInvocationAdmissionError,
+        };
+        use crate::model::{
+            LanguageModelProvider, PrivacyClass, ScriptedModelProvider, ScriptedOutcome,
+        };
+        use crate::registry::ModelRegistry;
+        use nexa_domain::{ModelInvocationId, ProtocolVersion};
+        use std::sync::Arc;
+
+        let f = admission_fixture();
+        for mutation in 0..9 {
+            let provider = Arc::new(
+                ScriptedModelProvider::new(
+                    f.descriptor.clone(),
+                    [ScriptedOutcome::Response(f.response.clone())],
+                )
+                .unwrap(),
+            );
+            let handle: Arc<dyn LanguageModelProvider> = provider.clone();
+            let registry = ModelRegistry::try_from_providers([handle]).unwrap();
+            let mut requirements = local_selection_requirements();
+            match mutation {
+                0 => requirements.contract_version = ProtocolVersion::new(2, 0),
+                1 => requirements.maximum_output_tokens = 0,
+                2 => requirements.required_capabilities.structured_output = false,
+                3 => requirements.privacy_preference.clear(),
+                4 => requirements.privacy_preference = vec![PrivacyClass::ApprovedRemote],
+                5 => requirements.privacy_preference = vec![PrivacyClass::RestrictedRemote],
+                6 => requirements
+                    .privacy_preference
+                    .push(PrivacyClass::ApprovedRemote),
+                7 => requirements
+                    .privacy_preference
+                    .push(PrivacyClass::RestrictedRemote),
+                _ => requirements
+                    .privacy_preference
+                    .push(PrivacyClass::LocalOnly),
+            }
+            assert_eq!(
+                select_local_model_invoke_and_admit(
+                    &registry,
+                    id(801, ModelInvocationId::new),
+                    &requirements,
+                    &f.compilation,
+                    &f.authority,
+                    &f.context,
+                    &f.citations,
+                ),
+                Err(SelectedInvocationAdmissionError::InvalidLocalOnlyRequirements)
+            );
+            assert_eq!(provider.remaining(), 1, "mutation {mutation}");
+        }
+    }
+
+    #[test]
+    fn local_selection_and_single_attempt_failures_never_fallback() {
+        use crate::generation::{
+            select_local_model_invoke_and_admit, InvocationAdmissionError,
+            SelectedInvocationAdmissionError,
+        };
+        use crate::model::{
+            LanguageModelProvider, ModelErrorKind, ScriptedModelProvider, ScriptedOutcome,
+        };
+        use crate::registry::ModelRegistry;
+        use crate::selection::ModelSelectionError;
+        use nexa_domain::{ModelInvocationId, ModelProviderId};
+        use std::sync::Arc;
+
+        let f = admission_fixture();
+        let invocation_id = id(802, ModelInvocationId::new);
+        let empty = ModelRegistry::try_from_providers(std::iter::empty()).unwrap();
+        assert_eq!(
+            select_local_model_invoke_and_admit(
+                &empty,
+                invocation_id,
+                &local_selection_requirements(),
+                &f.compilation,
+                &f.authority,
+                &f.context,
+                &f.citations
+            ),
+            Err(SelectedInvocationAdmissionError::Selection(
+                ModelSelectionError::NoEligibleModel
+            ))
+        );
+
+        let mut first_descriptor = f.descriptor.clone();
+        first_descriptor.provider_id = id(30, ModelProviderId::new);
+        let first = Arc::new(
+            ScriptedModelProvider::new(
+                first_descriptor,
+                [ScriptedOutcome::Error(ModelErrorKind::Unavailable)],
+            )
+            .unwrap(),
+        );
+        let mut second_descriptor = f.descriptor.clone();
+        second_descriptor.provider_id = id(31, ModelProviderId::new);
+        let second = Arc::new(
+            ScriptedModelProvider::new(
+                second_descriptor,
+                [ScriptedOutcome::Response(f.response.clone())],
+            )
+            .unwrap(),
+        );
+        let registry = ModelRegistry::try_from_providers([
+            first.clone() as Arc<dyn LanguageModelProvider>,
+            second.clone() as Arc<dyn LanguageModelProvider>,
+        ])
+        .unwrap();
+        assert_eq!(
+            select_local_model_invoke_and_admit(
+                &registry,
+                invocation_id,
+                &local_selection_requirements(),
+                &f.compilation,
+                &f.authority,
+                &f.context,
+                &f.citations
+            ),
+            Err(SelectedInvocationAdmissionError::InvocationAdmission(
+                InvocationAdmissionError::Invocation(ModelErrorKind::Unavailable)
+            ))
+        );
+        assert_eq!(first.remaining(), 0);
+        assert_eq!(second.remaining(), 1);
+    }
+
+    #[test]
+    fn local_selection_preflight_and_admission_errors_are_content_free_and_single_attempt() {
+        use crate::admission::AdmissionError;
+        use crate::generation::{
+            select_local_model_invoke_and_admit, InvocationAdmissionError,
+            SelectedInvocationAdmissionError,
+        };
+        use crate::model::{
+            LanguageModelProvider, ModelInput, RawModelOutput, ScriptedModelProvider,
+            ScriptedOutcome,
+        };
+        use crate::registry::ModelRegistry;
+        use nexa_domain::ModelInvocationId;
+        use std::sync::Arc;
+
+        for post_invocation in [false, true] {
+            let mut f = admission_fixture();
+            let secret = "distinctive-selected-composition-secret";
+            if post_invocation {
+                f.response.output =
+                    RawModelOutput::new(format!("{{\"unknown\":\"{secret}\"}}")).unwrap();
+            } else {
+                f.compilation.model_input = ModelInput::new(secret).unwrap();
+            }
+            let provider = Arc::new(
+                ScriptedModelProvider::new(
+                    f.descriptor.clone(),
+                    [ScriptedOutcome::Response(f.response.clone())],
+                )
+                .unwrap(),
+            );
+            let registry = ModelRegistry::try_from_providers([
+                provider.clone() as Arc<dyn LanguageModelProvider>
+            ])
+            .unwrap();
+            let error = select_local_model_invoke_and_admit(
+                &registry,
+                id(803, ModelInvocationId::new),
+                &local_selection_requirements(),
+                &f.compilation,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            )
+            .unwrap_err();
+            let expected = if post_invocation {
+                SelectedInvocationAdmissionError::InvocationAdmission(
+                    InvocationAdmissionError::Invocation(
+                        crate::model::ModelErrorKind::IdentityMismatch,
+                    ),
+                )
+            } else {
+                SelectedInvocationAdmissionError::InvocationAdmission(
+                    InvocationAdmissionError::Preflight(
+                        AdmissionError::PromptAssociationReplayMismatch,
+                    ),
+                )
+            };
+            assert_eq!(error, expected);
+            assert_eq!(provider.remaining(), usize::from(!post_invocation));
+            assert!(!format!("{error} {error:?}").contains(secret));
+        }
+    }
     #[test]
     fn response_planner_has_no_generation_or_async_surface() {
         let source = include_str!("lib.rs");

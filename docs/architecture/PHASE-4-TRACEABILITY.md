@@ -24,7 +24,7 @@
 | Semantic citation fidelity and tutor behavior | Explicitly deferred by ADR-0020 | Not implemented |
 | Model providers, networking, vector databases, and durable adapters | Explicitly deferred by ADR-0017 | Not implemented |
 
-Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministic vector retrieval are implemented, as are deterministic prompt compilation, strict structural output admission, single-attempt invocation-to-admission composition, provider-neutral in-memory registry mechanics, and static deterministic single-model selection. Learned/cross-encoder reranking, authority/freshness ranking, partial truncation, dynamic availability/latency/cost/task-complexity routing, automatic local-first policy, fallback/retry, privacy filtering and remote authorization, provider tokenization, semantic citation fidelity/entailment, semantic safety, tutor inference and concrete providers, networking, vector databases, and durable adapters remain unimplemented. ADR-0025 still requires an explicitly supplied provider. The reconstructed knowledge and tutor specifications retain their registry authority; NEXA-TUTOR-001 remains Baseline Draft and these increments do not promote it. The known inconsistency between implemented ingestion/context evidence here and unchecked corresponding roadmap bullets is intentionally not resolved by this increment.
+Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministic vector retrieval are implemented, as are deterministic prompt compilation, strict structural output admission, single-attempt invocation-to-admission composition, provider-neutral in-memory registry mechanics, static deterministic single-model selection, and explicit local-only selection-to-single-attempt admission composition. Learned/cross-encoder reranking, authority/freshness ranking, partial truncation, dynamic availability/latency/cost/task-complexity routing, automatic local-first policy, fallback/retry, privacy filtering and remote authorization, provider tokenization, semantic citation fidelity/entailment, semantic safety, tutor inference and concrete providers, networking, vector databases, and durable adapters remain unimplemented. ADR-0025 still accepts an explicitly supplied provider; ADR-0028 adds a separate explicit local-only composition and does not implement automatic local-first routing. The reconstructed knowledge and tutor specifications retain their registry authority; NEXA-TUTOR-001 remains Baseline Draft and these increments do not promote it. The known inconsistency between implemented ingestion/context evidence here and unchecked corresponding roadmap bullets is intentionally not resolved by this increment.
 
 ## Tutor-response planning increment
 
@@ -104,3 +104,17 @@ Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministi
 | Explicit privacy eligibility and deterministic total ordering | Caller privacy position, canonical provider identity, then canonical model identity | Implemented slice |
 | Exactly one original registered handle without provider consumption | `SelectedModel`, `Arc::ptr_eq`, scripted FIFO preservation, insertion-order tests | Implemented slice |
 | Dynamic routing, automatic local-first policy, fallback/retry, privacy filtering/authorization, provider integration/inference | Explicitly deferred by ADR-0027; ADR-0025 remains explicitly supplied | Not implemented |
+
+## Explicit local-only selection-to-admission composition evidence
+
+| Requirement | Evidence | Status |
+|---|---|---|
+| Fail-closed explicit local-only requirements | `select_local_model_invoke_and_admit`; version, output, structured-output, and exact singleton-privacy tests; ADR-0028 | Implemented slice |
+| Exact ADR-0027 selection and ADR-0022 request construction | Exact compiled `ModelInput`, unchanged requirements, selected descriptor identities, and caller invocation identity tests | Implemented slice |
+| Reuse of ADR-0025 single-attempt preflight/invocation/admission | Nested `SelectedInvocationAdmissionError`; preflight, invocation, and post-invocation failure tests | Implemented slice |
+| Canonical selection independent of registry insertion order | Multiple eligible local-provider order tests | Implemented slice |
+| Local-only privacy and untouched non-selected state | Scripted outcome retention for non-selected local and remote providers | Implemented slice |
+| Original API boundaries | ADR-0025 remains explicitly supplied; ADR-0027 remains standalone and non-invoking | Preserved |
+| Automatic local-first routing, remote authorization/privacy filtering, dynamic routing, fallback/retry/repair, inference, tokenization, semantic safety, tools, async/networking/telemetry/persistence, partial truncation | Explicitly deferred by ADR-0028 | Not implemented |
+
+NEXA-TUTOR-001 remains Baseline Draft. The documented inconsistency between implemented ingestion/context assembly evidence and their unchecked roadmap bullets remains intentionally preserved.
