@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 
 pub mod admission;
+pub mod availability;
 pub mod generation;
 pub mod model;
 pub mod prompt;
