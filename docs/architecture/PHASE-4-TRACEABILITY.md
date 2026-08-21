@@ -24,7 +24,7 @@
 | Semantic citation fidelity and tutor behavior | Explicitly deferred by ADR-0020 | Not implemented |
 | Model providers, networking, vector databases, and durable adapters | Explicitly deferred by ADR-0017 | Not implemented |
 
-Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministic vector retrieval are implemented, as are deterministic prompt compilation, strict structural output admission, single-attempt invocation-to-admission composition, and provider-neutral in-memory registry mechanics. Learned/cross-encoder reranking, authority/freshness ranking, partial truncation, provider selection/routing/local-first preference/fallback, privacy authorization, provider tokenization, semantic citation fidelity/entailment, semantic safety, tutor inference and concrete providers, networking, vector databases, and durable adapters remain unimplemented. ADR-0025 still requires an explicitly supplied provider. The reconstructed knowledge and tutor specifications retain their registry authority; NEXA-TUTOR-001 remains Baseline Draft and these increments do not promote it. The known inconsistency between implemented ingestion/context evidence here and unchecked corresponding roadmap bullets is intentionally not resolved by this increment.
+Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministic vector retrieval are implemented, as are deterministic prompt compilation, strict structural output admission, single-attempt invocation-to-admission composition, provider-neutral in-memory registry mechanics, and static deterministic single-model selection. Learned/cross-encoder reranking, authority/freshness ranking, partial truncation, dynamic availability/latency/cost/task-complexity routing, automatic local-first policy, fallback/retry, privacy filtering and remote authorization, provider tokenization, semantic citation fidelity/entailment, semantic safety, tutor inference and concrete providers, networking, vector databases, and durable adapters remain unimplemented. ADR-0025 still requires an explicitly supplied provider. The reconstructed knowledge and tutor specifications retain their registry authority; NEXA-TUTOR-001 remains Baseline Draft and these increments do not promote it. The known inconsistency between implemented ingestion/context evidence here and unchecked corresponding roadmap bullets is intentionally not resolved by this increment.
 
 ## Tutor-response planning increment
 
@@ -91,4 +91,16 @@ Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministi
 | Deterministic read-only inventory | Canonical `ModelProviderId`, then `ModelId`, ordering independent of insertion | Implemented slice |
 | Exact shared-provider resolution | Exact-pair lookup, missing-pair errors, and `Arc::ptr_eq` identity evidence | Implemented slice |
 | No provider consumption and content-free diagnostics | Scripted FIFO preservation, counting-provider boundary, and redaction tests; ADR-0026 | Implemented slice |
-| Selection, routing, local-first preference, fallback, privacy authorization, concrete providers, and inference | Explicitly deferred by ADR-0026; ADR-0025 continues to require an explicitly supplied provider | Not implemented |
+| Static selection | Deferred by ADR-0026 and implemented separately by ADR-0027 | Implemented slice |
+| Dynamic routing, automatic local-first policy, fallback, privacy authorization, concrete providers, and inference | Still deferred; ADR-0025 continues to require an explicitly supplied provider | Not implemented |
+
+
+## Deterministic model selection
+
+| Requirement | Evidence | Status |
+|---|---|---|
+| Closed, standalone-validating, content-free caller requirements | `ModelSelectionRequirements`, strict V1 wire decode; ADR-0027 | Implemented slice |
+| Shared ADR-0022 capability and conservative capacity eligibility | Factored descriptor check used by selection and unchanged `ModelRequest::validate_for` behavior | Implemented slice |
+| Explicit privacy eligibility and deterministic total ordering | Caller privacy position, canonical provider identity, then canonical model identity | Implemented slice |
+| Exactly one original registered handle without provider consumption | `SelectedModel`, `Arc::ptr_eq`, scripted FIFO preservation, insertion-order tests | Implemented slice |
+| Dynamic routing, automatic local-first policy, fallback/retry, privacy filtering/authorization, provider integration/inference | Explicitly deferred by ADR-0027; ADR-0025 remains explicitly supplied | Not implemented |
