@@ -4363,8 +4363,8 @@ mod tests {
         };
         use crate::generation::select_authorized_available_remote_model_invoke_and_admit;
         use crate::model::{
-            LanguageModelProvider, ModelRequest, ModelResponse, PrivacyClass,
-            ScriptedModelProvider, ScriptedOutcome, MODEL_INVOCATION_V1,
+            LanguageModelProvider, ModelRequest, ModelResponse, PrivacyClass, ScriptedOutcome,
+            MODEL_INVOCATION_V1,
         };
         use crate::registry::ModelRegistry;
         use nexa_domain::{ModelId, ModelInvocationId, ModelProviderId};
@@ -4391,30 +4391,46 @@ mod tests {
                 response.invocation_id = invocation_id;
                 response.provider_id = selected_descriptor.provider_id;
                 response.model_id = selected_descriptor.model_id;
-                let selected = Arc::new(
-                    ScriptedModelProvider::new(
-                        selected_descriptor.clone(),
-                        [
-                            ScriptedOutcome::Response(response),
-                            ScriptedOutcome::Error(crate::model::ModelErrorKind::Internal),
-                        ],
-                    )
-                    .unwrap(),
-                );
+                let selected = Arc::new(RecordingModelProvider::new(
+                    selected_descriptor.clone(),
+                    [
+                        ScriptedOutcome::Response(response),
+                        ScriptedOutcome::Error(crate::model::ModelErrorKind::Internal),
+                    ],
+                ));
                 let mut other_descriptor = selected_descriptor.clone();
                 other_descriptor.provider_id = id(30, ModelProviderId::new);
                 other_descriptor.model_id = id(30, ModelId::new);
-                let other = Arc::new(
-                    ScriptedModelProvider::new(
-                        other_descriptor.clone(),
-                        [ScriptedOutcome::Error(
-                            crate::model::ModelErrorKind::Internal,
-                        )],
-                    )
-                    .unwrap(),
-                );
-                let mut handles: Vec<Arc<dyn LanguageModelProvider>> =
-                    vec![selected.clone(), other.clone()];
+                let mut unauthorized_descriptor = selected_descriptor.clone();
+                unauthorized_descriptor.provider_id = id(40, ModelProviderId::new);
+                unauthorized_descriptor.model_id = id(40, ModelId::new);
+                let mut unavailable_descriptor = selected_descriptor.clone();
+                unavailable_descriptor.provider_id = id(50, ModelProviderId::new);
+                unavailable_descriptor.model_id = id(50, ModelId::new);
+                let mut local_descriptor = selected_descriptor.clone();
+                local_descriptor.provider_id = id(60, ModelProviderId::new);
+                local_descriptor.model_id = id(60, ModelId::new);
+                local_descriptor.privacy_class = PrivacyClass::LocalOnly;
+                let make_unselected = |descriptor| {
+                    Arc::new(RecordingModelProvider::new(
+                        descriptor,
+                        [
+                            ScriptedOutcome::Error(crate::model::ModelErrorKind::Internal),
+                            ScriptedOutcome::Error(crate::model::ModelErrorKind::Unavailable),
+                        ],
+                    ))
+                };
+                let other = make_unselected(other_descriptor.clone());
+                let unauthorized = make_unselected(unauthorized_descriptor.clone());
+                let unavailable = make_unselected(unavailable_descriptor.clone());
+                let local = make_unselected(local_descriptor.clone());
+                let mut handles: Vec<Arc<dyn LanguageModelProvider>> = vec![
+                    selected.clone(),
+                    other.clone(),
+                    unauthorized.clone(),
+                    unavailable.clone(),
+                    local.clone(),
+                ];
                 if reverse_registry {
                     handles.reverse();
                 }
@@ -4430,6 +4446,21 @@ mod tests {
                         model_id: other_descriptor.model_id,
                         state: ModelAvailabilityState::Available,
                     },
+                    ModelAvailabilityEntry {
+                        provider_id: unauthorized_descriptor.provider_id,
+                        model_id: unauthorized_descriptor.model_id,
+                        state: ModelAvailabilityState::Available,
+                    },
+                    ModelAvailabilityEntry {
+                        provider_id: unavailable_descriptor.provider_id,
+                        model_id: unavailable_descriptor.model_id,
+                        state: ModelAvailabilityState::Unavailable,
+                    },
+                    ModelAvailabilityEntry {
+                        provider_id: local_descriptor.provider_id,
+                        model_id: local_descriptor.model_id,
+                        state: ModelAvailabilityState::Available,
+                    },
                 ])
                 .unwrap();
                 let authorization = RemoteModelAuthorization::new(
@@ -4443,6 +4474,11 @@ mod tests {
                         RemoteModelAuthorizationEntry {
                             provider_id: other_descriptor.provider_id,
                             model_id: other_descriptor.model_id,
+                            privacy_class: privacy,
+                        },
+                        RemoteModelAuthorizationEntry {
+                            provider_id: unavailable_descriptor.provider_id,
+                            model_id: unavailable_descriptor.model_id,
                             privacy_class: privacy,
                         },
                     ],
@@ -4493,7 +4529,11 @@ mod tests {
                     f.compilation.replay_anchor
                 );
                 assert_eq!(selected.remaining(), 1);
-                assert_eq!(other.remaining(), 1);
+                assert_eq!(selected.requests(), vec![expected_request]);
+                for provider in [&other, &unauthorized, &unavailable, &local] {
+                    assert_eq!(provider.remaining(), 2);
+                    assert!(provider.requests().is_empty());
+                }
             }
         }
     }
@@ -4644,18 +4684,22 @@ mod tests {
             AuthorizedAvailableRemoteInvocationAdmissionError, InvocationAdmissionError,
         };
         use crate::model::{
-            LanguageModelProvider, ModelErrorKind, PrivacyClass, RawModelOutput,
-            ScriptedModelProvider, ScriptedOutcome,
+            LanguageModelProvider, ModelErrorKind, ModelRequest, PrivacyClass, RawModelOutput,
+            ScriptedOutcome, MODEL_INVOCATION_V1,
         };
         use crate::registry::ModelRegistry;
-        use nexa_domain::{ModelInvocationId, ModelProviderId};
+        use nexa_domain::{ModelId, ModelInvocationId, ModelProviderId};
         use std::sync::Arc;
 
         for mode in 0..3 {
             let mut f = admission_fixture();
             let invocation_id = id(1035, ModelInvocationId::new);
+            f.descriptor.provider_id = id(70, ModelProviderId::new);
+            f.descriptor.model_id = id(70, ModelId::new);
             f.descriptor.privacy_class = PrivacyClass::RestrictedRemote;
             f.response.invocation_id = invocation_id;
+            f.response.provider_id = f.descriptor.provider_id;
+            f.response.model_id = f.descriptor.model_id;
             if mode == 0 {
                 f.authority.context_package_id = id(9999, nexa_domain::ContextPackageId::new);
             }
@@ -4667,26 +4711,45 @@ mod tests {
             } else {
                 ScriptedOutcome::Response(f.response.clone())
             };
-            let selected = Arc::new(
-                ScriptedModelProvider::new(
-                    f.descriptor.clone(),
-                    [first, ScriptedOutcome::Error(ModelErrorKind::Internal)],
-                )
-                .unwrap(),
-            );
-            let mut other_descriptor = f.descriptor.clone();
-            other_descriptor.provider_id = id(9998, ModelProviderId::new);
-            let other = Arc::new(
-                ScriptedModelProvider::new(
-                    other_descriptor.clone(),
-                    [ScriptedOutcome::Error(ModelErrorKind::Internal)],
-                )
-                .unwrap(),
-            );
-            let registry = ModelRegistry::try_from_providers([
-                selected.clone() as Arc<dyn LanguageModelProvider>,
-                other.clone() as Arc<dyn LanguageModelProvider>,
-            ])
+            let selected = Arc::new(RecordingModelProvider::new(
+                f.descriptor.clone(),
+                [first, ScriptedOutcome::Error(ModelErrorKind::Internal)],
+            ));
+
+            let mut descriptors = Vec::new();
+            for (number, privacy) in [
+                (80_u128, PrivacyClass::RestrictedRemote),
+                (90, PrivacyClass::ApprovedRemote),
+                (100, PrivacyClass::RestrictedRemote),
+                (110, PrivacyClass::LocalOnly),
+            ] {
+                let mut descriptor = f.descriptor.clone();
+                descriptor.provider_id = id(number, ModelProviderId::new);
+                descriptor.model_id = id(number, ModelId::new);
+                descriptor.privacy_class = privacy;
+                descriptors.push(descriptor);
+            }
+            let providers: Vec<Arc<RecordingModelProvider>> = descriptors
+                .iter()
+                .cloned()
+                .map(|descriptor| {
+                    Arc::new(RecordingModelProvider::new(
+                        descriptor,
+                        [
+                            ScriptedOutcome::Error(ModelErrorKind::Internal),
+                            ScriptedOutcome::Error(ModelErrorKind::Unavailable),
+                        ],
+                    ))
+                })
+                .collect();
+            let registry = ModelRegistry::try_from_providers(
+                std::iter::once(selected.clone() as Arc<dyn LanguageModelProvider>).chain(
+                    providers
+                        .iter()
+                        .cloned()
+                        .map(|provider| provider as Arc<dyn LanguageModelProvider>),
+                ),
+            )
             .unwrap();
             let availability = ModelAvailabilitySnapshot::new(vec![
                 ModelAvailabilityEntry {
@@ -4695,8 +4758,23 @@ mod tests {
                     state: ModelAvailabilityState::Available,
                 },
                 ModelAvailabilityEntry {
-                    provider_id: other_descriptor.provider_id,
-                    model_id: other_descriptor.model_id,
+                    provider_id: descriptors[0].provider_id,
+                    model_id: descriptors[0].model_id,
+                    state: ModelAvailabilityState::Available,
+                },
+                ModelAvailabilityEntry {
+                    provider_id: descriptors[1].provider_id,
+                    model_id: descriptors[1].model_id,
+                    state: ModelAvailabilityState::Available,
+                },
+                ModelAvailabilityEntry {
+                    provider_id: descriptors[2].provider_id,
+                    model_id: descriptors[2].model_id,
+                    state: ModelAvailabilityState::Unavailable,
+                },
+                ModelAvailabilityEntry {
+                    provider_id: descriptors[3].provider_id,
+                    model_id: descriptors[3].model_id,
                     state: ModelAvailabilityState::Available,
                 },
             ])
@@ -4710,8 +4788,13 @@ mod tests {
                         privacy_class: PrivacyClass::RestrictedRemote,
                     },
                     RemoteModelAuthorizationEntry {
-                        provider_id: other_descriptor.provider_id,
-                        model_id: other_descriptor.model_id,
+                        provider_id: descriptors[0].provider_id,
+                        model_id: descriptors[0].model_id,
+                        privacy_class: PrivacyClass::RestrictedRemote,
+                    },
+                    RemoteModelAuthorizationEntry {
+                        provider_id: descriptors[2].provider_id,
+                        model_id: descriptors[2].model_id,
                         privacy_class: PrivacyClass::RestrictedRemote,
                     },
                 ],
@@ -4741,7 +4824,27 @@ mod tests {
                 AuthorizedAvailableRemoteInvocationAdmissionError::InvocationAdmission(expected)
             );
             assert_eq!(selected.remaining(), if mode == 0 { 2 } else { 1 });
-            assert_eq!(other.remaining(), 1);
+            let expected_requests = if mode == 0 {
+                vec![]
+            } else {
+                vec![ModelRequest {
+                    invocation_id,
+                    provider_id: f.descriptor.provider_id,
+                    model_id: f.descriptor.model_id,
+                    contract_version: MODEL_INVOCATION_V1,
+                    input: f.compilation.model_input.clone(),
+                    required_capabilities: remote_selection_requirements(vec![
+                        PrivacyClass::RestrictedRemote,
+                    ])
+                    .required_capabilities,
+                    maximum_output_tokens: 1000,
+                }]
+            };
+            assert_eq!(selected.requests(), expected_requests);
+            for provider in &providers {
+                assert_eq!(provider.remaining(), 2);
+                assert!(provider.requests().is_empty());
+            }
             let diagnostics = format!("{error:?} {error}");
             for sentinel in [
                 "private-response-sentinel",
