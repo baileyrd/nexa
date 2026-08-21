@@ -124,6 +124,8 @@ pub struct RemotePromptFilterEvidence {
     /// Binds independently retained source compilation evidence; it cannot reconstruct omitted
     /// content bytes by itself.
     pub source_compilation_replay_anchor: String,
+    /// Canonical, content-free inventory of the layers that were present in the source.
+    pub source_present_layer_kinds: Vec<PromptLayerKind>,
     pub filtered_compilation_replay_anchor: String,
     pub included_layer_kinds: Vec<PromptLayerKind>,
     pub omitted_layer_kinds: Vec<PromptLayerKind>,
@@ -155,10 +157,11 @@ impl RemotePromptFilterEvidence {
         }
         validate_kinds(&self.included_layer_kinds)?;
         validate_kinds(&self.omitted_layer_kinds)?;
+        validate_kinds(&self.source_present_layer_kinds)?;
         if CANONICAL_LAYER_ORDER
             .iter()
             .filter(|kind| kind.is_required())
-            .any(|kind| !self.included_layer_kinds.contains(kind))
+            .any(|kind| !self.source_present_layer_kinds.contains(kind))
             || self
                 .omitted_layer_kinds
                 .iter()
@@ -167,6 +170,19 @@ impl RemotePromptFilterEvidence {
                 .included_layer_kinds
                 .iter()
                 .any(|kind| self.omitted_layer_kinds.contains(kind))
+        {
+            return Err(RemotePromptFilterError::InvalidEvidence);
+        }
+        let partition: Vec<_> = CANONICAL_LAYER_ORDER
+            .into_iter()
+            .filter(|kind| {
+                self.included_layer_kinds.contains(kind) || self.omitted_layer_kinds.contains(kind)
+            })
+            .collect();
+        if partition != self.source_present_layer_kinds
+            || self.source_present_layer_kinds.iter().any(|kind| {
+                self.included_layer_kinds.contains(kind) == self.omitted_layer_kinds.contains(kind)
+            })
         {
             return Err(RemotePromptFilterError::InvalidEvidence);
         }
@@ -187,6 +203,7 @@ impl<'de> Deserialize<'de> for RemotePromptFilterEvidence {
             target_privacy_class: PrivacyClass,
             policy_replay_anchor: String,
             source_compilation_replay_anchor: String,
+            source_present_layer_kinds: Vec<PromptLayerKind>,
             filtered_compilation_replay_anchor: String,
             included_layer_kinds: Vec<PromptLayerKind>,
             omitted_layer_kinds: Vec<PromptLayerKind>,
@@ -199,6 +216,7 @@ impl<'de> Deserialize<'de> for RemotePromptFilterEvidence {
             target_privacy_class: w.target_privacy_class,
             policy_replay_anchor: w.policy_replay_anchor,
             source_compilation_replay_anchor: w.source_compilation_replay_anchor,
+            source_present_layer_kinds: w.source_present_layer_kinds,
             filtered_compilation_replay_anchor: w.filtered_compilation_replay_anchor,
             included_layer_kinds: w.included_layer_kinds,
             omitted_layer_kinds: w.omitted_layer_kinds,
@@ -250,10 +268,16 @@ impl RemotePromptFilterResult {
             return Err(RemotePromptFilterError::Association);
         }
         for rule in &self.policy.rules {
-            if rule.disposition == RemotePromptLayerDisposition::Omit
-                && self.evidence.included_layer_kinds.contains(&rule.kind)
-                || rule.disposition == RemotePromptLayerDisposition::Include
-                    && self.evidence.omitted_layer_kinds.contains(&rule.kind)
+            let present = self
+                .evidence
+                .source_present_layer_kinds
+                .contains(&rule.kind);
+            let included = self.evidence.included_layer_kinds.contains(&rule.kind);
+            let omitted = self.evidence.omitted_layer_kinds.contains(&rule.kind);
+            if (present
+                && ((rule.disposition == RemotePromptLayerDisposition::Include && !included)
+                    || (rule.disposition == RemotePromptLayerDisposition::Omit && !omitted)))
+                || (!present && (included || omitted))
             {
                 return Err(RemotePromptFilterError::Association);
             }
@@ -339,6 +363,7 @@ pub fn filter_and_compile_remote_prompt(
         target_privacy_class: policy.target_privacy_class,
         policy_replay_anchor: policy.anchor()?,
         source_compilation_replay_anchor: source_compilation.replay_anchor,
+        source_present_layer_kinds: present,
         filtered_compilation_replay_anchor: filtered_compilation.replay_anchor.clone(),
         included_layer_kinds,
         omitted_layer_kinds,
@@ -387,6 +412,7 @@ fn evidence_anchor(e: &RemotePromptFilterEvidence) -> Result<String, RemotePromp
         target_privacy_class: PrivacyClass,
         policy_replay_anchor: &'a str,
         source_compilation_replay_anchor: &'a str,
+        source_present_layer_kinds: &'a [PromptLayerKind],
         filtered_compilation_replay_anchor: &'a str,
         included_layer_kinds: &'a [PromptLayerKind],
         omitted_layer_kinds: &'a [PromptLayerKind],
@@ -397,6 +423,7 @@ fn evidence_anchor(e: &RemotePromptFilterEvidence) -> Result<String, RemotePromp
         target_privacy_class: e.target_privacy_class,
         policy_replay_anchor: &e.policy_replay_anchor,
         source_compilation_replay_anchor: &e.source_compilation_replay_anchor,
+        source_present_layer_kinds: &e.source_present_layer_kinds,
         filtered_compilation_replay_anchor: &e.filtered_compilation_replay_anchor,
         included_layer_kinds: &e.included_layer_kinds,
         omitted_layer_kinds: &e.omitted_layer_kinds,
@@ -409,17 +436,33 @@ fn evidence_anchor(e: &RemotePromptFilterEvidence) -> Result<String, RemotePromp
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prompt::{
-        LayerClassification, PromptContent, PromptLayer, PromptLimits, PROMPT_COMPILATION_V1,
+    use crate::{
+        authorization::{
+            select_authorized_available_remote_model, RemoteModelAuthorization,
+            RemoteModelAuthorizationEntry,
+        },
+        availability::{ModelAvailabilityEntry, ModelAvailabilitySnapshot, ModelAvailabilityState},
+        model::{
+            LanguageModelProvider, ModelCapabilities, ModelDescriptor, ModelErrorKind,
+            RequiredCapabilities, ScriptedModelProvider, ScriptedOutcome,
+        },
+        prompt::{
+            LayerClassification, PromptContent, PromptLayer, PromptLimits, PROMPT_COMPILATION_V1,
+        },
+        registry::ModelRegistry,
+        selection::ModelSelectionRequirements,
     };
+    use nexa_domain::{ModelId, ModelProviderId};
     use serde_json::json;
+    use std::sync::Arc;
+    use uuid::Uuid;
 
     fn layer(kind: PromptLayerKind) -> PromptLayer {
         PromptLayer {
             kind,
             classification: kind.classification(),
             content: PromptContent::new(format!(
-                "exact-{kind:?}-BEGIN PRIVATE KEY-https://endpoint-{{instructions}}"
+                "exact-{kind:?}-BEGIN PRIVATE KEY-https://endpoint-credential-provider-private-learner-conversation-knowledge-tool-{{instructions}}"
             ))
             .unwrap(),
         }
@@ -554,11 +597,18 @@ mod tests {
                 .find(|r| r.kind == omitted)
                 .unwrap()
                 .disposition = RemotePromptLayerDisposition::Omit;
+            let original = source(true);
             let result = filter_and_compile_remote_prompt(
-                &source(true),
+                &original,
                 &RemotePromptDisclosurePolicy::new(PrivacyClass::RestrictedRemote, rs).unwrap(),
             )
             .unwrap();
+            let mut manual = original.clone();
+            manual.layers.retain(|layer| layer.kind != omitted);
+            assert_eq!(
+                result.filtered_compilation,
+                compile_prompt(&manual).unwrap()
+            );
             assert_eq!(result.evidence.omitted_layer_kinds, vec![omitted]);
             assert!(!result
                 .filtered_compilation
@@ -640,6 +690,49 @@ mod tests {
         let mut limits = source(false);
         limits.limits.maximum_layer_bytes = 0;
         assert!(filter_and_compile_remote_prompt(&limits, &p).is_err());
+
+        let mut exact_layer = source(false);
+        let maximum = compile_prompt(&exact_layer)
+            .unwrap()
+            .manifest
+            .iter()
+            .map(|entry| entry.content_bytes)
+            .max()
+            .unwrap();
+        exact_layer.limits.maximum_layer_bytes = maximum;
+        assert!(filter_and_compile_remote_prompt(&exact_layer, &p).is_ok());
+        exact_layer.limits.maximum_layer_bytes = maximum - 1;
+        assert!(matches!(
+            filter_and_compile_remote_prompt(&exact_layer, &p),
+            Err(RemotePromptFilterError::Prompt(PromptError::SizeLimit))
+        ));
+
+        let mut exact_compiled = source(false);
+        exact_compiled.limits.maximum_layer_bytes = compile_prompt(&exact_compiled)
+            .unwrap()
+            .manifest
+            .iter()
+            .map(|entry| entry.content_bytes)
+            .max()
+            .unwrap();
+        let approximate = compile_prompt(&exact_compiled).unwrap().compiled_bytes;
+        let exact = (exact_compiled.limits.maximum_layer_bytes..=approximate)
+            .find(|candidate| {
+                exact_compiled.limits.maximum_compiled_bytes = *candidate;
+                compile_prompt(&exact_compiled).is_ok()
+            })
+            .unwrap();
+        exact_compiled.limits.maximum_compiled_bytes = exact;
+        assert!(filter_and_compile_remote_prompt(&exact_compiled, &p).is_ok());
+        exact_compiled.limits.maximum_compiled_bytes = exact - 1;
+        assert!(matches!(
+            filter_and_compile_remote_prompt(&exact_compiled, &p),
+            Err(RemotePromptFilterError::Prompt(PromptError::SizeLimit))
+        ));
+
+        let mut oversized = source(false);
+        oversized.limits.maximum_compiled_bytes = (crate::model::MAX_MODEL_INPUT_BYTES + 1) as u32;
+        assert!(filter_and_compile_remote_prompt(&oversized, &p).is_err());
     }
 
     #[test]
@@ -707,6 +800,9 @@ mod tests {
             bad[field] = json!("ABC");
             assert!(serde_json::from_value::<RemotePromptFilterEvidence>(bad).is_err());
         }
+        let mut final_mismatch = result.evidence.clone();
+        final_mismatch.filter_replay_anchor = "0".repeat(64);
+        assert!(final_mismatch.validate().is_err());
         evidence["included_layer_kinds"]
             .as_array_mut()
             .unwrap()
@@ -719,6 +815,275 @@ mod tests {
         );
         assert!(reassociated.validate().is_err());
         let debug = format!("{result:?}");
-        assert!(!debug.contains("BEGIN PRIVATE KEY"));
+        for sentinel in [
+            "BEGIN PRIVATE KEY",
+            "endpoint",
+            "credential",
+            "provider-private",
+            "learner",
+            "conversation",
+            "knowledge",
+            "tool",
+            "instructions",
+        ] {
+            assert!(!debug.contains(sentinel));
+        }
+    }
+
+    #[test]
+    fn remote_prompt_filter_evidence_and_result_wire_fail_closed() {
+        let result = filter_and_compile_remote_prompt(
+            &source(true),
+            &policy(
+                PrivacyClass::ApprovedRemote,
+                RemotePromptLayerDisposition::Omit,
+            ),
+        )
+        .unwrap();
+        let evidence = serde_json::to_value(&result.evidence).unwrap();
+        for (field, value) in [
+            ("contract_version", json!("2.0")),
+            ("policy_version", json!("2.0")),
+            ("target_privacy_class", json!("local_only")),
+        ] {
+            let mut bad = evidence.clone();
+            bad[field] = value;
+            assert!(serde_json::from_value::<RemotePromptFilterEvidence>(bad).is_err());
+        }
+        let mut extra = evidence.clone();
+        extra["unknown"] = json!(true);
+        assert!(serde_json::from_value::<RemotePromptFilterEvidence>(extra).is_err());
+
+        for mutation in 0..9 {
+            let mut bad = result.evidence.clone();
+            match mutation {
+                0 => bad.source_present_layer_kinds.swap(0, 1),
+                1 => bad
+                    .source_present_layer_kinds
+                    .push(PromptLayerKind::OutputContract),
+                2 => {
+                    bad.source_present_layer_kinds.pop();
+                }
+                3 => bad.included_layer_kinds.push(bad.included_layer_kinds[0]),
+                4 => bad.omitted_layer_kinds.swap(0, 1),
+                5 => bad.omitted_layer_kinds.push(bad.included_layer_kinds[0]),
+                6 => bad
+                    .omitted_layer_kinds
+                    .push(PromptLayerKind::PlatformContract),
+                7 => {
+                    bad.included_layer_kinds.pop();
+                }
+                _ => {
+                    bad.omitted_layer_kinds.pop();
+                }
+            }
+            bad.filter_replay_anchor = evidence_anchor(&bad).unwrap();
+            assert!(bad.validate().is_err(), "mutation {mutation}");
+        }
+
+        let mut wire = serde_json::to_value(&result).unwrap();
+        wire["unknown"] = json!(true);
+        assert!(serde_json::from_value::<RemotePromptFilterResult>(wire).is_err());
+        let mut nested = serde_json::to_value(&result).unwrap();
+        nested["filtered_compilation"]["unknown"] = json!(true);
+        assert!(serde_json::from_value::<RemotePromptFilterResult>(nested).is_err());
+        let mut invalid_compilation = result.clone();
+        invalid_compilation.filtered_compilation.replay_anchor = "0".repeat(64);
+        assert!(invalid_compilation.validate().is_err());
+
+        let mut disagreement = result.clone();
+        disagreement.evidence.filtered_compilation_replay_anchor = "0".repeat(64);
+        disagreement.evidence.filter_replay_anchor =
+            evidence_anchor(&disagreement.evidence).unwrap();
+        assert!(disagreement.validate().is_err());
+        let mut policy_disagreement = result.clone();
+        policy_disagreement.evidence.policy_replay_anchor = "0".repeat(64);
+        policy_disagreement.evidence.filter_replay_anchor =
+            evidence_anchor(&policy_disagreement.evidence).unwrap();
+        assert!(policy_disagreement.validate().is_err());
+        let mut manifest_disagreement = result.clone();
+        manifest_disagreement.evidence.included_layer_kinds.pop();
+        manifest_disagreement
+            .evidence
+            .source_present_layer_kinds
+            .pop();
+        manifest_disagreement.evidence.filter_replay_anchor =
+            evidence_anchor(&manifest_disagreement.evidence).unwrap();
+        assert!(manifest_disagreement.validate().is_err());
+    }
+
+    #[test]
+    fn remote_prompt_filter_coordinated_partition_reclassification_fails() {
+        let mut result = filter_and_compile_remote_prompt(
+            &source(true),
+            &policy(
+                PrivacyClass::ApprovedRemote,
+                RemotePromptLayerDisposition::Omit,
+            ),
+        )
+        .unwrap();
+        let moved = result.evidence.omitted_layer_kinds.remove(0);
+        result.evidence.included_layer_kinds.push(moved);
+        result
+            .evidence
+            .included_layer_kinds
+            .sort_by_key(|kind| canonical_position(*kind));
+        result.evidence.filter_replay_anchor = evidence_anchor(&result.evidence).unwrap();
+        assert_eq!(result.evidence.validate(), Ok(()));
+        assert!(result.validate().is_err());
+    }
+
+    #[test]
+    fn remote_prompt_filter_anchors_bind_source_content_inventory_policy_and_filtered_result() {
+        let base_source = source(true);
+        let include_policy = policy(
+            PrivacyClass::ApprovedRemote,
+            RemotePromptLayerDisposition::Include,
+        );
+        let base = filter_and_compile_remote_prompt(&base_source, &include_policy).unwrap();
+        let mut changed_content = base_source.clone();
+        changed_content.layers[0].content = PromptContent::new("changed-source-sentinel").unwrap();
+        let content = filter_and_compile_remote_prompt(&changed_content, &include_policy).unwrap();
+        let inventory = filter_and_compile_remote_prompt(&source(false), &include_policy).unwrap();
+        let disposition = filter_and_compile_remote_prompt(
+            &base_source,
+            &policy(
+                PrivacyClass::ApprovedRemote,
+                RemotePromptLayerDisposition::Omit,
+            ),
+        )
+        .unwrap();
+        let privacy = filter_and_compile_remote_prompt(
+            &base_source,
+            &policy(
+                PrivacyClass::RestrictedRemote,
+                RemotePromptLayerDisposition::Include,
+            ),
+        )
+        .unwrap();
+        assert_ne!(
+            base.evidence.source_compilation_replay_anchor,
+            content.evidence.source_compilation_replay_anchor
+        );
+        assert_ne!(
+            base.evidence.source_present_layer_kinds,
+            inventory.evidence.source_present_layer_kinds
+        );
+        assert_ne!(
+            base.evidence.policy_replay_anchor,
+            disposition.evidence.policy_replay_anchor
+        );
+        assert_ne!(
+            base.evidence.policy_replay_anchor,
+            privacy.evidence.policy_replay_anchor
+        );
+        assert_ne!(
+            base.evidence.filtered_compilation_replay_anchor,
+            content.evidence.filtered_compilation_replay_anchor
+        );
+        for other in [&content, &inventory, &disposition, &privacy] {
+            assert_ne!(
+                base.evidence.filter_replay_anchor,
+                other.evidence.filter_replay_anchor
+            );
+        }
+        assert_eq!(
+            base,
+            filter_and_compile_remote_prompt(&base_source, &include_policy).unwrap()
+        );
+    }
+
+    #[test]
+    fn remote_prompt_filter_authorized_selection_uses_exact_anchor_without_provider_consumption() {
+        let source_request = source(true);
+        let unfiltered = compile_prompt(&source_request).unwrap();
+        let filtered = filter_and_compile_remote_prompt(
+            &source_request,
+            &policy(
+                PrivacyClass::ApprovedRemote,
+                RemotePromptLayerDisposition::Omit,
+            ),
+        )
+        .unwrap()
+        .filtered_compilation;
+        let provider_id = ModelProviderId::new(Uuid::from_u128(41)).unwrap();
+        let model_id = ModelId::new(Uuid::from_u128(42)).unwrap();
+        let descriptor = ModelDescriptor::new(
+            provider_id,
+            model_id,
+            PrivacyClass::ApprovedRemote,
+            ModelCapabilities {
+                streaming: false,
+                structured_output: true,
+                tool_calling: false,
+                vision: false,
+                context_window_tokens: 100_000,
+                maximum_output_tokens: 128,
+            },
+        )
+        .unwrap();
+        let scripted = Arc::new(
+            ScriptedModelProvider::new(
+                descriptor,
+                [
+                    ScriptedOutcome::Error(ModelErrorKind::Unavailable),
+                    ScriptedOutcome::Error(ModelErrorKind::Internal),
+                ],
+            )
+            .unwrap(),
+        );
+        let registry =
+            ModelRegistry::try_from_providers([scripted.clone() as Arc<dyn LanguageModelProvider>])
+                .unwrap();
+        let requirements = ModelSelectionRequirements::new(
+            RequiredCapabilities {
+                structured_output: true,
+                tool_calling: false,
+                vision: false,
+            },
+            1,
+            vec![PrivacyClass::ApprovedRemote],
+        )
+        .unwrap();
+        let availability = ModelAvailabilitySnapshot::new(vec![ModelAvailabilityEntry {
+            provider_id,
+            model_id,
+            state: ModelAvailabilityState::Available,
+        }])
+        .unwrap();
+        let entry = RemoteModelAuthorizationEntry {
+            provider_id,
+            model_id,
+            privacy_class: PrivacyClass::ApprovedRemote,
+        };
+        let filtered_authorization =
+            RemoteModelAuthorization::new(filtered.replay_anchor.clone(), vec![entry]).unwrap();
+        assert!(select_authorized_available_remote_model(
+            &registry,
+            &requirements,
+            &availability,
+            &filtered_authorization,
+            &filtered
+        )
+        .is_ok());
+        assert!(select_authorized_available_remote_model(
+            &registry,
+            &requirements,
+            &availability,
+            &filtered_authorization,
+            &unfiltered
+        )
+        .is_err());
+        let source_authorization =
+            RemoteModelAuthorization::new(unfiltered.replay_anchor.clone(), vec![entry]).unwrap();
+        assert!(select_authorized_available_remote_model(
+            &registry,
+            &requirements,
+            &availability,
+            &source_authorization,
+            &filtered
+        )
+        .is_err());
+        assert_eq!(scripted.remaining(), 2);
     }
 }

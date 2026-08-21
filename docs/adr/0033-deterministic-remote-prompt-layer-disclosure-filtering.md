@@ -18,7 +18,7 @@ ADR-0023 remains the sole layer inventory and mandatory-layer authority. Its six
 
 Filtering first compiles the complete source through unchanged ADR-0023 behavior to validate it and establish its local replay anchor. It then preserves source versions and limits, removes only explicitly omitted source-present optional layers, and delegates the result to unchanged `compile_prompt`. It performs no selection, authorization, availability check, provider lookup or consumption, invocation, networking, filesystem or clock access, randomness, or persistence.
 
-The result contains the exact filtered compilation, the applied content-free policy, and content-free evidence binding the supported versions, target privacy class, canonical source-present included and omitted kinds, policy anchor, source compilation anchor, filtered compilation anchor, and a final SHA-256 replay anchor over those fields. The source anchor binds independently retained source compilation evidence; it cannot reconstruct omitted content bytes by itself.
+The result contains the exact filtered compilation, the applied content-free policy, and content-free evidence binding the supported versions, target privacy class, canonical content-free source-present inventory and its exact included/omitted partition, policy anchor, source compilation anchor, filtered compilation anchor, and a final SHA-256 replay anchor over those fields. The source anchor and content-free inventory bind independently retained source compilation evidence and its layer set; neither can reconstruct omitted content bytes.
 
 ## Consequences and limits
 
