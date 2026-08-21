@@ -4,11 +4,18 @@
 //! invokes, selects, authorizes, or resolves a provider.
 
 use crate::{
+    authorization::{
+        select_authorized_available_remote_model, RemoteAuthorizationError,
+        RemoteModelAuthorization,
+    },
+    availability::ModelAvailabilitySnapshot,
     model::PrivacyClass,
     prompt::{
         compile_prompt, PromptCompilationRequest, PromptCompilationResult, PromptError,
         PromptLayerKind, CANONICAL_LAYER_ORDER,
     },
+    registry::ModelRegistry,
+    selection::{ModelSelectionRequirements, SelectedModel},
 };
 use nexa_domain::ProtocolVersion;
 use serde::{Deserialize, Serialize};
@@ -326,6 +333,44 @@ pub enum RemotePromptFilterError {
     Prompt(#[from] PromptError),
 }
 
+/// Closed, content-free failures for ADR-0034's non-invoking composition.
+#[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
+pub enum FilteredRemoteSelectionError {
+    #[error("filtered remote selection requirements do not match the disclosure policy")]
+    FilterPrivacyRequirements,
+    #[error("remote prompt filter evidence is invalid or not associated")]
+    FilterEvidence,
+    #[error("authorized available remote selection failed")]
+    AuthorizedSelection(#[from] RemoteAuthorizationError),
+}
+
+/// Selects from the exact validated filtered compilation without invoking a provider.
+pub fn select_filtered_authorized_available_remote_model(
+    registry: &ModelRegistry,
+    requirements: &ModelSelectionRequirements,
+    availability: &ModelAvailabilitySnapshot,
+    authorization: &RemoteModelAuthorization,
+    filtered_result: &RemotePromptFilterResult,
+) -> Result<SelectedModel, FilteredRemoteSelectionError> {
+    filtered_result
+        .validate()
+        .map_err(|_| FilteredRemoteSelectionError::FilterEvidence)?;
+    if requirements.validate().is_err()
+        || requirements.privacy_preference.as_slice()
+            != [filtered_result.policy.target_privacy_class]
+    {
+        return Err(FilteredRemoteSelectionError::FilterPrivacyRequirements);
+    }
+    select_authorized_available_remote_model(
+        registry,
+        requirements,
+        availability,
+        authorization,
+        &filtered_result.filtered_compilation,
+    )
+    .map_err(FilteredRemoteSelectionError::AuthorizedSelection)
+}
+
 pub fn filter_and_compile_remote_prompt(
     source: &PromptCompilationRequest,
     policy: &RemotePromptDisclosurePolicy,
@@ -504,6 +549,76 @@ mod tests {
         disposition: RemotePromptLayerDisposition,
     ) -> RemotePromptDisclosurePolicy {
         RemotePromptDisclosurePolicy::new(privacy, rules(disposition)).unwrap()
+    }
+
+    fn selection_provider(
+        provider: u128,
+        model: u128,
+        privacy: PrivacyClass,
+        capabilities: ModelCapabilities,
+    ) -> Arc<ScriptedModelProvider> {
+        Arc::new(
+            ScriptedModelProvider::new(
+                ModelDescriptor::new(
+                    ModelProviderId::new(Uuid::from_u128(provider)).unwrap(),
+                    ModelId::new(Uuid::from_u128(model)).unwrap(),
+                    privacy,
+                    capabilities,
+                )
+                .unwrap(),
+                [ScriptedOutcome::Error(ModelErrorKind::Internal)],
+            )
+            .unwrap(),
+        )
+    }
+
+    fn selection_capabilities() -> ModelCapabilities {
+        ModelCapabilities {
+            streaming: false,
+            structured_output: true,
+            tool_calling: false,
+            vision: false,
+            context_window_tokens: 100_000,
+            maximum_output_tokens: 128,
+        }
+    }
+
+    fn selection_requirements(privacy: PrivacyClass) -> ModelSelectionRequirements {
+        ModelSelectionRequirements::new(
+            RequiredCapabilities {
+                structured_output: true,
+                tool_calling: false,
+                vision: false,
+            },
+            1,
+            vec![privacy],
+        )
+        .unwrap()
+    }
+
+    fn selection_entry(provider: &Arc<ScriptedModelProvider>) -> RemoteModelAuthorizationEntry {
+        RemoteModelAuthorizationEntry {
+            provider_id: provider.descriptor().provider_id,
+            model_id: provider.descriptor().model_id,
+            privacy_class: provider.descriptor().privacy_class,
+        }
+    }
+
+    fn selection_availability(
+        providers: &[Arc<ScriptedModelProvider>],
+        state: ModelAvailabilityState,
+    ) -> ModelAvailabilitySnapshot {
+        ModelAvailabilitySnapshot::new(
+            providers
+                .iter()
+                .map(|provider| ModelAvailabilityEntry {
+                    provider_id: provider.descriptor().provider_id,
+                    model_id: provider.descriptor().model_id,
+                    state,
+                })
+                .collect(),
+        )
+        .unwrap()
     }
 
     #[test]
@@ -994,7 +1109,7 @@ mod tests {
     }
 
     #[test]
-    fn remote_prompt_filter_authorized_selection_uses_exact_anchor_without_provider_consumption() {
+    fn filtered_authorized_remote_selection_uses_exact_anchor_and_preserves_provider() {
         let source_request = source(true);
         let unfiltered = compile_prompt(&source_request).unwrap();
         let filtered = filter_and_compile_remote_prompt(
@@ -1004,8 +1119,7 @@ mod tests {
                 RemotePromptLayerDisposition::Omit,
             ),
         )
-        .unwrap()
-        .filtered_compilation;
+        .unwrap();
         let provider_id = ModelProviderId::new(Uuid::from_u128(41)).unwrap();
         let model_id = ModelId::new(Uuid::from_u128(42)).unwrap();
         let descriptor = ModelDescriptor::new(
@@ -1056,16 +1170,23 @@ mod tests {
             model_id,
             privacy_class: PrivacyClass::ApprovedRemote,
         };
-        let filtered_authorization =
-            RemoteModelAuthorization::new(filtered.replay_anchor.clone(), vec![entry]).unwrap();
-        assert!(select_authorized_available_remote_model(
+        let filtered_authorization = RemoteModelAuthorization::new(
+            filtered.filtered_compilation.replay_anchor.clone(),
+            vec![entry],
+        )
+        .unwrap();
+        let selected = select_filtered_authorized_available_remote_model(
             &registry,
             &requirements,
             &availability,
             &filtered_authorization,
-            &filtered
+            &filtered,
         )
-        .is_ok());
+        .unwrap();
+        assert!(Arc::ptr_eq(
+            &selected.provider,
+            &(scripted.clone() as Arc<dyn LanguageModelProvider>)
+        ));
         assert!(select_authorized_available_remote_model(
             &registry,
             &requirements,
@@ -1076,14 +1197,492 @@ mod tests {
         .is_err());
         let source_authorization =
             RemoteModelAuthorization::new(unfiltered.replay_anchor.clone(), vec![entry]).unwrap();
+        assert!(matches!(
+            select_filtered_authorized_available_remote_model(
+                &registry,
+                &requirements,
+                &availability,
+                &source_authorization,
+                &filtered,
+            ),
+            Err(FilteredRemoteSelectionError::AuthorizedSelection(
+                RemoteAuthorizationError::PromptCompilationAssociation
+            ))
+        ));
         assert!(select_authorized_available_remote_model(
             &registry,
             &requirements,
             &availability,
             &source_authorization,
-            &filtered
+            &filtered.filtered_compilation
         )
         .is_err());
         assert_eq!(scripted.remaining(), 2);
+    }
+
+    #[test]
+    fn filtered_authorized_remote_selection_rejects_privacy_and_filter_mismatch_without_consumption(
+    ) {
+        for privacy in [PrivacyClass::ApprovedRemote, PrivacyClass::RestrictedRemote] {
+            let filtered = filter_and_compile_remote_prompt(
+                &source(true),
+                &policy(privacy, RemotePromptLayerDisposition::Omit),
+            )
+            .unwrap();
+            let provider_id = ModelProviderId::new(Uuid::from_u128(51)).unwrap();
+            let model_id = ModelId::new(Uuid::from_u128(52)).unwrap();
+            let descriptor = ModelDescriptor::new(
+                provider_id,
+                model_id,
+                privacy,
+                ModelCapabilities {
+                    streaming: false,
+                    structured_output: true,
+                    tool_calling: false,
+                    vision: false,
+                    context_window_tokens: 100_000,
+                    maximum_output_tokens: 128,
+                },
+            )
+            .unwrap();
+            let scripted = Arc::new(
+                ScriptedModelProvider::new(
+                    descriptor,
+                    [ScriptedOutcome::Error(ModelErrorKind::Internal)],
+                )
+                .unwrap(),
+            );
+            let registry = ModelRegistry::try_from_providers([
+                scripted.clone() as Arc<dyn LanguageModelProvider>
+            ])
+            .unwrap();
+            let availability = ModelAvailabilitySnapshot::new(vec![ModelAvailabilityEntry {
+                provider_id,
+                model_id,
+                state: ModelAvailabilityState::Available,
+            }])
+            .unwrap();
+            let authorization = RemoteModelAuthorization::new(
+                filtered.filtered_compilation.replay_anchor.clone(),
+                vec![RemoteModelAuthorizationEntry {
+                    provider_id,
+                    model_id,
+                    privacy_class: privacy,
+                }],
+            )
+            .unwrap();
+            let caps = RequiredCapabilities {
+                structured_output: true,
+                tool_calling: false,
+                vision: false,
+            };
+            for preferences in [
+                vec![],
+                vec![PrivacyClass::LocalOnly],
+                vec![privacy, PrivacyClass::LocalOnly],
+                vec![PrivacyClass::ApprovedRemote, PrivacyClass::RestrictedRemote],
+                vec![if privacy == PrivacyClass::ApprovedRemote {
+                    PrivacyClass::RestrictedRemote
+                } else {
+                    PrivacyClass::ApprovedRemote
+                }],
+            ] {
+                let requirements = ModelSelectionRequirements {
+                    contract_version: crate::selection::MODEL_SELECTION_V1,
+                    required_capabilities: caps.clone(),
+                    maximum_output_tokens: 1,
+                    privacy_preference: preferences,
+                };
+                assert_eq!(
+                    select_filtered_authorized_available_remote_model(
+                        &registry,
+                        &requirements,
+                        &availability,
+                        &authorization,
+                        &filtered
+                    )
+                    .unwrap_err(),
+                    FilteredRemoteSelectionError::FilterPrivacyRequirements
+                );
+            }
+            let mut tampered = filtered.clone();
+            tampered.evidence.policy_replay_anchor = "0".repeat(64);
+            assert_eq!(
+                select_filtered_authorized_available_remote_model(
+                    &registry,
+                    &ModelSelectionRequirements::new(caps, 1, vec![privacy]).unwrap(),
+                    &availability,
+                    &authorization,
+                    &tampered
+                )
+                .unwrap_err(),
+                FilteredRemoteSelectionError::FilterEvidence
+            );
+            assert_eq!(scripted.remaining(), 1);
+        }
+    }
+
+    #[test]
+    fn filtered_authorized_remote_selection_succeeds_for_both_remote_classes_and_preserves_handles()
+    {
+        for (offset, privacy) in [PrivacyClass::ApprovedRemote, PrivacyClass::RestrictedRemote]
+            .into_iter()
+            .enumerate()
+        {
+            let filtered = filter_and_compile_remote_prompt(
+                &source(true),
+                &policy(privacy, RemotePromptLayerDisposition::Omit),
+            )
+            .unwrap();
+            let provider = selection_provider(
+                100 + offset as u128,
+                110 + offset as u128,
+                privacy,
+                selection_capabilities(),
+            );
+            let registry = ModelRegistry::try_from_providers([
+                provider.clone() as Arc<dyn LanguageModelProvider>
+            ])
+            .unwrap();
+            let authorization = RemoteModelAuthorization::new(
+                filtered.filtered_compilation.replay_anchor.clone(),
+                vec![selection_entry(&provider)],
+            )
+            .unwrap();
+            let selected = select_filtered_authorized_available_remote_model(
+                &registry,
+                &selection_requirements(privacy),
+                &selection_availability(
+                    std::slice::from_ref(&provider),
+                    ModelAvailabilityState::Available,
+                ),
+                &authorization,
+                &filtered,
+            )
+            .unwrap();
+            assert!(Arc::ptr_eq(
+                &selected.provider,
+                &(provider.clone() as Arc<dyn LanguageModelProvider>)
+            ));
+            assert_eq!(provider.remaining(), 1);
+        }
+    }
+
+    #[test]
+    fn filtered_authorized_remote_selection_rejects_complete_filter_mutation_matrix() {
+        let filtered = filter_and_compile_remote_prompt(
+            &source(true),
+            &policy(
+                PrivacyClass::ApprovedRemote,
+                RemotePromptLayerDisposition::Omit,
+            ),
+        )
+        .unwrap();
+        let provider = selection_provider(
+            120,
+            121,
+            PrivacyClass::ApprovedRemote,
+            selection_capabilities(),
+        );
+        let registry =
+            ModelRegistry::try_from_providers([provider.clone() as Arc<dyn LanguageModelProvider>])
+                .unwrap();
+        let authorization = RemoteModelAuthorization::new(
+            filtered.filtered_compilation.replay_anchor.clone(),
+            vec![selection_entry(&provider)],
+        )
+        .unwrap();
+        let requirements = selection_requirements(PrivacyClass::ApprovedRemote);
+        let availability = selection_availability(
+            std::slice::from_ref(&provider),
+            ModelAvailabilityState::Available,
+        );
+
+        let mut mutations = Vec::new();
+        let mut policy_association = filtered.clone();
+        policy_association.evidence.policy_replay_anchor = "0".repeat(64);
+        policy_association.evidence.filter_replay_anchor =
+            evidence_anchor(&policy_association.evidence).unwrap();
+        mutations.push(policy_association);
+        let mut inventory = filtered.clone();
+        inventory.evidence.source_present_layer_kinds.pop();
+        inventory.evidence.filter_replay_anchor = evidence_anchor(&inventory.evidence).unwrap();
+        mutations.push(inventory);
+        let mut partition = filtered.clone();
+        let moved = partition.evidence.omitted_layer_kinds.remove(0);
+        partition.evidence.included_layer_kinds.push(moved);
+        partition
+            .evidence
+            .included_layer_kinds
+            .sort_by_key(|kind| canonical_position(*kind));
+        partition.evidence.filter_replay_anchor = evidence_anchor(&partition.evidence).unwrap();
+        mutations.push(partition);
+        let mut filtered_anchor = filtered.clone();
+        filtered_anchor.evidence.filtered_compilation_replay_anchor = "0".repeat(64);
+        filtered_anchor.evidence.filter_replay_anchor =
+            evidence_anchor(&filtered_anchor.evidence).unwrap();
+        mutations.push(filtered_anchor);
+        let mut nested_compilation = filtered.clone();
+        nested_compilation.filtered_compilation.replay_anchor = "0".repeat(64);
+        mutations.push(nested_compilation);
+        let mut final_anchor = filtered.clone();
+        final_anchor.evidence.filter_replay_anchor = "0".repeat(64);
+        mutations.push(final_anchor);
+
+        for mutation in mutations {
+            assert_eq!(
+                select_filtered_authorized_available_remote_model(
+                    &registry,
+                    &requirements,
+                    &availability,
+                    &authorization,
+                    &mutation,
+                )
+                .unwrap_err(),
+                FilteredRemoteSelectionError::FilterEvidence
+            );
+        }
+        assert_eq!(provider.remaining(), 1);
+    }
+
+    #[test]
+    fn filtered_authorized_remote_selection_propagates_nested_failure_families_without_consumption()
+    {
+        let privacy = PrivacyClass::ApprovedRemote;
+        let filtered = filter_and_compile_remote_prompt(
+            &source(true),
+            &policy(privacy, RemotePromptLayerDisposition::Omit),
+        )
+        .unwrap();
+        let provider = selection_provider(130, 131, privacy, selection_capabilities());
+        let registry =
+            ModelRegistry::try_from_providers([provider.clone() as Arc<dyn LanguageModelProvider>])
+                .unwrap();
+        let requirements = selection_requirements(privacy);
+        let available = selection_availability(
+            std::slice::from_ref(&provider),
+            ModelAvailabilityState::Available,
+        );
+        let exact = |entries| {
+            RemoteModelAuthorization::new(
+                filtered.filtered_compilation.replay_anchor.clone(),
+                entries,
+            )
+            .unwrap()
+        };
+        let entry = selection_entry(&provider);
+
+        let unknown = RemoteModelAuthorizationEntry {
+            provider_id: ModelProviderId::new(Uuid::from_u128(999)).unwrap(),
+            model_id: ModelId::new(Uuid::from_u128(998)).unwrap(),
+            privacy_class: privacy,
+        };
+        let cases = [
+            (&available, exact(vec![unknown])),
+            (&available, exact(vec![])),
+        ];
+        for (availability, authorization) in cases {
+            assert!(matches!(
+                select_filtered_authorized_available_remote_model(
+                    &registry,
+                    &requirements,
+                    availability,
+                    &authorization,
+                    &filtered
+                ),
+                Err(FilteredRemoteSelectionError::AuthorizedSelection(_))
+            ));
+        }
+        {
+            let state = ModelAvailabilityState::Unavailable;
+            assert!(select_filtered_authorized_available_remote_model(
+                &registry,
+                &requirements,
+                &selection_availability(std::slice::from_ref(&provider), state),
+                &exact(vec![entry]),
+                &filtered,
+            )
+            .is_err());
+        }
+        assert!(select_filtered_authorized_available_remote_model(
+            &registry,
+            &requirements,
+            &ModelAvailabilitySnapshot::new(vec![]).unwrap(),
+            &exact(vec![entry]),
+            &filtered,
+        )
+        .is_err());
+
+        let wrong_privacy = RemoteModelAuthorizationEntry {
+            privacy_class: PrivacyClass::RestrictedRemote,
+            ..entry
+        };
+        assert!(select_filtered_authorized_available_remote_model(
+            &registry,
+            &requirements,
+            &available,
+            &exact(vec![wrong_privacy]),
+            &filtered
+        )
+        .is_err());
+
+        for (caps, output) in [
+            (
+                ModelCapabilities {
+                    structured_output: false,
+                    ..selection_capabilities()
+                },
+                1,
+            ),
+            (
+                ModelCapabilities {
+                    context_window_tokens: 1,
+                    maximum_output_tokens: 1,
+                    ..selection_capabilities()
+                },
+                1,
+            ),
+            (
+                ModelCapabilities {
+                    maximum_output_tokens: 1,
+                    ..selection_capabilities()
+                },
+                2,
+            ),
+        ] {
+            let ineligible =
+                selection_provider(140 + output as u128, 150 + output as u128, privacy, caps);
+            let ineligible_registry = ModelRegistry::try_from_providers([
+                ineligible.clone() as Arc<dyn LanguageModelProvider>
+            ])
+            .unwrap();
+            let ineligible_authorization = RemoteModelAuthorization::new(
+                filtered.filtered_compilation.replay_anchor.clone(),
+                vec![selection_entry(&ineligible)],
+            )
+            .unwrap();
+            let mut ineligible_requirements = selection_requirements(privacy);
+            ineligible_requirements.maximum_output_tokens = output;
+            assert!(select_filtered_authorized_available_remote_model(
+                &ineligible_registry,
+                &ineligible_requirements,
+                &selection_availability(
+                    std::slice::from_ref(&ineligible),
+                    ModelAvailabilityState::Available
+                ),
+                &ineligible_authorization,
+                &filtered,
+            )
+            .is_err());
+            assert_eq!(ineligible.remaining(), 1);
+        }
+        assert_eq!(provider.remaining(), 1);
+    }
+
+    #[test]
+    fn filtered_authorized_remote_selection_is_deterministic_and_insertion_order_independent() {
+        let privacy = PrivacyClass::RestrictedRemote;
+        let filtered = filter_and_compile_remote_prompt(
+            &source(true),
+            &policy(privacy, RemotePromptLayerDisposition::Omit),
+        )
+        .unwrap();
+        let canonical = selection_provider(160, 170, privacy, selection_capabilities());
+        let later_model = selection_provider(160, 171, privacy, selection_capabilities());
+        let later_provider = selection_provider(161, 100, privacy, selection_capabilities());
+        let providers = [
+            canonical.clone(),
+            later_model.clone(),
+            later_provider.clone(),
+        ];
+        let authorization = RemoteModelAuthorization::new(
+            filtered.filtered_compilation.replay_anchor.clone(),
+            providers.iter().map(selection_entry).collect(),
+        )
+        .unwrap();
+        let availability = selection_availability(&providers, ModelAvailabilityState::Available);
+        for order in [[0, 1, 2], [2, 1, 0], [1, 2, 0]] {
+            let registry = ModelRegistry::try_from_providers(
+                order.map(|index| providers[index].clone() as Arc<dyn LanguageModelProvider>),
+            )
+            .unwrap();
+            let selected = select_filtered_authorized_available_remote_model(
+                &registry,
+                &selection_requirements(privacy),
+                &availability,
+                &authorization,
+                &filtered,
+            )
+            .unwrap();
+            assert!(Arc::ptr_eq(
+                &selected.provider,
+                &(canonical.clone() as Arc<dyn LanguageModelProvider>)
+            ));
+        }
+        assert!(providers.iter().all(|provider| provider.remaining() == 1));
+    }
+
+    #[test]
+    fn filtered_authorized_remote_selection_rejects_unsupported_requirements_version_without_consumption(
+    ) {
+        let privacy = PrivacyClass::ApprovedRemote;
+        let filtered = filter_and_compile_remote_prompt(
+            &source(true),
+            &policy(privacy, RemotePromptLayerDisposition::Omit),
+        )
+        .unwrap();
+        let provider = selection_provider(180, 181, privacy, selection_capabilities());
+        let registry =
+            ModelRegistry::try_from_providers([provider.clone() as Arc<dyn LanguageModelProvider>])
+                .unwrap();
+        let mut requirements = selection_requirements(privacy);
+        requirements.contract_version = ProtocolVersion::new(2, 0);
+        let authorization = RemoteModelAuthorization::new(
+            filtered.filtered_compilation.replay_anchor.clone(),
+            vec![selection_entry(&provider)],
+        )
+        .unwrap();
+        assert_eq!(
+            select_filtered_authorized_available_remote_model(
+                &registry,
+                &requirements,
+                &selection_availability(
+                    std::slice::from_ref(&provider),
+                    ModelAvailabilityState::Available
+                ),
+                &authorization,
+                &filtered,
+            )
+            .unwrap_err(),
+            FilteredRemoteSelectionError::FilterPrivacyRequirements
+        );
+        assert_eq!(provider.remaining(), 1);
+    }
+
+    #[test]
+    fn filtered_authorized_remote_selection_diagnostics_are_content_free() {
+        let nested = FilteredRemoteSelectionError::AuthorizedSelection(
+            RemoteAuthorizationError::PromptCompilationAssociation,
+        );
+        for error in [
+            FilteredRemoteSelectionError::FilterPrivacyRequirements,
+            FilteredRemoteSelectionError::FilterEvidence,
+            nested,
+        ] {
+            let diagnostic = format!("{error:?} {error}");
+            for sentinel in [
+                "BEGIN PRIVATE KEY",
+                "endpoint",
+                "credential",
+                "provider-private",
+                "learner",
+                "conversation",
+                "knowledge",
+                "tool",
+                "instructions",
+            ] {
+                assert!(!diagnostic.contains(sentinel));
+            }
+        }
     }
 }
