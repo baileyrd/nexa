@@ -44,6 +44,7 @@ This registry is the navigation and governance authority for Nexa system specifi
 | ADR-0026 | [Provider-neutral in-memory model registry](adr/0026-provider-neutral-in-memory-model-registry.md) | Accepted | Phase 4 validated exact provider/model registration, deterministic inventory, and exact resolution without invocation |
 | ADR-0027 | [Deterministic provider-neutral model selection](adr/0027-deterministic-provider-neutral-model-selection.md) | Accepted | Phase 4 static eligibility and deterministic single-model selection without invocation |
 | ADR-0028 | [Deterministic local-only selection-to-invocation-to-admission composition](adr/0028-deterministic-local-only-selection-invocation-admission.md) | Accepted | Phase 4 explicit local-only single-selection and single-attempt admission composition |
+| ADR-0029 | [Deterministic provider-neutral availability-gated selection](adr/0029-deterministic-provider-neutral-availability-gated-selection.md) | Accepted | Phase 4 caller-supplied availability eligibility for deterministic non-invoking selection |
 | ADR-0014 | [Learning-core composition and atomicity](adr/0014-learning-core-composition-and-atomicity.md) | Accepted | Phase 3 policy composition, unit of work, idempotency, and deferred durable adapters |
 | ADR-0008 | [Controlled 3D workspace migration and ownership](adr/0008-controlled-3d-workspace-migration.md) | Accepted | 3D library, viewer, and validator ownership after migration |
 

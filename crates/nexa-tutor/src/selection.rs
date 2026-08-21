@@ -112,12 +112,25 @@ pub fn select_model(
     input: &ModelInput,
     requirements: &ModelSelectionRequirements,
 ) -> Result<SelectedModel, ModelSelectionError> {
+    select_model_where(registry, input, requirements, |_| true)
+}
+
+/// Shared ADR-0027 selection algorithm with an additional caller-owned eligibility gate.
+pub(crate) fn select_model_where(
+    registry: &ModelRegistry,
+    input: &ModelInput,
+    requirements: &ModelSelectionRequirements,
+    is_available: impl Fn(&ModelDescriptor) -> bool,
+) -> Result<SelectedModel, ModelSelectionError> {
     requirements.validate()?;
     let mut eligible = Vec::new();
     for descriptor in registry.inventory() {
         descriptor
             .validate()
             .map_err(|_| ModelSelectionError::RegistryInconsistency)?;
+        if !is_available(descriptor) {
+            continue;
+        }
         let Some(privacy_rank) = requirements
             .privacy_preference
             .iter()
