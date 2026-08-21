@@ -78,6 +78,7 @@ See [ADR-0010](../adr/0010-learning-state-evidence-and-persistence.md),
 - [x] explicit local-only selection, exact request construction, and single-attempt invocation/admission; ADR-0025 remains explicitly supplied and automatic local-first routing remains deferred
 - [x] deterministic caller-supplied availability-gated selection without provider probing or invocation
 - [x] deterministic availability-gated explicit local-only selection, exactly one invocation, and strict admission
+- [x] deterministic caller-authorized available remote selection without provider invocation
 
 Exit: grounded responses carry citations, confidence, and machine-validated tutor/behavior output.
 
