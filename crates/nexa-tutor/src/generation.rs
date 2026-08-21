@@ -4,6 +4,9 @@ use crate::admission::{
     admit_model_output_after_preflight, validate_admission_preflight, AdmissionError,
     AdmissionResult, TrustedPlanningAuthority,
 };
+use crate::availability::{
+    select_available_model, ModelAvailabilityError, ModelAvailabilitySnapshot,
+};
 use crate::model::{
     LanguageModelProvider, ModelErrorKind, ModelRequest, PrivacyClass, MODEL_INVOCATION_V1,
 };
@@ -36,6 +39,47 @@ pub enum SelectedInvocationAdmissionError {
     Selection(ModelSelectionError),
     #[error("selected model invocation or admission failed")]
     InvocationAdmission(InvocationAdmissionError),
+}
+
+/// Closed failure categories for availability-gated explicit local-only execution.
+#[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
+pub enum AvailableLocalInvocationAdmissionError {
+    #[error("available local-only invocation composition requirements are invalid")]
+    InvalidLocalOnlyRequirements,
+    #[error("available local-only model selection failed")]
+    AvailabilitySelection(ModelAvailabilityError),
+    #[error("selected available model invocation or admission failed")]
+    InvocationAdmission(InvocationAdmissionError),
+}
+
+fn validate_explicit_local_requirements(
+    requirements: &ModelSelectionRequirements,
+) -> Result<(), ()> {
+    if requirements.contract_version != MODEL_SELECTION_V1
+        || requirements.maximum_output_tokens == 0
+        || !requirements.required_capabilities.structured_output
+        || requirements.privacy_preference.as_slice() != [PrivacyClass::LocalOnly]
+    {
+        return Err(());
+    }
+    Ok(())
+}
+
+fn request_for_selected(
+    invocation_id: ModelInvocationId,
+    descriptor: &crate::model::ModelDescriptor,
+    requirements: &ModelSelectionRequirements,
+    compilation: &PromptCompilationResult,
+) -> ModelRequest {
+    ModelRequest {
+        invocation_id,
+        provider_id: descriptor.provider_id,
+        model_id: descriptor.model_id,
+        contract_version: MODEL_INVOCATION_V1,
+        input: compilation.model_input.clone(),
+        required_capabilities: requirements.required_capabilities.clone(),
+        maximum_output_tokens: requirements.maximum_output_tokens,
+    }
 }
 
 /// Validates all host inputs, invokes the supplied provider once, and admits its exact response.
@@ -82,25 +126,17 @@ pub fn select_local_model_invoke_and_admit(
     context: &ContextPackage,
     citations: &CitationResult,
 ) -> Result<AdmissionResult, SelectedInvocationAdmissionError> {
-    if requirements.contract_version != MODEL_SELECTION_V1
-        || requirements.maximum_output_tokens == 0
-        || !requirements.required_capabilities.structured_output
-        || requirements.privacy_preference.as_slice() != [PrivacyClass::LocalOnly]
-    {
-        return Err(SelectedInvocationAdmissionError::InvalidLocalOnlyRequirements);
-    }
+    validate_explicit_local_requirements(requirements)
+        .map_err(|()| SelectedInvocationAdmissionError::InvalidLocalOnlyRequirements)?;
 
     let selected = select_model(registry, &compilation.model_input, requirements)
         .map_err(SelectedInvocationAdmissionError::Selection)?;
-    let request = ModelRequest {
+    let request = request_for_selected(
         invocation_id,
-        provider_id: selected.descriptor.provider_id,
-        model_id: selected.descriptor.model_id,
-        contract_version: MODEL_INVOCATION_V1,
-        input: compilation.model_input.clone(),
-        required_capabilities: requirements.required_capabilities.clone(),
-        maximum_output_tokens: requirements.maximum_output_tokens,
-    };
+        &selected.descriptor,
+        requirements,
+        compilation,
+    );
 
     invoke_and_admit_model_output(
         selected.provider.as_ref(),
@@ -111,4 +147,44 @@ pub fn select_local_model_invoke_and_admit(
         citations,
     )
     .map_err(SelectedInvocationAdmissionError::InvocationAdmission)
+}
+
+/// Selects one caller-marked-available local model, invokes it once, and admits its response.
+#[allow(clippy::too_many_arguments)]
+pub fn select_available_local_model_invoke_and_admit(
+    registry: &ModelRegistry,
+    invocation_id: ModelInvocationId,
+    requirements: &ModelSelectionRequirements,
+    availability: &ModelAvailabilitySnapshot,
+    compilation: &PromptCompilationResult,
+    authority: &TrustedPlanningAuthority,
+    context: &ContextPackage,
+    citations: &CitationResult,
+) -> Result<AdmissionResult, AvailableLocalInvocationAdmissionError> {
+    validate_explicit_local_requirements(requirements)
+        .map_err(|()| AvailableLocalInvocationAdmissionError::InvalidLocalOnlyRequirements)?;
+
+    let selected = select_available_model(
+        registry,
+        &compilation.model_input,
+        requirements,
+        availability,
+    )
+    .map_err(AvailableLocalInvocationAdmissionError::AvailabilitySelection)?;
+    let request = request_for_selected(
+        invocation_id,
+        &selected.descriptor,
+        requirements,
+        compilation,
+    );
+
+    invoke_and_admit_model_output(
+        selected.provider.as_ref(),
+        &request,
+        compilation,
+        authority,
+        context,
+        citations,
+    )
+    .map_err(AvailableLocalInvocationAdmissionError::InvocationAdmission)
 }

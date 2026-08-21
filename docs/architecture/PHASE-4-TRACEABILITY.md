@@ -130,3 +130,17 @@ NEXA-TUTOR-001 remains Baseline Draft. The documented inconsistency between impl
 | Freshness/authenticity, probing/monitoring, recovery, general routing, fallback/retry, and remote authorization | Explicitly deferred by ADR-0029; ADR-0028 remains unchanged | Not implemented |
 
 NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context roadmap inconsistency remains intentionally preserved.
+
+## Available explicit local-only selection-to-admission composition
+
+| Requirement | Evidence | Status |
+|---|---|---|
+| Fail-closed exact local-only requirements | `select_available_local_model_invoke_and_admit`; focused `available_local_selection` malformed/version/output/structured/privacy tests; ADR-0030 | Implemented slice |
+| Exact caller availability and deterministic initial selection | Direct ADR-0029 delegation; unavailable-first, available-next, insertion-order, omission, unknown, version, duplicate, and non-canonical tests | Implemented slice |
+| Exact request and existing admission evidence | Shared request construction; provider/model/invocation/prompt replay identity assertions; unchanged ADR-0024 `AdmissionResult` | Implemented slice |
+| Exactly one selected invocation and no fallback | Invocation/admission failure tests preserve the second selected outcome and all non-selected outcomes | Implemented slice |
+| Remote exclusion and content-free diagnostics | Exact `LocalOnly` gate, available-remote untouched evidence, and sentinel diagnostic assertions | Implemented slice |
+| Existing API boundaries | ADR-0028 remains availability-free; ADR-0029 remains non-invoking; ADR-0025 remains explicitly supplied | Preserved |
+| Probing/monitoring, remote authorization, automatic/general routing, recovery/retry/repair, inference, semantic validation, persistence, partial truncation | Explicitly deferred by ADR-0030 | Not implemented |
+
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context roadmap inconsistency remains intentionally preserved.
