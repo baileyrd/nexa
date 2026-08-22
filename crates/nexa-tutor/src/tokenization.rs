@@ -569,6 +569,34 @@ mod tests {
     }
 
     #[test]
+    fn tokenize_and_validate_accepts_fit_and_returns_generated_replay_evidence() {
+        let mut base = descriptor(1, 2);
+        base.capabilities.context_window_tokens = 20;
+        base.capabilities.maximum_output_tokens = 10;
+        let request = request_for(&base, "fit", 10);
+        let tokenizer = ScriptedModelInputTokenizer::new(
+            base.clone(),
+            [
+                ScriptedTokenizationOutcome::TokenCount(9),
+                ScriptedTokenizationOutcome::TokenCount(11),
+            ],
+        )
+        .unwrap();
+        let expected = evidence_for(&base, &request.input, 9);
+
+        let evidence = tokenize_and_validate_model_request_capacity(
+            MODEL_INPUT_TOKENIZATION_V1,
+            &base,
+            &request,
+            &tokenizer,
+        )
+        .unwrap();
+
+        assert_eq!(evidence, expected);
+        assert_eq!(tokenizer.remaining().unwrap(), 1);
+    }
+
+    #[test]
     fn tokenize_and_validate_returns_exact_replay_evidence_and_accepts_boundary() {
         let mut base = descriptor(1, 2);
         base.capabilities.context_window_tokens = 20;
