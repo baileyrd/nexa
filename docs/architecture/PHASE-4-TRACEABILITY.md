@@ -227,6 +227,6 @@ NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy 
 | Exact association and checked capacity | Existing ADR-0036 `validate_for`; checked `u32` sum; boundary, excess, overflow, and reassociation tests | Implemented slice |
 | Non-invoking and non-consuming | Scripted tokenizer and provider FIFO preservation tests | Implemented slice |
 | Closed content-free failures without duplicate evidence | `ModelRequestTokenCapacityError`; sentinel diagnostics tests; success is `()` | Implemented slice |
-| Existing selection and invocation behavior | No existing API consumes ADR-0036 evidence; no concrete tokenizer or provider | Preserved |
+| Existing selection and invocation behavior | `validate_model_request_token_capacity` consumes existing ADR-0036 evidence only in the separate ADR-0037 request-capacity gate; ADR-0027 selection and existing invocation/admission APIs remain unchanged and do not consume it; no concrete tokenizer or provider is implemented | Preserved |
 
 NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy namespace remains reserved and unimplemented. Partial truncation, the known ingestion/context roadmap inconsistency, and all existing provider, inference, selection/invocation token integration, routing, privacy, networking, semantic-validation, async/streaming, telemetry, and persistence deferrals remain preserved.
