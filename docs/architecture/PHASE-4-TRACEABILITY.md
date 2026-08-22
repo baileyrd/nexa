@@ -255,19 +255,6 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. All concr
 
 NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all concrete tokenizer/provider, routing, inference, networking, semantic-validation, privacy-policy, recovery, async/streaming, telemetry, and persistence deferrals remain preserved.
 
-## ADR-0041 explicit local-only selection and exact-tokenization composition
-
-| Requirement | Evidence | Status |
-|---|---|---|
-| Exact ADR-0028 local-only gate before dependency consumption | `select_local_model_tokenize_invoke_and_admit`; malformed privacy-list tests preserve tokenizer and provider outcomes | Implemented slice |
-| Unchanged conservative ADR-0027 selection before exact tokenization | Direct `select_model` delegation over the exact compiled input; empty-registry and canonical selection tests | Implemented slice |
-| Exact selected request followed by unchanged ADR-0040 | Shared request construction and direct `tokenize_invoke_and_admit_model_output_with_token_capacity` delegation | Implemented slice |
-| Exactly one selected tokenizer/provider outcome and exact dual success evidence | Exact-fit/equality and failure-path tests; returned `ModelInputTokenizationEvidence` plus direct `AdmissionResult` equality | Implemented slice |
-| Closed, content-free failure separation | `SelectedTokenizedInvocationAdmissionError::{InvalidLocalOnlyRequirements, Selection, TokenizedInvocationAdmission}` and sentinel diagnostics | Implemented slice |
-| Existing APIs and deferrals | ADR-0028 and ADR-0040 signatures unchanged; no token-aware selection, fallback, retry, concrete dependency, routing, or networking | Preserved |
-
-NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
-
 ## ADR-0040 exact tokenization, single-attempt invocation, and admission composition
 
 | Requirement | Evidence | Status |
@@ -280,3 +267,16 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Existing APIs and explicit deferrals | ADR-0025 and ADR-0036 through ADR-0039 signatures unchanged; no selection, routing, concrete dependency, retry, or networking | Preserved |
 
 NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all concrete tokenizer/provider, routing, inference, networking, semantic-validation, privacy-policy, recovery, async/streaming, telemetry, and persistence deferrals remain preserved.
+
+## ADR-0041 explicit local-only selection and exact-tokenization composition
+
+| Requirement | Evidence | Status |
+|---|---|---|
+| Exact ADR-0028 local-only gate before dependency consumption | `select_local_model_tokenize_invoke_and_admit`; malformed privacy-list tests preserve tokenizer and provider outcomes | Implemented slice |
+| Unchanged conservative ADR-0027 selection before exact tokenization | Direct `select_model` delegation over the exact compiled input; empty-registry and canonical selection tests | Implemented slice |
+| Exact selected request followed by unchanged ADR-0040 | Shared request construction and direct `tokenize_invoke_and_admit_model_output_with_token_capacity` delegation | Implemented slice |
+| Exactly one selected tokenizer/provider outcome and exact dual success evidence | Exact-fit/equality and failure-path tests; returned `ModelInputTokenizationEvidence` plus direct `AdmissionResult` equality | Implemented slice |
+| Closed, content-free failure separation | `SelectedTokenizedInvocationAdmissionError::{InvalidLocalOnlyRequirements, Selection, TokenizedInvocationAdmission}` and sentinel diagnostics | Implemented slice |
+| Existing APIs and deferrals | ADR-0028 and ADR-0040 signatures unchanged; no token-aware selection, fallback, retry, concrete dependency, routing, or networking | Preserved |
+
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
