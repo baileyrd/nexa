@@ -1,6 +1,6 @@
 # Nexa project status
 
-Updated from the verified predecessor checkpoint at merge commit `7c8de456e51cd4031e26ff33fe8011e7cbec7989` (PR #41). This is a checkpoint, not an additional specification or ADR. The change containing this status update adds the narrow ADR-0039 capability without assuming a future merge SHA.
+Updated from the verified predecessor checkpoint at merge commit `7c8de456e51cd4031e26ff33fe8011e7cbec7989` (PR #41). This is a checkpoint, not an additional specification or ADR. The change containing this status update adds the narrow ADR-0040 capability without assuming a future merge SHA.
 
 ## Verified checkpoint
 

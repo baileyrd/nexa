@@ -2733,6 +2733,33 @@ mod tests {
             "tokenizer-private-sentinel",
             "provider-private-sentinel",
         ];
+
+        let mut mismatched = admission_fixture();
+        mismatched.descriptor.model_id = id(9_992, nexa_domain::ModelId::new);
+        let tokenizer = ScriptedModelInputTokenizer::new(
+            fixture.descriptor.clone(),
+            [ScriptedTokenizationOutcome::TokenCount(1)],
+        )
+        .unwrap();
+        let provider = CountingProvider::new(&mismatched);
+        let preflight_error = tokenize_invoke_and_admit_model_output_with_token_capacity(
+            MODEL_INPUT_TOKENIZATION_V1,
+            &tokenizer,
+            &provider,
+            &fixture.request,
+            &fixture.compilation,
+            &fixture.authority,
+            &fixture.context,
+            &fixture.citations,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            preflight_error,
+            TokenizedInvocationAdmissionError::Preflight(_)
+        ));
+        assert_eq!(tokenizer.remaining().unwrap(), 1);
+        assert_eq!(provider.calls(), 0);
+
         let tokenizer = InternalTokenizer {
             descriptor: fixture.descriptor.clone(),
             private: sentinels[6],
@@ -2771,7 +2798,38 @@ mod tests {
             &fixture.citations,
         )
         .unwrap_err();
-        for error in [tokenization_error, invocation_error] {
+
+        let mut malformed = admission_fixture();
+        malformed.response.output = crate::model::RawModelOutput::new(sentinels[3]).unwrap();
+        let tokenizer = ScriptedModelInputTokenizer::new(
+            malformed.descriptor.clone(),
+            [ScriptedTokenizationOutcome::TokenCount(1)],
+        )
+        .unwrap();
+        let provider = CountingProvider::new(&malformed);
+        let admission_error = tokenize_invoke_and_admit_model_output_with_token_capacity(
+            MODEL_INPUT_TOKENIZATION_V1,
+            &tokenizer,
+            &provider,
+            &malformed.request,
+            &malformed.compilation,
+            &malformed.authority,
+            &malformed.context,
+            &malformed.citations,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            admission_error,
+            TokenizedInvocationAdmissionError::Admission(_)
+        ));
+        assert_eq!(provider.calls(), 1);
+
+        for error in [
+            preflight_error,
+            tokenization_error,
+            invocation_error,
+            admission_error,
+        ] {
             let diagnostics = format!("{error:?} {error}");
             for sentinel in sentinels {
                 assert!(!diagnostics.contains(sentinel));
