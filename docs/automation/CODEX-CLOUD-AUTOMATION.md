@@ -17,7 +17,8 @@ Codex GitHub Action.
 ## Issue-to-pull-request flow
 
 1. Confirm that no other automation implementation issue or pull request is
-   active and that the America/Chicago daily merge count is below three.
+   active. Never dispatch competing implementation work while an implementation
+   issue or pull request is active.
 2. Create one bounded GitHub issue containing the complete implementation
    contract, repository instructions, scope, exclusions, acceptance criteria,
    and required validation.
@@ -40,12 +41,10 @@ the reviewed head, required outcomes, scope constraints, and validation. Codex
 commits and pushes every correction to the same pull-request branch; the
 updated head receives a fresh review.
 
-The available GitHub webhook does not expose workflow-run completion. An
-hourly ChatGPT automation therefore acts as a backstop: it revisits an active
-pull request whose exact-head checks were pending, refreshes the head and check
-state, and either reviews the completed result or leaves the pull request
-unmerged. The backstop does not create CI-completion comments or substitute an
-older run's result.
+When exact-head CI is pending and no correction is required, the event-driven
+pull-request run stops cleanly. Re-review occurs on a later matching
+pull-request event or an explicit repository-owner command. No older run's
+result may substitute for the exact-head checks.
 
 ## Merge guards and owner blockers
 
@@ -54,16 +53,14 @@ head is unchanged from the reviewed commit, all required checks for that exact
 head passed, no blocking feedback remains, and the diff satisfies the issue.
 Missing, pending, failed, stale, or older-head CI always blocks a merge.
 
-Automation must also enforce both operating limits:
-
-- only one implementation issue or pull request may be active; and
-- no more than three automation merges may occur during one America/Chicago
-  calendar day.
+Automation must also enforce the single-active-work limit: only one
+implementation issue or pull request may be active, and it must never dispatch
+competing implementation work while that issue or pull request remains active.
 
 Ambiguous authority, conflicting requirements, unavailable permissions,
-unexpected head movement, unresolved feedback, scope expansion, and either
-operating-limit violation are owner blockers. Stop and ask the repository owner
-instead of weakening a guard, silently resolving a conflict, or starting
+unexpected head movement, unresolved feedback, scope expansion, and a
+single-active-work violation are owner blockers. Stop and ask the repository
+owner instead of weakening a guard, silently resolving a conflict, or starting
 parallel work.
 
 ## Publication failure and recovery
