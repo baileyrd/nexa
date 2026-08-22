@@ -238,7 +238,7 @@ NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy 
 | Existing shared preflight before capacity validation | `invoke_and_admit_model_output_with_token_capacity`; ordering and non-consumption tests | Implemented slice |
 | Exact existing evidence and mandatory conservative validation | Direct delegation to unchanged `validate_model_request_token_capacity`; mismatch, overflow, excess, and equality tests | Implemented slice |
 | Exactly one invocation followed by unchanged strict admission | Direct provider call and `admit_model_output_after_preflight`; success, provider-error, and admission-error tests | Implemented slice |
-| Closed content-free failure separation | `TokenCapacityInvocationAdmissionError::{Preflight, TokenCapacity, Invocation, Admission}` | Implemented slice |
+| Closed content-free failure separation | `TokenCapacityInvocationAdmissionError::{Preflight, TokenCapacity, Invocation, Admission}` and focused prompt, model-output, and private-provider-diagnostic sentinel assertions for both `Debug` and `Display` | Implemented slice |
 | Existing APIs and tokenizer boundary | ADR-0025 and ADR-0037 APIs remain unchanged; the composition accepts no tokenizer and produces no evidence | Preserved |
 
 NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. All concrete tokenizer/provider, selection/routing/fallback, inference, networking, semantic-validation, privacy-policy, async/streaming, telemetry, and persistence deferrals remain preserved.

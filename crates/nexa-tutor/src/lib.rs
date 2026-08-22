@@ -2277,6 +2277,134 @@ mod tests {
     }
 
     #[test]
+    fn token_capacity_composition_diagnostics_are_content_free() {
+        use crate::generation::{
+            invoke_and_admit_model_output_with_token_capacity,
+            TokenCapacityInvocationAdmissionError,
+        };
+        use crate::model::{
+            LanguageModelProvider, ModelError, ModelErrorKind, ModelInput, ModelRequest,
+            ModelResponse, RawModelOutput,
+        };
+
+        struct PrivateDiagnosticProvider {
+            descriptor: crate::model::ModelDescriptor,
+            private_diagnostic: String,
+        }
+
+        impl LanguageModelProvider for PrivateDiagnosticProvider {
+            fn descriptor(&self) -> &crate::model::ModelDescriptor {
+                &self.descriptor
+            }
+
+            fn generate(&self, _request: &ModelRequest) -> Result<ModelResponse, ModelError> {
+                assert!(!self.private_diagnostic.is_empty());
+                Err(ModelError::new(ModelErrorKind::Internal))
+            }
+        }
+
+        let prompt_secret = "capacity-composition-prompt-private-sentinel";
+        let mut preflight = admission_fixture();
+        preflight.request.input = ModelInput::new(prompt_secret).unwrap();
+        let evidence = tokenization_evidence(&preflight, 1);
+        let preflight_provider = CountingProvider::new(&preflight);
+        let preflight_error = invoke_and_admit_model_output_with_token_capacity(
+            &preflight_provider,
+            &preflight.request,
+            &evidence,
+            &preflight.compilation,
+            &preflight.authority,
+            &preflight.context,
+            &preflight.citations,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            preflight_error,
+            TokenCapacityInvocationAdmissionError::Preflight(_)
+        ));
+
+        let capacity = admission_fixture();
+        let evidence = tokenization_evidence(
+            &capacity,
+            capacity.descriptor.capabilities.context_window_tokens,
+        );
+        let capacity_provider = CountingProvider::new(&capacity);
+        let capacity_error = invoke_and_admit_model_output_with_token_capacity(
+            &capacity_provider,
+            &capacity.request,
+            &evidence,
+            &capacity.compilation,
+            &capacity.authority,
+            &capacity.context,
+            &capacity.citations,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            capacity_error,
+            TokenCapacityInvocationAdmissionError::TokenCapacity(_)
+        ));
+
+        let provider_secret = "capacity-composition-provider-diagnostic-private-sentinel";
+        let invocation = admission_fixture();
+        let evidence = tokenization_evidence(&invocation, 1);
+        let invocation_provider = PrivateDiagnosticProvider {
+            descriptor: invocation.descriptor.clone(),
+            private_diagnostic: provider_secret.into(),
+        };
+        let invocation_error = invoke_and_admit_model_output_with_token_capacity(
+            &invocation_provider,
+            &invocation.request,
+            &evidence,
+            &invocation.compilation,
+            &invocation.authority,
+            &invocation.context,
+            &invocation.citations,
+        )
+        .unwrap_err();
+        assert_eq!(
+            invocation_error,
+            TokenCapacityInvocationAdmissionError::Invocation(ModelErrorKind::Internal)
+        );
+
+        let output_secret = "capacity-composition-model-output-private-sentinel";
+        let mut admission = admission_fixture();
+        admission.response.output = RawModelOutput::new(output_secret).unwrap();
+        let evidence = tokenization_evidence(&admission, 1);
+        let admission_provider = CountingProvider::new(&admission);
+        let admission_error = invoke_and_admit_model_output_with_token_capacity(
+            &admission_provider,
+            &admission.request,
+            &evidence,
+            &admission.compilation,
+            &admission.authority,
+            &admission.context,
+            &admission.citations,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            admission_error,
+            TokenCapacityInvocationAdmissionError::Admission(_)
+        ));
+
+        for error in [
+            preflight_error,
+            capacity_error,
+            invocation_error,
+            admission_error,
+        ] {
+            let debug = format!("{error:?}");
+            let display = format!("{error}");
+            for sentinel in [prompt_secret, output_secret, provider_secret] {
+                assert!(!debug.contains(sentinel));
+                assert!(!display.contains(sentinel));
+            }
+        }
+        assert_eq!(preflight_provider.calls(), 0);
+        assert_eq!(capacity_provider.calls(), 0);
+        assert_eq!(admission_provider.calls(), 1);
+    }
+
+    #[test]
     fn post_invocation_admission_failure_consumes_one_outcome_without_retry() {
         use crate::admission::AdmissionError;
         use crate::generation::{invoke_and_admit_model_output, InvocationAdmissionError};
