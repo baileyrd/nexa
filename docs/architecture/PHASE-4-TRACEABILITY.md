@@ -214,7 +214,7 @@ NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy 
 | Exact-model synchronous counting boundary | `ModelInputTokenizer`, existing ADR-0022 `ModelDescriptor` and `ModelInput`, checked `u32` count | Implemented slice |
 | Standalone content-free association and replay evidence | `ModelInputTokenizationEvidence`, strict validating decode, UTF-8 byte count, SHA-256 input hash and replay anchor | Implemented slice |
 | Deterministic provider-independent testing | FIFO `ScriptedModelInputTokenizer`, preflight non-consumption and exactly-once outcome tests | Implemented slice |
-| Conservative capacity behavior preserved | No changes to ADR-0022 validation or ADR-0027 selection; no existing API consumes tokenization evidence | Preserved |
+| Conservative capacity behavior preserved | ADR-0036 introduced no API that consumes tokenization evidence, and ADR-0022 validation and ADR-0027 selection remain unchanged and do not consume it; ADR-0037 later added only the separate existing-request capacity gate | Preserved |
 | Concrete tokenizers and token-count integration | ADR-0036 itself deferred integration; ADR-0037 later implements only the separate existing-request capacity gate. Concrete/provider tokenizer algorithms and integration into selection, invocation, admission, authorization, availability, routing, or provider execution remain deferred. | Partially implemented |
 
 NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy namespace remains reserved. Partial truncation and the known ingestion/context roadmap inconsistency remain preserved, along with all existing privacy, provider, inference, routing, networking, semantic-validation, async/streaming, telemetry, and persistence deferrals.
