@@ -1,6 +1,8 @@
 //! Provider-neutral model-input token-counting contracts and scripted test infrastructure.
 
-use crate::model::{ModelDescriptor, ModelInput, MAX_MODEL_INPUT_BYTES};
+use crate::model::{
+    ModelDescriptor, ModelErrorKind, ModelInput, ModelRequest, MAX_MODEL_INPUT_BYTES,
+};
 use nexa_domain::{ModelId, ModelProviderId, ProtocolVersion};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -23,6 +25,41 @@ pub enum ModelInputTokenizationError {
     ScriptExhausted,
     #[error("model-input tokenizer internal failure")]
     Internal,
+}
+
+/// Closed failures from validating an existing request against exact token evidence.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Error)]
+pub enum ModelRequestTokenCapacityError {
+    #[error("model request validation failed: {0:?}")]
+    Request(ModelErrorKind),
+    #[error("model-input tokenization evidence validation failed: {0}")]
+    TokenizationEvidence(ModelInputTokenizationError),
+    #[error("exact model token capacity exceeded")]
+    ExactCapacity,
+}
+
+/// Validates both ADR-0022 conservative byte capacity and ADR-0037 exact token capacity.
+///
+/// This operation consumes no tokenizer or provider and produces no duplicate evidence.
+pub fn validate_model_request_token_capacity(
+    descriptor: &ModelDescriptor,
+    request: &ModelRequest,
+    tokenization_evidence: &ModelInputTokenizationEvidence,
+) -> Result<(), ModelRequestTokenCapacityError> {
+    request
+        .validate_for(descriptor)
+        .map_err(|error| ModelRequestTokenCapacityError::Request(error.kind))?;
+    tokenization_evidence
+        .validate_for(descriptor, &request.input)
+        .map_err(ModelRequestTokenCapacityError::TokenizationEvidence)?;
+    if tokenization_evidence
+        .input_token_count
+        .checked_add(request.maximum_output_tokens)
+        .is_none_or(|total| total > descriptor.capabilities.context_window_tokens)
+    {
+        return Err(ModelRequestTokenCapacityError::ExactCapacity);
+    }
+    Ok(())
 }
 
 pub trait ModelInputTokenizer: Send + Sync {
@@ -307,6 +344,217 @@ mod tests {
             &tokenizer,
         )
         .unwrap()
+    }
+
+    fn request_for(descriptor: &ModelDescriptor, input: &str, output: u32) -> ModelRequest {
+        ModelRequest {
+            invocation_id: ModelInvocationId::new(Uuid::from_u128(3)).unwrap(),
+            provider_id: descriptor.provider_id,
+            model_id: descriptor.model_id,
+            contract_version: MODEL_INVOCATION_V1,
+            input: ModelInput::new(input).unwrap(),
+            required_capabilities: RequiredCapabilities {
+                structured_output: false,
+                tool_calling: false,
+                vision: false,
+            },
+            maximum_output_tokens: output,
+        }
+    }
+
+    fn evidence_for(
+        descriptor: &ModelDescriptor,
+        input: &ModelInput,
+        count: u32,
+    ) -> ModelInputTokenizationEvidence {
+        ModelInputTokenizationEvidence::new(descriptor, input, count).unwrap()
+    }
+
+    #[test]
+    fn model_request_token_capacity_accepts_fit_and_exact_boundary() {
+        let mut descriptor = descriptor(1, 2);
+        descriptor.capabilities.context_window_tokens = 20;
+        descriptor.capabilities.maximum_output_tokens = 10;
+        let request = request_for(&descriptor, "four", 10);
+        let fit = evidence_for(&descriptor, &request.input, 9);
+        assert!(validate_model_request_token_capacity(&descriptor, &request, &fit).is_ok());
+        let boundary = evidence_for(&descriptor, &request.input, 10);
+        assert!(validate_model_request_token_capacity(&descriptor, &request, &boundary).is_ok());
+
+        let beyond = evidence_for(&descriptor, &request.input, 11);
+        assert_eq!(
+            validate_model_request_token_capacity(&descriptor, &request, &beyond),
+            Err(ModelRequestTokenCapacityError::ExactCapacity)
+        );
+    }
+
+    #[test]
+    fn model_request_token_capacity_fails_closed_on_addition_overflow() {
+        let mut descriptor = descriptor(1, 2);
+        descriptor.capabilities.context_window_tokens = u32::MAX;
+        let request = request_for(&descriptor, "a", 1);
+        let evidence = evidence_for(&descriptor, &request.input, u32::MAX);
+        assert_eq!(
+            validate_model_request_token_capacity(&descriptor, &request, &evidence),
+            Err(ModelRequestTokenCapacityError::ExactCapacity)
+        );
+    }
+
+    #[test]
+    fn model_request_token_capacity_preserves_byte_validation_and_request_failures() {
+        let mut capacity_descriptor = descriptor(1, 2);
+        capacity_descriptor.capabilities.context_window_tokens = 5;
+        capacity_descriptor.capabilities.maximum_output_tokens = 2;
+        let multibyte = request_for(&capacity_descriptor, "éé", 1);
+        let low = evidence_for(&capacity_descriptor, &multibyte.input, 1);
+        assert!(
+            validate_model_request_token_capacity(&capacity_descriptor, &multibyte, &low).is_ok()
+        );
+        let over_bytes = request_for(&capacity_descriptor, "ééa", 1);
+        let over_evidence = evidence_for(&capacity_descriptor, &over_bytes.input, 1);
+        assert_eq!(
+            validate_model_request_token_capacity(
+                &capacity_descriptor,
+                &over_bytes,
+                &over_evidence
+            ),
+            Err(ModelRequestTokenCapacityError::Request(
+                ModelErrorKind::ContextTooLarge
+            ))
+        );
+
+        let base = descriptor(1, 2);
+        let valid = request_for(&base, "input", 1);
+        let cases = [
+            (ModelErrorKind::IdentityMismatch, {
+                let mut value = valid.clone();
+                value.model_id = ModelId::new(Uuid::from_u128(99)).unwrap();
+                value
+            }),
+            (ModelErrorKind::UnsupportedVersion, {
+                let mut value = valid.clone();
+                value.contract_version = ProtocolVersion::new(2, 0);
+                value
+            }),
+            (ModelErrorKind::UnsupportedCapability, {
+                let mut value = valid.clone();
+                value.required_capabilities.tool_calling = true;
+                value
+            }),
+            (ModelErrorKind::ContextTooLarge, {
+                let mut value = valid.clone();
+                value.maximum_output_tokens = 513;
+                value
+            }),
+            (ModelErrorKind::ContextTooLarge, {
+                let mut value = valid.clone();
+                value.input = ModelInput::new("x".repeat(4096)).unwrap();
+                value
+            }),
+        ];
+        for (expected_kind, invalid) in cases {
+            let evidence = evidence_for(&base, &invalid.input, 1);
+            assert_eq!(
+                validate_model_request_token_capacity(&base, &invalid, &evidence),
+                Err(ModelRequestTokenCapacityError::Request(expected_kind))
+            );
+        }
+    }
+
+    #[test]
+    fn model_request_token_capacity_rejects_unassociated_or_invalid_evidence() {
+        let descriptor = descriptor(1, 2);
+        let request = request_for(&descriptor, "bound", 1);
+        let original = evidence_for(&descriptor, &request.input, 2);
+        let mutations = [
+            ("provider", {
+                let mut value = original.clone();
+                value.provider_id = ModelProviderId::new(Uuid::from_u128(9)).unwrap();
+                value
+            }),
+            ("model", {
+                let mut value = original.clone();
+                value.model_id = ModelId::new(Uuid::from_u128(9)).unwrap();
+                value
+            }),
+            ("descriptor", {
+                let mut value = original.clone();
+                value.descriptor_contract_version = ProtocolVersion::new(1, 1);
+                value
+            }),
+            ("bytes", {
+                let mut value = original.clone();
+                value.input_byte_count += 1;
+                value
+            }),
+            ("hash", {
+                let mut value = original.clone();
+                value.input_sha256 = "a".repeat(64);
+                value
+            }),
+        ];
+        for (name, mut evidence) in mutations {
+            evidence.replay_anchor = evidence.compute_anchor().unwrap();
+            assert!(
+                matches!(
+                    validate_model_request_token_capacity(&descriptor, &request, &evidence),
+                    Err(ModelRequestTokenCapacityError::TokenizationEvidence(_))
+                ),
+                "{name}"
+            );
+        }
+        let mut unsupported = original;
+        unsupported.contract_version = ProtocolVersion::new(2, 0);
+        assert_eq!(
+            validate_model_request_token_capacity(&descriptor, &request, &unsupported),
+            Err(ModelRequestTokenCapacityError::TokenizationEvidence(
+                ModelInputTokenizationError::UnsupportedVersion
+            ))
+        );
+
+        let mut tampered = evidence_for(&descriptor, &request.input, 2);
+        tampered.input_token_count += 1;
+        assert_eq!(
+            validate_model_request_token_capacity(&descriptor, &request, &tampered),
+            Err(ModelRequestTokenCapacityError::TokenizationEvidence(
+                ModelInputTokenizationError::InvalidEvidence
+            ))
+        );
+    }
+
+    #[test]
+    fn model_request_token_capacity_is_non_consuming_and_content_free() {
+        let descriptor = descriptor(1, 2);
+        let sentinels = [
+            "PROMPT_SENTINEL",
+            "LEARNER_SENTINEL",
+            "KNOWLEDGE_SENTINEL",
+            "ENDPOINT_SENTINEL",
+            "CREDENTIAL_SENTINEL",
+            "TOKENIZER_PRIVATE_SENTINEL",
+            "PROVIDER_PRIVATE_SENTINEL",
+        ];
+        let request = request_for(&descriptor, &sentinels.join("|"), 1);
+        let evidence = evidence_for(&descriptor, &request.input, 4096);
+        let tokenizer = ScriptedModelInputTokenizer::new(
+            descriptor.clone(),
+            [ScriptedTokenizationOutcome::Error],
+        )
+        .unwrap();
+        let provider = ScriptedModelProvider::new(
+            descriptor.clone(),
+            [ScriptedOutcome::Error(ModelErrorKind::Internal)],
+        )
+        .unwrap();
+        let error =
+            validate_model_request_token_capacity(&descriptor, &request, &evidence).unwrap_err();
+        assert_eq!(error, ModelRequestTokenCapacityError::ExactCapacity);
+        assert_eq!(tokenizer.remaining().unwrap(), 1);
+        assert_eq!(provider.remaining(), 1);
+        let diagnostics = format!("{error:?} {error}");
+        for sentinel in sentinels {
+            assert!(!diagnostics.contains(sentinel));
+        }
     }
 
     #[test]
