@@ -23,10 +23,11 @@ use crate::selection::{
     select_model, ModelSelectionError, ModelSelectionRequirements, MODEL_SELECTION_V1,
 };
 use crate::tokenization::{
-    validate_model_request_token_capacity, ModelInputTokenizationEvidence,
-    ModelRequestTokenCapacityError,
+    tokenize_and_validate_model_request_capacity, validate_model_request_token_capacity,
+    ModelInputTokenizationEvidence, ModelInputTokenizer, ModelRequestTokenCapacityError,
+    TokenizeAndValidateModelRequestCapacityError,
 };
-use nexa_domain::ModelInvocationId;
+use nexa_domain::{ModelInvocationId, ProtocolVersion};
 use nexa_knowledge::{CitationResult, ContextPackage};
 use thiserror::Error;
 
@@ -48,6 +49,26 @@ pub enum TokenCapacityInvocationAdmissionError {
     Preflight(AdmissionError),
     #[error("model request token-capacity validation failed")]
     TokenCapacity(ModelRequestTokenCapacityError),
+    #[error("model provider invocation failed: {0:?}")]
+    Invocation(ModelErrorKind),
+    #[error("model output admission failed")]
+    Admission(AdmissionError),
+}
+
+/// Successful exact-tokenization, single-invocation, and strict-admission evidence.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TokenizedInvocationAdmissionResult {
+    pub tokenization_evidence: ModelInputTokenizationEvidence,
+    pub admission: AdmissionResult,
+}
+
+/// Closed failures for exact tokenization followed by one invocation and admission.
+#[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
+pub enum TokenizedInvocationAdmissionError {
+    #[error("tokenized invocation-to-admission preflight failed")]
+    Preflight(AdmissionError),
+    #[error("model-input tokenization or request-capacity composition failed")]
+    TokenizationCapacity(TokenizeAndValidateModelRequestCapacityError),
     #[error("model provider invocation failed: {0:?}")]
     Invocation(ModelErrorKind),
     #[error("model output admission failed")]
@@ -195,6 +216,55 @@ pub fn invoke_and_admit_model_output_with_token_capacity(
         citations,
     )
     .map_err(TokenCapacityInvocationAdmissionError::Admission)
+}
+
+/// Performs complete admission preflight, exact tokenization, one invocation, and admission.
+#[allow(clippy::too_many_arguments)]
+pub fn tokenize_invoke_and_admit_model_output_with_token_capacity(
+    tokenization_contract_version: ProtocolVersion,
+    tokenizer: &dyn ModelInputTokenizer,
+    provider: &dyn LanguageModelProvider,
+    request: &ModelRequest,
+    compilation: &PromptCompilationResult,
+    authority: &TrustedPlanningAuthority,
+    context: &ContextPackage,
+    citations: &CitationResult,
+) -> Result<TokenizedInvocationAdmissionResult, TokenizedInvocationAdmissionError> {
+    validate_admission_preflight(
+        provider.descriptor(),
+        request,
+        compilation,
+        authority,
+        context,
+        citations,
+    )
+    .map_err(TokenizedInvocationAdmissionError::Preflight)?;
+
+    let tokenization_evidence = tokenize_and_validate_model_request_capacity(
+        tokenization_contract_version,
+        provider.descriptor(),
+        request,
+        tokenizer,
+    )
+    .map_err(TokenizedInvocationAdmissionError::TokenizationCapacity)?;
+
+    let response = provider
+        .generate(request)
+        .map_err(|error| TokenizedInvocationAdmissionError::Invocation(error.kind))?;
+    let admission = admit_model_output_after_preflight(
+        request,
+        &response,
+        compilation,
+        authority,
+        context,
+        citations,
+    )
+    .map_err(TokenizedInvocationAdmissionError::Admission)?;
+
+    Ok(TokenizedInvocationAdmissionResult {
+        tokenization_evidence,
+        admission,
+    })
 }
 
 /// Selects one explicitly requested local model, invokes it once, and admits its exact response.

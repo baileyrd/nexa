@@ -254,3 +254,16 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. All concr
 | Non-invoking and existing APIs preserved | Provider FIFO preservation; ADR-0036, ADR-0037, and ADR-0038 signatures unchanged | Preserved |
 
 NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all concrete tokenizer/provider, routing, inference, networking, semantic-validation, privacy-policy, recovery, async/streaming, telemetry, and persistence deferrals remain preserved.
+
+## ADR-0040 exact tokenization, single-attempt invocation, and admission composition
+
+| Requirement | Evidence | Status |
+|---|---|---|
+| Complete shared admission preflight before dependency consumption | `tokenize_invoke_and_admit_model_output_with_token_capacity`; all 33 shared-preflight mutations preserve tokenizer and provider outcomes | Implemented slice |
+| Unchanged exact tokenization and capacity composition | Direct delegation to ADR-0039 `tokenize_and_validate_model_request_capacity`; version, descriptor, tokenizer failure, zero, exhaustion, internal, excess, overflow, fit, and equality tests | Implemented slice |
+| Exactly one invocation and unchanged strict admission | Direct provider call followed by `admit_model_output_after_preflight`; success equality, provider failure, and admission failure tests | Implemented slice |
+| Dual exact success evidence and replay | `TokenizedInvocationAdmissionResult`; generated evidence association and serialization/replay validation plus direct-admission equality | Implemented slice |
+| Closed content-free failure separation | `TokenizedInvocationAdmissionError::{Preflight, TokenizationCapacity, Invocation, Admission}` and sentinel diagnostics tests | Implemented slice |
+| Existing APIs and explicit deferrals | ADR-0025 and ADR-0036 through ADR-0039 signatures unchanged; no selection, routing, concrete dependency, retry, or networking | Preserved |
+
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all concrete tokenizer/provider, routing, inference, networking, semantic-validation, privacy-policy, recovery, async/streaming, telemetry, and persistence deferrals remain preserved.

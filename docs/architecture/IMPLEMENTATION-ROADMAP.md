@@ -198,3 +198,7 @@ ADR-0038 adds an opt-in synchronous composition that completes shared ADR-0025 p
 ### Phase 4 narrow increment: exact tokenization and request-capacity composition
 
 ADR-0039 adds an opt-in synchronous non-invoking composition that completes unchanged ADR-0022 request preflight, delegates exactly one tokenization outcome and evidence construction to ADR-0036, and immediately delegates the exact request and generated evidence to ADR-0037. Success returns that evidence; existing APIs and every concrete-tokenizer, provider, selection/routing, inference, networking, semantic-validation, privacy-policy, recovery, async/streaming, telemetry, and persistence deferral remain unchanged.
+
+### Phase 4 narrow increment: exact tokenization, single-attempt invocation, and admission
+
+ADR-0040 adds an opt-in synchronous composition that completes unchanged shared admission preflight before delegating evidence creation and request-capacity validation to unchanged ADR-0039. It then invokes the explicitly supplied provider exactly once and applies unchanged strict admission, returning both exact generated tokenization evidence and the existing admission result. No selection/routing/fallback, concrete tokenizer/provider, inference, transport, retry/repair/regeneration, truncation/rewriting/summarization, usage reconciliation, semantic validation, privacy policy, async/streaming, telemetry, or persistence is added. NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress.
