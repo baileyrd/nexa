@@ -1,6 +1,6 @@
 # Nexa project status
 
-Updated from the verified predecessor checkpoint at merge commit `635d5f60bcf5e3af2c75e5d4e09ca2a197fe580d` (PR #38). This is a checkpoint, not an additional specification or ADR. The change containing this status update adds the narrow ADR-0037 capability without assuming a future merge SHA.
+Updated from the verified predecessor checkpoint at merge commit `e60a66175b36ddfeda614ebbdcbada15991559a1` (PR #39). This is a checkpoint, not an additional specification or ADR. The change containing this status update adds the narrow ADR-0037 capability without assuming a future merge SHA.
 
 ## Verified checkpoint
 
@@ -39,6 +39,6 @@ The current Cargo workspace contains the contract kernel; avatar/3D; student, pe
 ## How to resume work
 
 1. Start from the current `main`; read [`CHATGPT_WORKFLOW.md`](../CHATGPT_WORKFLOW.md), [`AGENTS.md`](../AGENTS.md), and [`PROJECT-STATUS.md`](PROJECT-STATUS.md), in that order, followed by the applicable baseline, registry, roadmap, traceability, specifications, and ADRs routed to by those files.
-2. Confirm PR #38 / `635d5f60bcf5e3af2c75e5d4e09ca2a197fe580d` is the verified predecessor on `main`, then inspect later merges and read ADR-0036 after ADRs 0021–0035.
-3. Choose one evidence-backed incomplete Phase 4 increment after ADR-0036's separate provider-neutral model-input counting boundary, without assuming this task's eventual merge SHA; state its exclusions and identify specification/ADR/traceability impact before coding.
+2. Confirm PR #39 / `e60a66175b36ddfeda614ebbdcbada15991559a1` is the verified predecessor on `main`, then inspect later merges and read ADRs 0036 and 0037 after ADRs 0021–0035.
+3. Choose a later evidence-backed incomplete Phase 4 increment after ADR-0037's separate existing-request capacity gate, without assuming this task's eventual merge SHA; state its exclusions and identify specification/ADR/traceability impact before coding.
 4. Keep the PR independently reviewable, report documentation/implementation conflicts, and run every validation command in `AGENTS.md`.

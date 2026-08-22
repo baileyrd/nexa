@@ -426,38 +426,38 @@ mod tests {
         let base = descriptor(1, 2);
         let valid = request_for(&base, "input", 1);
         let cases = [
-            {
+            (ModelErrorKind::IdentityMismatch, {
                 let mut value = valid.clone();
                 value.model_id = ModelId::new(Uuid::from_u128(99)).unwrap();
                 value
-            },
-            {
+            }),
+            (ModelErrorKind::UnsupportedVersion, {
                 let mut value = valid.clone();
                 value.contract_version = ProtocolVersion::new(2, 0);
                 value
-            },
-            {
+            }),
+            (ModelErrorKind::UnsupportedCapability, {
                 let mut value = valid.clone();
                 value.required_capabilities.tool_calling = true;
                 value
-            },
-            {
+            }),
+            (ModelErrorKind::ContextTooLarge, {
                 let mut value = valid.clone();
                 value.maximum_output_tokens = 513;
                 value
-            },
-            {
+            }),
+            (ModelErrorKind::ContextTooLarge, {
                 let mut value = valid.clone();
                 value.input = ModelInput::new("x".repeat(4096)).unwrap();
                 value
-            },
+            }),
         ];
-        for invalid in cases {
+        for (expected_kind, invalid) in cases {
             let evidence = evidence_for(&base, &invalid.input, 1);
-            assert!(matches!(
+            assert_eq!(
                 validate_model_request_token_capacity(&base, &invalid, &evidence),
-                Err(ModelRequestTokenCapacityError::Request(_))
-            ));
+                Err(ModelRequestTokenCapacityError::Request(expected_kind))
+            );
         }
     }
 
@@ -509,6 +509,15 @@ mod tests {
             validate_model_request_token_capacity(&descriptor, &request, &unsupported),
             Err(ModelRequestTokenCapacityError::TokenizationEvidence(
                 ModelInputTokenizationError::UnsupportedVersion
+            ))
+        );
+
+        let mut tampered = evidence_for(&descriptor, &request.input, 2);
+        tampered.input_token_count += 1;
+        assert_eq!(
+            validate_model_request_token_capacity(&descriptor, &request, &tampered),
+            Err(ModelRequestTokenCapacityError::TokenizationEvidence(
+                ModelInputTokenizationError::InvalidEvidence
             ))
         );
     }
