@@ -22,6 +22,10 @@ use crate::remote_prompt::{
 use crate::selection::{
     select_model, ModelSelectionError, ModelSelectionRequirements, MODEL_SELECTION_V1,
 };
+use crate::tokenization::{
+    validate_model_request_token_capacity, ModelInputTokenizationEvidence,
+    ModelRequestTokenCapacityError,
+};
 use nexa_domain::ModelInvocationId;
 use nexa_knowledge::{CitationResult, ContextPackage};
 use thiserror::Error;
@@ -31,6 +35,19 @@ use thiserror::Error;
 pub enum InvocationAdmissionError {
     #[error("invocation-to-admission preflight failed")]
     Preflight(AdmissionError),
+    #[error("model provider invocation failed: {0:?}")]
+    Invocation(ModelErrorKind),
+    #[error("model output admission failed")]
+    Admission(AdmissionError),
+}
+
+/// Closed failure categories for token-capacity-gated single-attempt admission.
+#[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
+pub enum TokenCapacityInvocationAdmissionError {
+    #[error("token-capacity-gated invocation preflight failed")]
+    Preflight(AdmissionError),
+    #[error("model request token-capacity validation failed")]
+    TokenCapacity(ModelRequestTokenCapacityError),
     #[error("model provider invocation failed: {0:?}")]
     Invocation(ModelErrorKind),
     #[error("model output admission failed")]
@@ -139,6 +156,45 @@ pub fn invoke_and_admit_model_output(
         citations,
     )
     .map_err(InvocationAdmissionError::Admission)
+}
+
+/// Runs admission preflight and exact token-capacity validation before one invocation.
+#[allow(clippy::too_many_arguments)]
+pub fn invoke_and_admit_model_output_with_token_capacity(
+    provider: &dyn LanguageModelProvider,
+    request: &ModelRequest,
+    tokenization_evidence: &ModelInputTokenizationEvidence,
+    compilation: &PromptCompilationResult,
+    authority: &TrustedPlanningAuthority,
+    context: &ContextPackage,
+    citations: &CitationResult,
+) -> Result<AdmissionResult, TokenCapacityInvocationAdmissionError> {
+    validate_admission_preflight(
+        provider.descriptor(),
+        request,
+        compilation,
+        authority,
+        context,
+        citations,
+    )
+    .map_err(TokenCapacityInvocationAdmissionError::Preflight)?;
+
+    validate_model_request_token_capacity(provider.descriptor(), request, tokenization_evidence)
+        .map_err(TokenCapacityInvocationAdmissionError::TokenCapacity)?;
+
+    let response = provider
+        .generate(request)
+        .map_err(|error| TokenCapacityInvocationAdmissionError::Invocation(error.kind))?;
+
+    admit_model_output_after_preflight(
+        request,
+        &response,
+        compilation,
+        authority,
+        context,
+        citations,
+    )
+    .map_err(TokenCapacityInvocationAdmissionError::Admission)
 }
 
 /// Selects one explicitly requested local model, invokes it once, and admits its exact response.
