@@ -3589,6 +3589,343 @@ mod tests {
     }
 
     #[test]
+    fn local_tokenized_selection_returns_exact_evidence_and_direct_admission() {
+        use crate::generation::select_local_model_tokenize_invoke_and_admit;
+        use crate::model::{
+            LanguageModelProvider, PrivacyClass, ScriptedModelProvider, ScriptedOutcome,
+        };
+        use crate::registry::ModelRegistry;
+        use crate::tokenization::{
+            ScriptedModelInputTokenizer, ScriptedTokenizationOutcome, MODEL_INPUT_TOKENIZATION_V1,
+        };
+        use nexa_domain::{ModelId, ModelProviderId};
+        use std::sync::Arc;
+
+        for reverse in [false, true] {
+            let f = admission_fixture();
+            let selected = Arc::new(
+                ScriptedModelProvider::new(
+                    f.descriptor.clone(),
+                    [ScriptedOutcome::Response(f.response.clone())],
+                )
+                .unwrap(),
+            );
+            let token_count = if reverse {
+                f.descriptor.capabilities.context_window_tokens
+                    - local_selection_requirements().maximum_output_tokens
+            } else {
+                1
+            };
+            let tokenizer = ScriptedModelInputTokenizer::new(
+                f.descriptor.clone(),
+                [ScriptedTokenizationOutcome::TokenCount(token_count)],
+            )
+            .unwrap();
+            let mut remote_descriptor = f.descriptor.clone();
+            remote_descriptor.provider_id = id(9_800, ModelProviderId::new);
+            remote_descriptor.model_id = id(9_801, ModelId::new);
+            remote_descriptor.privacy_class = PrivacyClass::ApprovedRemote;
+            let remote = Arc::new(
+                ScriptedModelProvider::new(
+                    remote_descriptor,
+                    [ScriptedOutcome::Error(
+                        crate::model::ModelErrorKind::Internal,
+                    )],
+                )
+                .unwrap(),
+            );
+            let mut providers: Vec<Arc<dyn LanguageModelProvider>> =
+                vec![selected.clone(), remote.clone()];
+            if reverse {
+                providers.reverse();
+            }
+            let registry = ModelRegistry::try_from_providers(providers).unwrap();
+
+            let result = select_local_model_tokenize_invoke_and_admit(
+                &registry,
+                f.request.invocation_id,
+                &local_selection_requirements(),
+                MODEL_INPUT_TOKENIZATION_V1,
+                &tokenizer,
+                &f.compilation,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            )
+            .unwrap();
+
+            assert_eq!(result.admission, f.admit().unwrap());
+            result
+                .tokenization_evidence
+                .validate_for(&f.descriptor, &f.compilation.model_input)
+                .unwrap();
+            assert_eq!(result.tokenization_evidence.input_token_count, token_count);
+            assert_eq!(tokenizer.remaining().unwrap(), 0);
+            assert_eq!(selected.remaining(), 0);
+            assert_eq!(remote.remaining(), 1);
+        }
+    }
+
+    #[test]
+    fn local_tokenized_selection_rejects_requirements_and_selection_before_dependencies() {
+        use crate::generation::{
+            select_local_model_tokenize_invoke_and_admit, SelectedTokenizedInvocationAdmissionError,
+        };
+        use crate::model::{
+            LanguageModelProvider, PrivacyClass, ScriptedModelProvider, ScriptedOutcome,
+        };
+        use crate::registry::ModelRegistry;
+        use crate::selection::ModelSelectionError;
+        use crate::tokenization::{
+            ScriptedModelInputTokenizer, ScriptedTokenizationOutcome, MODEL_INPUT_TOKENIZATION_V1,
+        };
+        use std::sync::Arc;
+
+        for privacy in [
+            vec![],
+            vec![PrivacyClass::ApprovedRemote],
+            vec![PrivacyClass::LocalOnly, PrivacyClass::ApprovedRemote],
+            vec![PrivacyClass::LocalOnly, PrivacyClass::LocalOnly],
+        ] {
+            let f = admission_fixture();
+            let provider = Arc::new(
+                ScriptedModelProvider::new(
+                    f.descriptor.clone(),
+                    [ScriptedOutcome::Response(f.response.clone())],
+                )
+                .unwrap(),
+            );
+            let registry = ModelRegistry::try_from_providers([
+                provider.clone() as Arc<dyn LanguageModelProvider>
+            ])
+            .unwrap();
+            let tokenizer = ScriptedModelInputTokenizer::new(
+                f.descriptor.clone(),
+                [ScriptedTokenizationOutcome::TokenCount(1)],
+            )
+            .unwrap();
+            let mut requirements = local_selection_requirements();
+            requirements.privacy_preference = privacy;
+            assert_eq!(
+                select_local_model_tokenize_invoke_and_admit(
+                    &registry,
+                    f.request.invocation_id,
+                    &requirements,
+                    MODEL_INPUT_TOKENIZATION_V1,
+                    &tokenizer,
+                    &f.compilation,
+                    &f.authority,
+                    &f.context,
+                    &f.citations,
+                ),
+                Err(SelectedTokenizedInvocationAdmissionError::InvalidLocalOnlyRequirements)
+            );
+            assert_eq!(tokenizer.remaining().unwrap(), 1);
+            assert_eq!(provider.remaining(), 1);
+        }
+
+        let f = admission_fixture();
+        let empty = ModelRegistry::try_from_providers(std::iter::empty()).unwrap();
+        let tokenizer = ScriptedModelInputTokenizer::new(
+            f.descriptor.clone(),
+            [ScriptedTokenizationOutcome::TokenCount(1)],
+        )
+        .unwrap();
+        assert_eq!(
+            select_local_model_tokenize_invoke_and_admit(
+                &empty,
+                f.request.invocation_id,
+                &local_selection_requirements(),
+                MODEL_INPUT_TOKENIZATION_V1,
+                &tokenizer,
+                &f.compilation,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            ),
+            Err(SelectedTokenizedInvocationAdmissionError::Selection(
+                ModelSelectionError::NoEligibleModel
+            ))
+        );
+        assert_eq!(tokenizer.remaining().unwrap(), 1);
+    }
+
+    #[test]
+    fn local_tokenized_selection_preserves_exact_once_failures_and_closed_diagnostics() {
+        use crate::generation::{
+            select_local_model_tokenize_invoke_and_admit,
+            SelectedTokenizedInvocationAdmissionError, TokenizedInvocationAdmissionError,
+        };
+        use crate::model::{
+            LanguageModelProvider, ModelErrorKind, RawModelOutput, ScriptedModelProvider,
+            ScriptedOutcome,
+        };
+        use crate::registry::ModelRegistry;
+        use crate::tokenization::{
+            ScriptedModelInputTokenizer, ScriptedTokenizationOutcome, MODEL_INPUT_TOKENIZATION_V1,
+        };
+        use nexa_domain::{ModelId, ProtocolVersion};
+        use std::sync::Arc;
+
+        for wrong_version in [true, false] {
+            let f = admission_fixture();
+            let provider = Arc::new(
+                ScriptedModelProvider::new(
+                    f.descriptor.clone(),
+                    [ScriptedOutcome::Response(f.response.clone())],
+                )
+                .unwrap(),
+            );
+            let registry = ModelRegistry::try_from_providers([
+                provider.clone() as Arc<dyn LanguageModelProvider>
+            ])
+            .unwrap();
+            let mut tokenizer_descriptor = f.descriptor.clone();
+            if !wrong_version {
+                tokenizer_descriptor.model_id = id(9_900, ModelId::new);
+            }
+            let tokenizer = ScriptedModelInputTokenizer::new(
+                tokenizer_descriptor,
+                [ScriptedTokenizationOutcome::TokenCount(1)],
+            )
+            .unwrap();
+            let version = if wrong_version {
+                ProtocolVersion::new(2, 0)
+            } else {
+                MODEL_INPUT_TOKENIZATION_V1
+            };
+            assert!(matches!(
+                select_local_model_tokenize_invoke_and_admit(
+                    &registry,
+                    f.request.invocation_id,
+                    &local_selection_requirements(),
+                    version,
+                    &tokenizer,
+                    &f.compilation,
+                    &f.authority,
+                    &f.context,
+                    &f.citations,
+                ),
+                Err(
+                    SelectedTokenizedInvocationAdmissionError::TokenizedInvocationAdmission(
+                        TokenizedInvocationAdmissionError::TokenizationCapacity(_)
+                    )
+                )
+            ));
+            assert_eq!(tokenizer.remaining().unwrap(), 1);
+            assert_eq!(provider.remaining(), 1);
+        }
+
+        for outcome in [
+            ScriptedTokenizationOutcome::Error,
+            ScriptedTokenizationOutcome::TokenCount(u32::MAX),
+        ] {
+            let f = admission_fixture();
+            let provider = Arc::new(
+                ScriptedModelProvider::new(
+                    f.descriptor.clone(),
+                    [ScriptedOutcome::Response(f.response.clone())],
+                )
+                .unwrap(),
+            );
+            let registry = ModelRegistry::try_from_providers([
+                provider.clone() as Arc<dyn LanguageModelProvider>
+            ])
+            .unwrap();
+            let tokenizer =
+                ScriptedModelInputTokenizer::new(f.descriptor.clone(), [outcome]).unwrap();
+            assert!(select_local_model_tokenize_invoke_and_admit(
+                &registry,
+                f.request.invocation_id,
+                &local_selection_requirements(),
+                MODEL_INPUT_TOKENIZATION_V1,
+                &tokenizer,
+                &f.compilation,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            )
+            .is_err());
+            assert_eq!(tokenizer.remaining().unwrap(), 0);
+            assert_eq!(provider.remaining(), 1);
+        }
+
+        let f = admission_fixture();
+        let provider = Arc::new(
+            ScriptedModelProvider::new(
+                f.descriptor.clone(),
+                [
+                    ScriptedOutcome::Error(ModelErrorKind::Unavailable),
+                    ScriptedOutcome::Error(ModelErrorKind::Internal),
+                ],
+            )
+            .unwrap(),
+        );
+        let registry =
+            ModelRegistry::try_from_providers([provider.clone() as Arc<dyn LanguageModelProvider>])
+                .unwrap();
+        let tokenizer = ScriptedModelInputTokenizer::new(
+            f.descriptor.clone(),
+            [ScriptedTokenizationOutcome::TokenCount(1)],
+        )
+        .unwrap();
+        let provider_error = select_local_model_tokenize_invoke_and_admit(
+            &registry,
+            f.request.invocation_id,
+            &local_selection_requirements(),
+            MODEL_INPUT_TOKENIZATION_V1,
+            &tokenizer,
+            &f.compilation,
+            &f.authority,
+            &f.context,
+            &f.citations,
+        )
+        .unwrap_err();
+        assert_eq!(tokenizer.remaining().unwrap(), 0);
+        assert_eq!(provider.remaining(), 1);
+
+        let mut malformed = admission_fixture();
+        malformed.response.output = RawModelOutput::new("model-output-private-sentinel").unwrap();
+        let provider = Arc::new(CountingProvider::new(&malformed));
+        let registry =
+            ModelRegistry::try_from_providers([provider.clone() as Arc<dyn LanguageModelProvider>])
+                .unwrap();
+        let tokenizer = ScriptedModelInputTokenizer::new(
+            malformed.descriptor.clone(),
+            [ScriptedTokenizationOutcome::TokenCount(1)],
+        )
+        .unwrap();
+        let admission_error = select_local_model_tokenize_invoke_and_admit(
+            &registry,
+            malformed.request.invocation_id,
+            &local_selection_requirements(),
+            MODEL_INPUT_TOKENIZATION_V1,
+            &tokenizer,
+            &malformed.compilation,
+            &malformed.authority,
+            &malformed.context,
+            &malformed.citations,
+        )
+        .unwrap_err();
+        assert_eq!(provider.calls(), 1);
+        for error in [provider_error, admission_error] {
+            let diagnostics = format!("{error:?} {error}");
+            for sentinel in [
+                "model-output-private-sentinel",
+                "prompt-private-sentinel",
+                "learner-private-sentinel",
+                "knowledge-private-sentinel",
+                "endpoint-private-sentinel",
+                "credential-private-sentinel",
+                "tokenizer-private-sentinel",
+                "provider-private-sentinel",
+            ] {
+                assert!(!diagnostics.contains(sentinel));
+            }
+        }
+    }
+
+    #[test]
     fn local_selection_composes_canonical_selection_request_invocation_and_admission() {
         use crate::generation::select_local_model_invoke_and_admit;
         use crate::model::{LanguageModelProvider, ScriptedModelProvider, ScriptedOutcome};
