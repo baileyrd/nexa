@@ -1372,14 +1372,14 @@ mod tests {
             layers: vec![
                 layer(
                     PromptLayerKind::PlatformContract,
-                    "distinctive private platform prompt",
+                    "distinctive private platform prompt prompt-private-sentinel",
                 ),
                 layer(PromptLayerKind::NexaIdentity, "identity"),
                 layer(PromptLayerKind::Policy, "policy"),
                 layer(PromptLayerKind::Pedagogy, "pedagogy"),
                 layer(
                     PromptLayerKind::StudentInput,
-                    "distinctive private learner prompt",
+                    "distinctive private learner prompt learner-private-sentinel",
                 ),
                 layer(PromptLayerKind::OutputContract, "output"),
             ],
@@ -1473,6 +1473,48 @@ mod tests {
         ) -> Result<crate::model::ModelResponse, crate::model::ModelError> {
             self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             Ok(self.response.clone())
+        }
+    }
+
+    struct SentinelTokenizer {
+        inner: crate::tokenization::ScriptedModelInputTokenizer,
+        private_diagnostic: String,
+    }
+
+    impl crate::tokenization::ModelInputTokenizer for SentinelTokenizer {
+        fn descriptor(&self) -> &crate::model::ModelDescriptor {
+            self.inner.descriptor()
+        }
+
+        fn count_input_tokens(
+            &self,
+            input: &crate::model::ModelInput,
+        ) -> Result<u32, crate::tokenization::ModelInputTokenizationError> {
+            assert_eq!(self.private_diagnostic, "tokenizer-private-sentinel");
+            self.inner.count_input_tokens(input)
+        }
+    }
+
+    struct SentinelProvider {
+        inner: crate::model::ScriptedModelProvider,
+        endpoint: String,
+        credential: String,
+        private_diagnostic: String,
+    }
+
+    impl crate::model::LanguageModelProvider for SentinelProvider {
+        fn descriptor(&self) -> &crate::model::ModelDescriptor {
+            self.inner.descriptor()
+        }
+
+        fn generate(
+            &self,
+            request: &crate::model::ModelRequest,
+        ) -> Result<crate::model::ModelResponse, crate::model::ModelError> {
+            assert_eq!(self.endpoint, "endpoint-private-sentinel");
+            assert_eq!(self.credential, "credential-private-sentinel");
+            assert_eq!(self.private_diagnostic, "provider-private-sentinel");
+            self.inner.generate(request)
         }
     }
 
@@ -3603,10 +3645,41 @@ mod tests {
 
         for reverse in [false, true] {
             let f = admission_fixture();
+            let mut selected_descriptor = f.descriptor.clone();
+            selected_descriptor.provider_id = id(9_700, ModelProviderId::new);
+            selected_descriptor.model_id = id(9_701, ModelId::new);
+            let mut selected_response = f.response.clone();
+            selected_response.provider_id = selected_descriptor.provider_id;
+            selected_response.model_id = selected_descriptor.model_id;
+            let mut selected_request = f.request.clone();
+            selected_request.provider_id = selected_descriptor.provider_id;
+            selected_request.model_id = selected_descriptor.model_id;
+            let expected_admission = crate::admission::admit_model_output(
+                &selected_descriptor,
+                &selected_request,
+                &selected_response,
+                &f.compilation,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            )
+            .unwrap();
             let selected = Arc::new(
                 ScriptedModelProvider::new(
-                    f.descriptor.clone(),
-                    [ScriptedOutcome::Response(f.response.clone())],
+                    selected_descriptor.clone(),
+                    [ScriptedOutcome::Response(selected_response)],
+                )
+                .unwrap(),
+            );
+            let mut other_descriptor = f.descriptor.clone();
+            other_descriptor.provider_id = id(9_750, ModelProviderId::new);
+            other_descriptor.model_id = id(9_751, ModelId::new);
+            let other = Arc::new(
+                ScriptedModelProvider::new(
+                    other_descriptor,
+                    [ScriptedOutcome::Error(
+                        crate::model::ModelErrorKind::Internal,
+                    )],
                 )
                 .unwrap(),
             );
@@ -3617,7 +3690,7 @@ mod tests {
                 1
             };
             let tokenizer = ScriptedModelInputTokenizer::new(
-                f.descriptor.clone(),
+                selected_descriptor.clone(),
                 [ScriptedTokenizationOutcome::TokenCount(token_count)],
             )
             .unwrap();
@@ -3635,7 +3708,7 @@ mod tests {
                 .unwrap(),
             );
             let mut providers: Vec<Arc<dyn LanguageModelProvider>> =
-                vec![selected.clone(), remote.clone()];
+                vec![other.clone(), remote.clone(), selected.clone()];
             if reverse {
                 providers.reverse();
             }
@@ -3654,14 +3727,15 @@ mod tests {
             )
             .unwrap();
 
-            assert_eq!(result.admission, f.admit().unwrap());
+            assert_eq!(result.admission, expected_admission);
             result
                 .tokenization_evidence
-                .validate_for(&f.descriptor, &f.compilation.model_input)
+                .validate_for(&selected_descriptor, &f.compilation.model_input)
                 .unwrap();
             assert_eq!(result.tokenization_evidence.input_token_count, token_count);
             assert_eq!(tokenizer.remaining().unwrap(), 0);
             assert_eq!(selected.remaining(), 0);
+            assert_eq!(other.remaining(), 1);
             assert_eq!(remote.remaining(), 1);
         }
     }
@@ -3725,7 +3799,19 @@ mod tests {
         }
 
         let f = admission_fixture();
-        let empty = ModelRegistry::try_from_providers(std::iter::empty()).unwrap();
+        let mut ineligible_descriptor = f.descriptor.clone();
+        ineligible_descriptor.privacy_class = PrivacyClass::ApprovedRemote;
+        let ineligible = Arc::new(
+            ScriptedModelProvider::new(
+                ineligible_descriptor,
+                [ScriptedOutcome::Response(f.response.clone())],
+            )
+            .unwrap(),
+        );
+        let registry = ModelRegistry::try_from_providers([
+            ineligible.clone() as Arc<dyn LanguageModelProvider>
+        ])
+        .unwrap();
         let tokenizer = ScriptedModelInputTokenizer::new(
             f.descriptor.clone(),
             [ScriptedTokenizationOutcome::TokenCount(1)],
@@ -3733,7 +3819,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             select_local_model_tokenize_invoke_and_admit(
-                &empty,
+                &registry,
                 f.request.invocation_id,
                 &local_selection_requirements(),
                 MODEL_INPUT_TOKENIZATION_V1,
@@ -3748,6 +3834,7 @@ mod tests {
             ))
         );
         assert_eq!(tokenizer.remaining().unwrap(), 1);
+        assert_eq!(ineligible.remaining(), 1);
     }
 
     #[test]
@@ -3886,15 +3973,28 @@ mod tests {
 
         let mut malformed = admission_fixture();
         malformed.response.output = RawModelOutput::new("model-output-private-sentinel").unwrap();
-        let provider = Arc::new(CountingProvider::new(&malformed));
+        malformed.context.tokenizer_profile_id = "knowledge-private-sentinel".into();
+        let provider = Arc::new(SentinelProvider {
+            inner: ScriptedModelProvider::new(
+                malformed.descriptor.clone(),
+                [ScriptedOutcome::Response(malformed.response.clone())],
+            )
+            .unwrap(),
+            endpoint: "endpoint-private-sentinel".into(),
+            credential: "credential-private-sentinel".into(),
+            private_diagnostic: "provider-private-sentinel".into(),
+        });
         let registry =
             ModelRegistry::try_from_providers([provider.clone() as Arc<dyn LanguageModelProvider>])
                 .unwrap();
-        let tokenizer = ScriptedModelInputTokenizer::new(
-            malformed.descriptor.clone(),
-            [ScriptedTokenizationOutcome::TokenCount(1)],
-        )
-        .unwrap();
+        let tokenizer = SentinelTokenizer {
+            inner: ScriptedModelInputTokenizer::new(
+                malformed.descriptor.clone(),
+                [ScriptedTokenizationOutcome::TokenCount(1)],
+            )
+            .unwrap(),
+            private_diagnostic: "tokenizer-private-sentinel".into(),
+        };
         let admission_error = select_local_model_tokenize_invoke_and_admit(
             &registry,
             malformed.request.invocation_id,
@@ -3907,7 +4007,8 @@ mod tests {
             &malformed.citations,
         )
         .unwrap_err();
-        assert_eq!(provider.calls(), 1);
+        assert_eq!(tokenizer.inner.remaining().unwrap(), 0);
+        assert_eq!(provider.inner.remaining(), 0);
         for error in [provider_error, admission_error] {
             let diagnostics = format!("{error:?} {error}");
             for sentinel in [
