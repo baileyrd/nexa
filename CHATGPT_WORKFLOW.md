@@ -10,6 +10,32 @@ This document defines the human-coordinated workflow used to develop Nexa with C
 
 This document governs the collaboration process. It does not supersede `AGENTS.md`, accepted ADRs, approved specifications, the specification registry, or other repository authorities.
 
+## Optional autonomous operating mode
+
+The human-coordinated workflow below remains the default. As an optional mode,
+ChatGPT automations may act as planner, reviewer, and merge gate while Codex
+Cloud performs implementation through the repository's GitHub connection. The
+operating procedure and prerequisites are defined in
+[`docs/automation/CODEX-CLOUD-AUTOMATION.md`](docs/automation/CODEX-CLOUD-AUTOMATION.md).
+
+In this mode:
+
+1. ChatGPT selects one bounded increment and dispatches it from one GitHub issue
+   with a top-level `@codex` comment.
+2. Codex Cloud implements and validates the increment, then creates exactly one
+   pull request. Every correction is made on that pull request's existing
+   branch in response to a top-level `@codex` pull-request comment.
+3. GitHub pull-request events trigger immediate ChatGPT review. Because the
+   available webhook does not report workflow-run completion, an hourly
+   ChatGPT backstop rechecks pending CI against the pull request's exact head.
+4. At most one implementation issue or pull request may be active, and no more
+   than three automation merges may occur in one America/Chicago calendar day.
+5. ChatGPT never merges when required CI is missing, pending, failed, stale, or
+   associated with an older head commit.
+
+These automation rules do not change the authority, validation, correction,
+or exact-head merge safeguards elsewhere in this document.
+
 ## Source of truth
 
 Every workflow cycle begins from the repository’s current state.
