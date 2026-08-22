@@ -38,6 +38,37 @@ pub enum ModelRequestTokenCapacityError {
     ExactCapacity,
 }
 
+/// Closed failures from creating exact tokenization evidence and validating request capacity.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Error)]
+pub enum TokenizeAndValidateModelRequestCapacityError {
+    #[error("model request validation failed: {0:?}")]
+    Request(ModelErrorKind),
+    #[error("model-input tokenization failed: {0}")]
+    Tokenization(ModelInputTokenizationError),
+    #[error("model request token-capacity validation failed: {0}")]
+    TokenCapacity(ModelRequestTokenCapacityError),
+}
+
+/// Creates ADR-0036 evidence and immediately applies the unchanged ADR-0037 capacity gate.
+///
+/// ADR-0022 host validation completes before the tokenizer can consume an outcome. This
+/// operation invokes no model provider.
+pub fn tokenize_and_validate_model_request_capacity(
+    contract_version: ProtocolVersion,
+    descriptor: &ModelDescriptor,
+    request: &ModelRequest,
+    tokenizer: &dyn ModelInputTokenizer,
+) -> Result<ModelInputTokenizationEvidence, TokenizeAndValidateModelRequestCapacityError> {
+    request
+        .validate_for(descriptor)
+        .map_err(|error| TokenizeAndValidateModelRequestCapacityError::Request(error.kind))?;
+    let evidence = tokenize_model_input(contract_version, descriptor, &request.input, tokenizer)
+        .map_err(TokenizeAndValidateModelRequestCapacityError::Tokenization)?;
+    validate_model_request_token_capacity(descriptor, request, &evidence)
+        .map_err(TokenizeAndValidateModelRequestCapacityError::TokenCapacity)?;
+    Ok(evidence)
+}
+
 /// Validates both ADR-0022 conservative byte capacity and ADR-0037 exact token capacity.
 ///
 /// This operation consumes no tokenizer or provider and produces no duplicate evidence.
@@ -368,6 +399,293 @@ mod tests {
         count: u32,
     ) -> ModelInputTokenizationEvidence {
         ModelInputTokenizationEvidence::new(descriptor, input, count).unwrap()
+    }
+
+    #[test]
+    fn tokenize_and_validate_preflight_failures_do_not_consume_tokenizer() {
+        let base = descriptor(1, 2);
+        let valid = request_for(&base, "input", 1);
+        let tokenizer = ScriptedModelInputTokenizer::new(
+            base.clone(),
+            [ScriptedTokenizationOutcome::TokenCount(1)],
+        )
+        .unwrap();
+        let mut invalid_descriptor = base.clone();
+        invalid_descriptor.capabilities.context_window_tokens = 0;
+        assert_eq!(
+            tokenize_and_validate_model_request_capacity(
+                MODEL_INPUT_TOKENIZATION_V1,
+                &invalid_descriptor,
+                &valid,
+                &tokenizer,
+            ),
+            Err(TokenizeAndValidateModelRequestCapacityError::Request(
+                ModelErrorKind::InvalidContract
+            ))
+        );
+        assert_eq!(tokenizer.remaining().unwrap(), 1);
+        let cases = [
+            (ModelErrorKind::IdentityMismatch, {
+                let mut value = valid.clone();
+                value.model_id = ModelId::new(Uuid::from_u128(99)).unwrap();
+                value
+            }),
+            (ModelErrorKind::UnsupportedVersion, {
+                let mut value = valid.clone();
+                value.contract_version = ProtocolVersion::new(2, 0);
+                value
+            }),
+            (ModelErrorKind::UnsupportedCapability, {
+                let mut value = valid.clone();
+                value.required_capabilities.vision = true;
+                value
+            }),
+            (ModelErrorKind::ContextTooLarge, {
+                let mut value = valid.clone();
+                value.maximum_output_tokens = 513;
+                value
+            }),
+            (ModelErrorKind::ContextTooLarge, {
+                let mut value = valid.clone();
+                value.input = ModelInput::new("x".repeat(4096)).unwrap();
+                value
+            }),
+        ];
+        for (expected, request) in cases {
+            let tokenizer = ScriptedModelInputTokenizer::new(
+                base.clone(),
+                [ScriptedTokenizationOutcome::TokenCount(1)],
+            )
+            .unwrap();
+            assert_eq!(
+                tokenize_and_validate_model_request_capacity(
+                    MODEL_INPUT_TOKENIZATION_V1,
+                    &base,
+                    &request,
+                    &tokenizer,
+                ),
+                Err(TokenizeAndValidateModelRequestCapacityError::Request(
+                    expected
+                ))
+            );
+            assert_eq!(tokenizer.remaining().unwrap(), 1);
+        }
+    }
+
+    #[test]
+    fn tokenize_and_validate_normalizes_tokenizer_failures_after_preflight() {
+        struct ClosedTokenizer {
+            descriptor: ModelDescriptor,
+            error: ModelInputTokenizationError,
+        }
+        impl ModelInputTokenizer for ClosedTokenizer {
+            fn descriptor(&self) -> &ModelDescriptor {
+                &self.descriptor
+            }
+            fn count_input_tokens(
+                &self,
+                _input: &ModelInput,
+            ) -> Result<u32, ModelInputTokenizationError> {
+                Err(self.error)
+            }
+        }
+
+        let base = descriptor(1, 2);
+        let request = request_for(&base, "private prompt", 1);
+        let mismatched = ScriptedModelInputTokenizer::new(
+            descriptor(9, 2),
+            [ScriptedTokenizationOutcome::TokenCount(2)],
+        )
+        .unwrap();
+        assert!(matches!(
+            tokenize_and_validate_model_request_capacity(
+                MODEL_INPUT_TOKENIZATION_V1,
+                &base,
+                &request,
+                &mismatched,
+            ),
+            Err(TokenizeAndValidateModelRequestCapacityError::Tokenization(
+                ModelInputTokenizationError::InvalidDescriptor
+            ))
+        ));
+        assert_eq!(mismatched.remaining().unwrap(), 1);
+
+        let exhausted = ScriptedModelInputTokenizer::new(base.clone(), []).unwrap();
+        assert_eq!(
+            tokenize_and_validate_model_request_capacity(
+                MODEL_INPUT_TOKENIZATION_V1,
+                &base,
+                &request,
+                &exhausted,
+            ),
+            Err(TokenizeAndValidateModelRequestCapacityError::Tokenization(
+                ModelInputTokenizationError::ScriptExhausted
+            ))
+        );
+
+        let cases = [
+            (
+                ProtocolVersion::new(2, 0),
+                ModelInputTokenizationError::UnsupportedVersion,
+            ),
+            (
+                MODEL_INPUT_TOKENIZATION_V1,
+                ModelInputTokenizationError::TokenizerFailure,
+            ),
+            (
+                MODEL_INPUT_TOKENIZATION_V1,
+                ModelInputTokenizationError::Internal,
+            ),
+        ];
+        for (version, expected) in cases {
+            let tokenizer = ClosedTokenizer {
+                descriptor: base.clone(),
+                error: expected,
+            };
+            assert_eq!(
+                tokenize_and_validate_model_request_capacity(version, &base, &request, &tokenizer),
+                Err(TokenizeAndValidateModelRequestCapacityError::Tokenization(
+                    expected
+                ))
+            );
+        }
+        let zero = ScriptedModelInputTokenizer::new(
+            base.clone(),
+            [ScriptedTokenizationOutcome::TokenCount(0)],
+        )
+        .unwrap();
+        assert_eq!(
+            tokenize_and_validate_model_request_capacity(
+                MODEL_INPUT_TOKENIZATION_V1,
+                &base,
+                &request,
+                &zero,
+            ),
+            Err(TokenizeAndValidateModelRequestCapacityError::Tokenization(
+                ModelInputTokenizationError::InvalidEvidence
+            ))
+        );
+        assert_eq!(zero.remaining().unwrap(), 0);
+    }
+
+    #[test]
+    fn tokenize_and_validate_accepts_fit_and_returns_generated_replay_evidence() {
+        let mut base = descriptor(1, 2);
+        base.capabilities.context_window_tokens = 20;
+        base.capabilities.maximum_output_tokens = 10;
+        let request = request_for(&base, "fit", 10);
+        let tokenizer = ScriptedModelInputTokenizer::new(
+            base.clone(),
+            [
+                ScriptedTokenizationOutcome::TokenCount(9),
+                ScriptedTokenizationOutcome::TokenCount(11),
+            ],
+        )
+        .unwrap();
+        let expected = evidence_for(&base, &request.input, 9);
+
+        let evidence = tokenize_and_validate_model_request_capacity(
+            MODEL_INPUT_TOKENIZATION_V1,
+            &base,
+            &request,
+            &tokenizer,
+        )
+        .unwrap();
+
+        assert_eq!(evidence, expected);
+        assert_eq!(tokenizer.remaining().unwrap(), 1);
+    }
+
+    #[test]
+    fn tokenize_and_validate_returns_exact_replay_evidence_and_accepts_boundary() {
+        let mut base = descriptor(1, 2);
+        base.capabilities.context_window_tokens = 20;
+        base.capabilities.maximum_output_tokens = 10;
+        let request = request_for(&base, "exact", 10);
+        let tokenizer = ScriptedModelInputTokenizer::new(
+            base.clone(),
+            [ScriptedTokenizationOutcome::TokenCount(10)],
+        )
+        .unwrap();
+        let evidence = tokenize_and_validate_model_request_capacity(
+            MODEL_INPUT_TOKENIZATION_V1,
+            &base,
+            &request,
+            &tokenizer,
+        )
+        .unwrap();
+        assert_eq!(tokenizer.remaining().unwrap(), 0);
+        assert_eq!(evidence.input_token_count, 10);
+        evidence.validate_for(&base, &request.input).unwrap();
+        validate_model_request_token_capacity(&base, &request, &evidence).unwrap();
+        let wire = serde_json::to_string(&evidence).unwrap();
+        assert_eq!(
+            serde_json::from_str::<ModelInputTokenizationEvidence>(&wire).unwrap(),
+            evidence
+        );
+    }
+
+    #[test]
+    fn tokenize_and_validate_capacity_failure_consumes_once_and_no_provider() {
+        for count in [11, u32::MAX] {
+            let mut base = descriptor(1, 2);
+            base.capabilities.context_window_tokens = if count == u32::MAX { u32::MAX } else { 20 };
+            base.capabilities.maximum_output_tokens = 10;
+            let request = request_for(&base, "short", 10);
+            let tokenizer = ScriptedModelInputTokenizer::new(
+                base.clone(),
+                [ScriptedTokenizationOutcome::TokenCount(count)],
+            )
+            .unwrap();
+            let provider = ScriptedModelProvider::new(
+                base.clone(),
+                [ScriptedOutcome::Error(ModelErrorKind::Internal)],
+            )
+            .unwrap();
+            assert_eq!(
+                tokenize_and_validate_model_request_capacity(
+                    MODEL_INPUT_TOKENIZATION_V1,
+                    &base,
+                    &request,
+                    &tokenizer,
+                ),
+                Err(TokenizeAndValidateModelRequestCapacityError::TokenCapacity(
+                    ModelRequestTokenCapacityError::ExactCapacity
+                ))
+            );
+            assert_eq!(tokenizer.remaining().unwrap(), 0);
+            assert_eq!(provider.remaining(), 1);
+        }
+    }
+
+    #[test]
+    fn tokenize_and_validate_errors_are_content_free() {
+        let base = descriptor(1, 2);
+        let sentinels = [
+            "PROMPT",
+            "LEARNER",
+            "KNOWLEDGE",
+            "CREDENTIAL",
+            "ENDPOINT",
+            "TOKENIZER_PRIVATE",
+        ];
+        let request = request_for(&base, &sentinels.join("_SENTINEL|"), 1);
+        let errors = [
+            TokenizeAndValidateModelRequestCapacityError::Request(ModelErrorKind::Internal),
+            TokenizeAndValidateModelRequestCapacityError::Tokenization(
+                ModelInputTokenizationError::Internal,
+            ),
+            TokenizeAndValidateModelRequestCapacityError::TokenCapacity(
+                ModelRequestTokenCapacityError::ExactCapacity,
+            ),
+        ];
+        for error in errors {
+            let diagnostics = format!("{error:?} {error}");
+            for sentinel in sentinels {
+                assert!(!diagnostics.contains(&format!("{sentinel}_SENTINEL")));
+            }
+        }
+        assert!(format!("{request:?}").contains("[REDACTED]"));
     }
 
     #[test]
