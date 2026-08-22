@@ -1,0 +1,150 @@
+name: Codex publication smoke test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: codex-publication-smoke-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Create disposable draft PR
+    runs-on: ubuntu-latest
+    env:
+      BRANCH_NAME: automation/codex-publication-smoke-${{ github.run_id }}
+      EXPECTED_FILE: docs/automation/smoke-${{ github.run_id }}.md
+    steps:
+      - name: Authorize repository owner
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REPOSITORY}" != "baileyrd/nexa" || "${GITHUB_ACTOR}" != "baileyrd" ]]; then
+            echo "This workflow may only be run by the baileyrd repository owner." >&2
+            exit 1
+          fi
+
+      - name: Check out the repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Create the publication branch
+        shell: bash
+        run: git switch --create "${BRANCH_NAME}"
+
+      - name: Prepare the unprivileged Codex user
+        shell: bash
+        run: |
+          sudo useradd --system --create-home --shell /bin/bash --user-group codex-smoke
+          sudo usermod --append --groups runner codex-smoke
+
+          # Codex may read the checkout, but it cannot read Git metadata or
+          # change any existing path. Pre-creating the sole writable file also
+          # prevents directory-level create or delete access.
+          chmod --recursive go-w "${GITHUB_WORKSPACE}"
+          chmod --recursive go-rwx "${GITHUB_WORKSPACE}/.git"
+          sudo install --owner=codex-smoke --group=runner --mode=0640 \
+            /dev/null "${EXPECTED_FILE}"
+
+      - name: Create smoke-test evidence with Codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          safety-strategy: unprivileged-user
+          codex-user: codex-smoke
+          permission-profile: ":workspace"
+          prompt: |
+            This is a tightly constrained publication smoke test for baileyrd/nexa.
+            Create exactly one file and make no other repository changes.
+            The only authorized path is docs/automation/smoke-${{ github.run_id }}.md.
+            That file must contain exactly the following Markdown, including the heading and list labels, with no additional text:
+
+            # Codex publication smoke test
+
+            - Repository: `baileyrd/nexa`
+            - Workflow run ID: `${{ github.run_id }}`
+            - Result: Codex successfully created the authorized smoke-test evidence file.
+
+            Do not read, print, copy, or write credentials or secret values. Do not commit, push, create branches, or open pull requests.
+
+      - name: Verify the only change and its content
+        shell: bash
+        run: |
+          mapfile -d '' status_records < <(git status --porcelain=v1 -z --untracked-files=all)
+          if [[ "${#status_records[@]}" -ne 1 ]]; then
+            echo "Expected exactly one changed or untracked file; found ${#status_records[@]}." >&2
+            printf 'Status: %q\n' "${status_records[@]}" >&2
+            exit 1
+          fi
+
+          record="${status_records[0]}"
+          if [[ "${record:3}" != "${EXPECTED_FILE}" || ! -f "${EXPECTED_FILE}" ]]; then
+            echo "Codex did not create only the expected evidence file." >&2
+            printf 'Status: %q\n' "${record}" >&2
+            exit 1
+          fi
+
+          diff --unified "${EXPECTED_FILE}" <(printf '%s\n' \
+            '# Codex publication smoke test' \
+            '' \
+            '- Repository: `baileyrd/nexa`' \
+            '- Workflow run ID: `${{ github.run_id }}`' \
+            '- Result: Codex successfully created the authorized smoke-test evidence file.')
+          git diff --check
+          git add -- "${EXPECTED_FILE}"
+          git diff --cached --check
+
+      - name: Commit the evidence
+        shell: bash
+        run: |
+          before_commit="$(git rev-parse HEAD)"
+          git config user.name "nexa-actions[bot]"
+          git config user.email "nexa-actions[bot]@users.noreply.github.com"
+          git add -- "${EXPECTED_FILE}"
+          git commit -m "docs: add Codex publication smoke evidence"
+          if [[ "$(git rev-parse HEAD)" == "${before_commit}" ]]; then
+            echo "The expected smoke-test commit was not created." >&2
+            exit 1
+          fi
+
+      - name: Push the publication branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git
+          git push --set-upstream origin "${BRANCH_NAME}"
+          local_commit="$(git rev-parse HEAD)"
+          remote_commit="$(git ls-remote --heads origin "refs/heads/${BRANCH_NAME}" | cut -f1)"
+          if [[ -z "${remote_commit}" || "${remote_commit}" != "${local_commit}" ]]; then
+            echo "The publication branch was not pushed at the expected commit." >&2
+            exit 1
+          fi
+
+      - name: Open one disposable draft pull request
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing_count="$(gh pr list --state all --head "${BRANCH_NAME}" --json number --jq 'length')"
+          if [[ "${existing_count}" -ne 0 ]]; then
+            echo "Refusing to create a PR because this unique branch already has one." >&2
+            exit 1
+          fi
+
+          gh pr create \
+            --base main \
+            --head "${BRANCH_NAME}" \
+            --draft \
+            --title "chore: disposable Codex publication smoke evidence" \
+            --body "Disposable evidence from the supervised Codex publication smoke test. Close this draft PR without merging after confirming the workflow succeeded."
+
+          pr_data="$(gh pr list --state all --head "${BRANCH_NAME}" --json baseRefName,isDraft,number --jq 'if length == 1 then .[0] else empty end')"
+          if [[ -z "${pr_data}" || "$(jq -r '.baseRefName' <<<"${pr_data}")" != "main" || "$(jq -r '.isDraft' <<<"${pr_data}")" != "true" ]]; then
+            echo "Exactly one draft PR targeting main was not created." >&2
+            exit 1
+          fi
