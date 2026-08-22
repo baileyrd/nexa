@@ -18,7 +18,6 @@ jobs:
     env:
       BRANCH_NAME: automation/codex-publication-smoke-${{ github.run_id }}
       EXPECTED_FILE: docs/automation/smoke-${{ github.run_id }}.md
-      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Authorize repository owner
         shell: bash
@@ -30,15 +29,33 @@ jobs:
 
       - name: Check out the repository
         uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - name: Create the publication branch
         shell: bash
         run: git switch --create "${BRANCH_NAME}"
 
+      - name: Prepare the unprivileged Codex user
+        shell: bash
+        run: |
+          sudo useradd --system --create-home --shell /bin/bash --user-group codex-smoke
+          sudo usermod --append --groups runner codex-smoke
+
+          # Codex may read the checkout, but it cannot read Git metadata or
+          # change any existing path. Pre-creating the sole writable file also
+          # prevents directory-level create or delete access.
+          chmod --recursive go-w "${GITHUB_WORKSPACE}"
+          chmod --recursive go-rwx "${GITHUB_WORKSPACE}/.git"
+          sudo install --owner=codex-smoke --group=runner --mode=0640 \
+            /dev/null "${EXPECTED_FILE}"
+
       - name: Create smoke-test evidence with Codex
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          safety-strategy: unprivileged-user
+          codex-user: codex-smoke
           permission-profile: ":workspace"
           prompt: |
             This is a tightly constrained publication smoke test for baileyrd/nexa.
@@ -96,7 +113,10 @@ jobs:
 
       - name: Push the publication branch
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          gh auth setup-git
           git push --set-upstream origin "${BRANCH_NAME}"
           local_commit="$(git rev-parse HEAD)"
           remote_commit="$(git ls-remote --heads origin "refs/heads/${BRANCH_NAME}" | cut -f1)"
@@ -107,6 +127,8 @@ jobs:
 
       - name: Open one disposable draft pull request
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           existing_count="$(gh pr list --state all --head "${BRANCH_NAME}" --json number --jq 'length')"
           if [[ "${existing_count}" -ne 0 ]]; then

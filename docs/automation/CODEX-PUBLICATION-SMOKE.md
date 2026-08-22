@@ -4,7 +4,7 @@
 
 The `Codex publication smoke test` workflow is a narrow, supervised check of the
 repository's publication path. It asks `openai/codex-action@v1` to create one
-non-sensitive evidence file, then uses the authenticated GitHub checkout to
+non-sensitive evidence file, then authenticates Git only after Codex exits to
 commit that file, push a unique branch, and open one draft pull request.
 
 This workflow is disposable operational evidence. It is not a product build,
@@ -38,7 +38,7 @@ A successful run proves, for that run and repository configuration, that:
 - the workflow rejects additional or substituted repository changes and checks
   the expected file's exact non-sensitive content and whitespace;
 - the GitHub Actions commit identity can create a commit and the authenticated
-  checkout can push the unique branch without force-pushing; and
+  publication step can push the unique branch without force-pushing; and
 - the workflow token can create exactly one draft pull request targeting
   `main`.
 
@@ -60,11 +60,15 @@ pull request's commit history and is not added to `main`.
 The workflow is manual-only, has no prompt input, and fails closed unless both
 the repository and triggering actor are the expected owner. Its job receives
 only `contents: write` and `pull-requests: write`; Codex uses the workspace-only
-permission profile and the action's default safe `drop-sudo` strategy. The
-fixed prompt authorizes exactly one run-specific documentation file, and a
-post-action gate rejects every other changed or untracked path before commit.
-Concurrency prevents two attempts for the same workflow run from publishing at
-the same time.
+permission profile as a dedicated ephemeral, unprivileged user. The checkout
+does not persist Git credentials, `.git` remains inaccessible to that user, and
+the user's only writable repository path is the pre-created run-specific
+evidence file. The GitHub token is provided only to the later push and pull
+request steps, and Git authentication is configured only after Codex exits. The
+fixed prompt authorizes exactly that evidence file, and a post-action gate
+rejects every other changed or untracked path before commit. Concurrency
+prevents two attempts for the same workflow run from publishing at the same
+time.
 
 The API key must remain solely in the GitHub Actions secret store. Do not echo,
 inspect, interpolate into content, or otherwise expose the key—or any other
