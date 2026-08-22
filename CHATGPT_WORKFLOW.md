@@ -25,11 +25,13 @@ In this mode:
 2. Codex Cloud implements and validates the increment, then creates exactly one
    pull request. Every correction is made on that pull request's existing
    branch in response to a top-level `@codex` pull-request comment.
-3. GitHub pull-request events trigger immediate ChatGPT review. Because the
-   available webhook does not report workflow-run completion, an hourly
-   ChatGPT backstop rechecks pending CI against the pull request's exact head.
-4. At most one implementation issue or pull request may be active, and no more
-   than three automation merges may occur in one America/Chicago calendar day.
+3. GitHub pull-request events trigger immediate ChatGPT review. When exact-head
+   CI is pending and no correction is required, the event-driven pull-request
+   run stops cleanly. Re-review occurs on a later matching pull-request event or
+   an explicit repository-owner command.
+4. At most one implementation issue or pull request may be active. Never
+   dispatch competing implementation work while that issue or pull request is
+   active.
 5. ChatGPT never merges when required CI is missing, pending, failed, stale, or
    associated with an older head commit.
 
