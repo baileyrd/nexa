@@ -366,9 +366,9 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. Availabil
 
 | Requirement | Evidence | Status |
 |---|---|---|
-| Unchanged authorization and availability selection precedes dependencies | `select_authorized_available_remote_model_tokenize_invoke_validate_reported_usage_and_admit`; direct focused selection and dependency-accounting tests | Implemented slice |
+| Unchanged authorization and availability selection precedes dependencies | `authorized_remote_usage_validated_tokenized_composition_proves_every_selection_gate`; direct wrapper coverage of every reachable ADR-0031 failure, gate independence, deterministic selection, and untouched dependency queues | Implemented slice |
 | Exact ADR-0043 request followed by unchanged ADR-0046 | Direct delegation using the selected original shared provider, exact request, and caller tokenizer | Implemented slice |
-| Optional reported usage and single-attempt behavior | Direct absent/equal/lower/higher usage evidence and existing complete ADR-0031/ADR-0046 ordering suites | Implemented slice |
+| Optional reported usage and single-attempt behavior | Direct `authorized_remote_usage_validated_tokenized_composition_preserves_selection_and_usage` absent/equal/lower/higher evidence plus `authorized_remote_usage_validated_tokenized_composition_proves_nested_order_and_counts` wrapper-only stage, precedence, exact-error, and FIFO accounting evidence | Implemented slice |
 | Limited authority and existing APIs | ADR-0031 remains the sole permission boundary; authorization and availability remain caller evidence; no authentication or authorization-policy change; ADRs 0022–0048 remain unchanged | Preserved |
 
 NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. Authorization and availability grant no authenticity/freshness or monitoring/recovery authority. Optional reported input usage establishes structural association and equality only, granting no tokenizer/provider truth, billing/cost, output-token, telemetry, or semantic authority. The known ingestion/context checklist inconsistency is preserved.
