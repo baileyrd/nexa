@@ -4597,6 +4597,162 @@ mod tests {
     }
 
     #[test]
+    fn selected_usage_validated_tokenized_composition_rejects_before_dependencies() {
+        use crate::generation::{
+            select_local_model_tokenize_invoke_validate_reported_usage_and_admit,
+            SelectedUsageValidatedTokenizedInvocationAdmissionError,
+        };
+        use crate::model::{LanguageModelProvider, ScriptedModelProvider, ScriptedOutcome};
+        use crate::registry::ModelRegistry;
+        use crate::selection::ModelSelectionError;
+        use crate::tokenization::{
+            ScriptedModelInputTokenizer, ScriptedTokenizationOutcome, MODEL_INPUT_TOKENIZATION_V1,
+        };
+        use std::sync::Arc;
+
+        let f = admission_fixture();
+        let provider = Arc::new(
+            ScriptedModelProvider::new(
+                f.descriptor.clone(),
+                [ScriptedOutcome::Response(f.response.clone())],
+            )
+            .unwrap(),
+        );
+        let registry =
+            ModelRegistry::try_from_providers([provider.clone() as Arc<dyn LanguageModelProvider>])
+                .unwrap();
+        for mutation in 0..4 {
+            let tokenizer = ScriptedModelInputTokenizer::new(
+                f.descriptor.clone(),
+                [ScriptedTokenizationOutcome::TokenCount(1)],
+            )
+            .unwrap();
+            let mut requirements = local_selection_requirements();
+            match mutation {
+                0 => requirements.contract_version = ProtocolVersion::new(2, 0),
+                1 => requirements.maximum_output_tokens = 0,
+                2 => requirements.required_capabilities.structured_output = false,
+                _ => requirements.privacy_preference.clear(),
+            }
+            assert_eq!(
+                select_local_model_tokenize_invoke_validate_reported_usage_and_admit(
+                    &registry,
+                    f.request.invocation_id,
+                    &requirements,
+                    MODEL_INPUT_TOKENIZATION_V1,
+                    &tokenizer,
+                    &f.compilation,
+                    &f.authority,
+                    &f.context,
+                    &f.citations,
+                ),
+                Err(SelectedUsageValidatedTokenizedInvocationAdmissionError::InvalidLocalOnlyRequirements)
+            );
+            assert_eq!(tokenizer.remaining().unwrap(), 1);
+            assert_eq!(provider.remaining(), 1);
+        }
+
+        let tokenizer = ScriptedModelInputTokenizer::new(
+            f.descriptor.clone(),
+            [ScriptedTokenizationOutcome::TokenCount(1)],
+        )
+        .unwrap();
+        assert_eq!(
+            select_local_model_tokenize_invoke_validate_reported_usage_and_admit(
+                &ModelRegistry::try_from_providers(std::iter::empty::<
+                    Arc<dyn LanguageModelProvider>,
+                >(),)
+                .unwrap(),
+                f.request.invocation_id,
+                &local_selection_requirements(),
+                MODEL_INPUT_TOKENIZATION_V1,
+                &tokenizer,
+                &f.compilation,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            ),
+            Err(
+                SelectedUsageValidatedTokenizedInvocationAdmissionError::Selection(
+                    ModelSelectionError::NoEligibleModel
+                )
+            )
+        );
+        assert_eq!(tokenizer.remaining().unwrap(), 1);
+        assert_eq!(provider.remaining(), 1);
+    }
+
+    #[test]
+    fn selected_usage_validated_tokenized_composition_is_exact_and_single_attempt() {
+        use crate::generation::{
+            select_local_model_tokenize_invoke_validate_reported_usage_and_admit,
+            SelectedUsageValidatedTokenizedInvocationAdmissionError,
+            UsageValidatedTokenizedInvocationAdmissionError,
+        };
+        use crate::model::{
+            LanguageModelProvider, ModelUsage, ScriptedModelProvider, ScriptedOutcome,
+        };
+        use crate::registry::ModelRegistry;
+        use crate::tokenization::{
+            ScriptedModelInputTokenizer, ScriptedTokenizationOutcome, MODEL_INPUT_TOKENIZATION_V1,
+        };
+        use crate::usage::ModelResponseReportedUsageValidationError;
+        use std::sync::Arc;
+
+        for reported in [None, Some(7), Some(6), Some(8)] {
+            let mut f = admission_fixture();
+            f.response.reported_usage = reported.map(|input_tokens| ModelUsage {
+                input_tokens,
+                output_tokens: 1,
+            });
+            let provider = Arc::new(
+                ScriptedModelProvider::new(
+                    f.descriptor.clone(),
+                    [ScriptedOutcome::Response(f.response.clone())],
+                )
+                .unwrap(),
+            );
+            let registry = ModelRegistry::try_from_providers([
+                provider.clone() as Arc<dyn LanguageModelProvider>
+            ])
+            .unwrap();
+            let tokenizer = ScriptedModelInputTokenizer::new(
+                f.descriptor.clone(),
+                [ScriptedTokenizationOutcome::TokenCount(7)],
+            )
+            .unwrap();
+            let result = select_local_model_tokenize_invoke_validate_reported_usage_and_admit(
+                &registry,
+                f.request.invocation_id,
+                &local_selection_requirements(),
+                MODEL_INPUT_TOKENIZATION_V1,
+                &tokenizer,
+                &f.compilation,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            );
+            if matches!(reported, None | Some(7)) {
+                let result = result.unwrap();
+                assert_eq!(result.admission, f.admit().unwrap());
+                assert_eq!(result.tokenization_evidence.input_token_count, 7);
+            } else {
+                assert_eq!(
+                    result,
+                    Err(SelectedUsageValidatedTokenizedInvocationAdmissionError::
+                        UsageValidatedTokenizedInvocationAdmission(
+                            UsageValidatedTokenizedInvocationAdmissionError::ReportedUsage(
+                                ModelResponseReportedUsageValidationError::InputTokenCountMismatch
+                            )
+                        ))
+                );
+            }
+            assert_eq!(tokenizer.remaining().unwrap(), 0);
+            assert_eq!(provider.remaining(), 0);
+        }
+    }
+
+    #[test]
     fn available_local_tokenized_selection_rejects_requirements_and_availability_first() {
         use crate::availability::{
             ModelAvailabilityEntry, ModelAvailabilityError, ModelAvailabilitySnapshot,

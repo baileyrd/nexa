@@ -193,7 +193,6 @@ NEXA-TUTOR-001 remains Baseline Draft; the reserved privacy specification namesp
 
 NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy namespace remains reserved. The known ingestion/context roadmap inconsistency is preserved.
 
-
 ## Filtered authorized available remote invocation and admission
 
 | Requirement | Evidence | Status |
@@ -294,7 +293,6 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 
 NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
 
-
 ## ADR-0043 authorized available remote selection and exact-tokenization composition
 
 | Requirement | Evidence | Status |
@@ -336,5 +334,17 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Exact evidence, single attempt, and dependency accounting | Deterministic scripted tokenizer/provider tests assert exact evidence and remaining outcomes | Implemented slice |
 | Optional usage equality before unchanged admission | Direct absent/equal/lower/higher, structural-response, and admission-failure tests | Implemented slice |
 | Closed content-free failures and limited authority | Five-category error; diagnostics tests and ADR-0046 exclusions preserve no truth, billing/cost, output-token, authenticity/freshness, or telemetry claims | Preserved |
+
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
+
+## ADR-0047 local-only selection with reported-usage-validated exact-tokenization invocation and admission
+
+| Requirement | Evidence | Status |
+|---|---|---|
+| Explicit-local validation and conservative selection precede dependency consumption | `select_local_model_tokenize_invoke_validate_reported_usage_and_admit`; direct malformed-requirement and empty-registry dependency-preservation tests | Implemented slice |
+| Exact selected request followed by unchanged ADR-0046 | Shared ADR-0041 request construction and direct ADR-0046 delegation | Implemented slice |
+| Optional usage equality, exact evidence, and single attempt | Direct absent/equal/lower/higher tests assert exact results and dependency counts; ADR-0046 focused tests preserve all nested ordering | Implemented slice |
+| Closed content-free failures and limited authority | Three-category outer error preserves complete nested ADR-0046 errors; existing sentinel-bearing diagnostics tests cover those unchanged nested categories | Preserved |
+| Existing APIs and explicit deferrals | ADRs 0022 through 0046 unchanged; no availability, authorization, routing, retry, concrete dependency, networking, telemetry, or semantic authority | Preserved |
 
 NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.

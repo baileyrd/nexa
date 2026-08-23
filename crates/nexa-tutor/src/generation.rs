@@ -115,6 +115,18 @@ pub enum SelectedTokenizedInvocationAdmissionError {
     TokenizedInvocationAdmission(TokenizedInvocationAdmissionError),
 }
 
+/// Closed failures for explicit local-only selection followed by usage-validated exact
+/// tokenization, invocation, and admission.
+#[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
+pub enum SelectedUsageValidatedTokenizedInvocationAdmissionError {
+    #[error("local-only usage-validated tokenized invocation requirements are invalid")]
+    InvalidLocalOnlyRequirements,
+    #[error("local-only model selection failed")]
+    Selection(ModelSelectionError),
+    #[error("selected model usage-validated tokenized invocation or admission failed")]
+    UsageValidatedTokenizedInvocationAdmission(UsageValidatedTokenizedInvocationAdmissionError),
+}
+
 /// Closed failure categories for availability-gated explicit local-only execution.
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
 pub enum AvailableLocalInvocationAdmissionError {
@@ -456,6 +468,51 @@ pub fn select_local_model_tokenize_invoke_and_admit(
         citations,
     )
     .map_err(SelectedTokenizedInvocationAdmissionError::TokenizedInvocationAdmission)
+}
+
+/// Selects one explicitly requested local model, then validates its reported usage between exact
+/// tokenization/invocation and admission.
+#[allow(clippy::too_many_arguments)]
+pub fn select_local_model_tokenize_invoke_validate_reported_usage_and_admit(
+    registry: &ModelRegistry,
+    invocation_id: ModelInvocationId,
+    requirements: &ModelSelectionRequirements,
+    tokenization_contract_version: ProtocolVersion,
+    tokenizer: &dyn ModelInputTokenizer,
+    compilation: &PromptCompilationResult,
+    authority: &TrustedPlanningAuthority,
+    context: &ContextPackage,
+    citations: &CitationResult,
+) -> Result<
+    TokenizedInvocationAdmissionResult,
+    SelectedUsageValidatedTokenizedInvocationAdmissionError,
+> {
+    validate_explicit_local_requirements(requirements).map_err(|()| {
+        SelectedUsageValidatedTokenizedInvocationAdmissionError::InvalidLocalOnlyRequirements
+    })?;
+
+    let selected = select_model(registry, &compilation.model_input, requirements)
+        .map_err(SelectedUsageValidatedTokenizedInvocationAdmissionError::Selection)?;
+    let request = request_for_selected(
+        invocation_id,
+        &selected.descriptor,
+        requirements,
+        compilation,
+    );
+
+    tokenize_invoke_validate_reported_usage_and_admit_model_output_with_token_capacity(
+        tokenization_contract_version,
+        tokenizer,
+        selected.provider.as_ref(),
+        &request,
+        compilation,
+        authority,
+        context,
+        citations,
+    )
+    .map_err(
+        SelectedUsageValidatedTokenizedInvocationAdmissionError::UsageValidatedTokenizedInvocationAdmission,
+    )
 }
 
 /// Selects one caller-marked-available local model, invokes it once, and admits its response.
