@@ -294,3 +294,16 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Existing APIs and deferrals | ADRs 0029, 0030, 0040, and 0041 unchanged; no probing, token-aware selection, fallback, retry, or concrete dependency | Preserved |
 
 NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
+
+
+## ADR-0043 authorized available remote selection and exact-tokenization composition
+
+| Requirement | Evidence | Status |
+|---|---|---|
+| ADR-0031 remains the sole permission and selection boundary | Direct test `authorized_remote_tokenized_composition_denials_preserve_exact_categories_and_dependencies` covers every malformed remote privacy preference, unsupported inputs, replay and registry/privacy association, authorization and availability gates, exact nested errors, and zero dependency consumption | Implemented slice |
+| Existing request followed by unchanged ADR-0040 | Direct test `authorized_remote_tokenized_composition_is_exact_single_attempt_and_content_free` covers pre-tokenization failures, exact-capacity validation, invocation, and strict admission | Implemented slice |
+| Exact success result and single selected dependency use | Direct test `authorized_remote_tokenized_composition_is_exact_single_attempt_and_content_free` checks replayable tokenization evidence, equality with direct admission, both insertion orders for two eligible authorized remote providers, exact selected shared-handle consumption, and untouched non-selected remote/local providers | Implemented slice |
+| Closed content-free failures | Both direct focused tests format the closed errors and cover content-free selection, tokenizer, provider, and admission failure categories | Implemented slice |
+| Permission and deferrals preserved | No authentication, authorization-policy change, secrets, filtering/minimization proof, concrete remote execution, networking, retry, fallback, or token-aware selection | Preserved |
+
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
