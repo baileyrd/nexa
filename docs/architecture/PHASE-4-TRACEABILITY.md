@@ -327,3 +327,14 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Optional usage and exact input-count equality | Direct tests cover absent usage, equality, lower/higher mismatch, and unchanged maximum-output validation | Implemented slice |
 | Pure, non-consuming, content-free boundary | Direct tests retain scripted tokenizer/provider outcomes and verify every error category excludes private sentinels | Implemented slice |
 | Limited claim and unchanged authorities | ADR-0045 establishes equality only; provider usage remains optional evidence without truth, billing, output-token, or telemetry authority; NEXA-TUTOR-001 remains Baseline Draft | Preserved |
+
+## ADR-0046 reported-usage-validated exact-tokenization invocation and admission
+
+| Requirement | Evidence | Status |
+|---|---|---|
+| Mandatory preflight-to-admission ordering | `tokenize_invoke_validate_reported_usage_and_admit_model_output_with_token_capacity`; direct preflight and ordered failure tests | Implemented slice |
+| Exact evidence, single attempt, and dependency accounting | Deterministic scripted tokenizer/provider tests assert exact evidence and remaining outcomes | Implemented slice |
+| Optional usage equality before unchanged admission | Direct absent/equal/lower/higher, structural-response, and admission-failure tests | Implemented slice |
+| Closed content-free failures and limited authority | Five-category error; diagnostics tests and ADR-0046 exclusions preserve no truth, billing/cost, output-token, authenticity/freshness, or telemetry claims | Preserved |
+
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
