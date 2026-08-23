@@ -66,6 +66,17 @@ mod tests {
     use nexa_domain::{ModelId, ModelInvocationId, ModelProviderId, ProtocolVersion};
     use uuid::Uuid;
 
+    const SENTINELS: [&str; 8] = [
+        "request-input-sentinel",
+        "response-output-sentinel",
+        "tokenizer-provider-sentinel",
+        "endpoint-sentinel",
+        "credential-sentinel",
+        "learner-sentinel",
+        "context-sentinel",
+        "usage-adjacent-sentinel",
+    ];
+
     fn descriptor(provider: u128, model: u128) -> ModelDescriptor {
         ModelDescriptor::new(
             ModelProviderId::new(Uuid::from_u128(provider)).unwrap(),
@@ -76,7 +87,7 @@ mod tests {
                 structured_output: false,
                 tool_calling: false,
                 vision: false,
-                context_window_tokens: 100,
+                context_window_tokens: 1_000,
                 maximum_output_tokens: 20,
             },
         )
@@ -95,9 +106,10 @@ mod tests {
             provider_id: descriptor.provider_id,
             model_id: descriptor.model_id,
             contract_version: MODEL_INVOCATION_V1,
-            input: ModelInput::new(
-                "learner-context credential endpoint tokenizer-provider sentinel",
-            )
+            input: ModelInput::new(format!(
+                "{} {} {} {} {} {}",
+                SENTINELS[0], SENTINELS[2], SENTINELS[3], SENTINELS[4], SENTINELS[5], SENTINELS[6]
+            ))
             .unwrap(),
             required_capabilities: RequiredCapabilities {
                 structured_output: false,
@@ -111,7 +123,7 @@ mod tests {
             provider_id: request.provider_id,
             model_id: request.model_id,
             contract_version: MODEL_INVOCATION_V1,
-            output: RawModelOutput::new("private response output usage sentinel").unwrap(),
+            output: RawModelOutput::new(format!("{} {}", SENTINELS[1], SENTINELS[7])).unwrap(),
             finish_reason: FinishReason::Complete,
             reported_usage: Some(ModelUsage {
                 input_tokens: 7,
@@ -133,6 +145,33 @@ mod tests {
         (descriptor, request, response, evidence)
     }
 
+    fn assert_validation_does_not_consume(
+        scripted_descriptor: &ModelDescriptor,
+        descriptor: &ModelDescriptor,
+        request: &ModelRequest,
+        response: &ModelResponse,
+        evidence: &ModelInputTokenizationEvidence,
+        expected: Result<(), ModelResponseReportedUsageValidationError>,
+    ) {
+        let tokenizer = ScriptedModelInputTokenizer::new(
+            scripted_descriptor.clone(),
+            [ScriptedTokenizationOutcome::TokenCount(99)],
+        )
+        .unwrap();
+        let provider = ScriptedModelProvider::new(
+            scripted_descriptor.clone(),
+            [ScriptedOutcome::Response(response.clone())],
+        )
+        .unwrap();
+
+        assert_eq!(
+            validate_model_response_reported_usage(descriptor, request, response, evidence),
+            expected
+        );
+        assert_eq!(tokenizer.remaining().unwrap(), 1);
+        assert_eq!(provider.remaining(), 1);
+    }
+
     #[test]
     fn request_failures_are_exact_and_take_precedence() {
         let (descriptor, request, response, evidence) = contracts();
@@ -147,6 +186,19 @@ mod tests {
             ),
             Err(ModelResponseReportedUsageValidationError::Request(
                 ModelErrorKind::InvalidContract
+            ))
+        );
+        let mut unsupported_descriptor = descriptor.clone();
+        unsupported_descriptor.contract_version = ProtocolVersion::new(2, 0);
+        assert_eq!(
+            validate_model_response_reported_usage(
+                &unsupported_descriptor,
+                &request,
+                &response,
+                &evidence
+            ),
+            Err(ModelResponseReportedUsageValidationError::Request(
+                ModelErrorKind::UnsupportedVersion
             ))
         );
         let cases = [
@@ -305,43 +357,93 @@ mod tests {
     }
 
     #[test]
-    fn validation_consumes_no_scripted_dependency_and_errors_leak_no_content() {
-        let (descriptor, request, response, evidence) = contracts();
-        let tokenizer = ScriptedModelInputTokenizer::new(
-            descriptor.clone(),
-            [ScriptedTokenizationOutcome::TokenCount(99)],
-        )
-        .unwrap();
-        let provider = ScriptedModelProvider::new(
-            descriptor.clone(),
-            [ScriptedOutcome::Response(response.clone())],
-        )
-        .unwrap();
+    fn invalid_evidence_precedes_reported_input_count_mismatch() {
+        let (descriptor, request, mut response, mut evidence) = contracts();
+        response.reported_usage.as_mut().unwrap().input_tokens = 8;
+        evidence.replay_anchor = format!("tampered-{}", SENTINELS[2]);
+
         assert_eq!(
             validate_model_response_reported_usage(&descriptor, &request, &response, &evidence),
-            Ok(())
+            Err(
+                ModelResponseReportedUsageValidationError::TokenizationEvidence(
+                    ModelInputTokenizationError::InvalidEvidence
+                )
+            )
         );
-        assert_eq!(tokenizer.remaining().unwrap(), 1);
-        assert_eq!(provider.remaining(), 1);
-        let errors = [
-            ModelResponseReportedUsageValidationError::Request(ModelErrorKind::Internal),
-            ModelResponseReportedUsageValidationError::Response(ModelErrorKind::InvalidResponse),
-            ModelResponseReportedUsageValidationError::TokenizationEvidence(
-                ModelInputTokenizationError::TokenizerFailure,
+    }
+
+    #[test]
+    fn public_validator_failures_are_redacted_and_never_consume_dependencies() {
+        let (descriptor, request, response, evidence) = contracts();
+        let mut invalid_descriptor = descriptor.clone();
+        invalid_descriptor.capabilities.context_window_tokens = 0;
+        let mut invalid_response = response.clone();
+        invalid_response
+            .reported_usage
+            .as_mut()
+            .unwrap()
+            .output_tokens = 21;
+        let mut invalid_evidence = evidence.clone();
+        invalid_evidence.replay_anchor = format!("tampered {} {}", SENTINELS[2], SENTINELS[4]);
+        let mut mismatched_response = response.clone();
+        mismatched_response
+            .reported_usage
+            .as_mut()
+            .unwrap()
+            .input_tokens = 8;
+
+        let cases = [
+            (
+                &invalid_descriptor,
+                &response,
+                &evidence,
+                ModelResponseReportedUsageValidationError::Request(ModelErrorKind::InvalidContract),
             ),
-            ModelResponseReportedUsageValidationError::InputTokenCountMismatch,
+            (
+                &descriptor,
+                &invalid_response,
+                &evidence,
+                ModelResponseReportedUsageValidationError::Response(
+                    ModelErrorKind::InvalidResponse,
+                ),
+            ),
+            (
+                &descriptor,
+                &response,
+                &invalid_evidence,
+                ModelResponseReportedUsageValidationError::TokenizationEvidence(
+                    ModelInputTokenizationError::InvalidEvidence,
+                ),
+            ),
+            (
+                &descriptor,
+                &mismatched_response,
+                &evidence,
+                ModelResponseReportedUsageValidationError::InputTokenCountMismatch,
+            ),
         ];
-        for error in errors {
-            let rendered = format!("{error:?} {error}");
-            for sentinel in [
-                "learner-context",
-                "credential",
-                "endpoint",
-                "tokenizer-provider",
-                "private response",
-                "usage sentinel",
-            ] {
-                assert!(!rendered.contains(sentinel));
+
+        assert_validation_does_not_consume(
+            &descriptor,
+            &descriptor,
+            &request,
+            &response,
+            &evidence,
+            Ok(()),
+        );
+        for (supplied_descriptor, supplied_response, supplied_evidence, error) in cases {
+            assert_validation_does_not_consume(
+                &descriptor,
+                supplied_descriptor,
+                &request,
+                supplied_response,
+                supplied_evidence,
+                Err(error),
+            );
+            for rendered in [format!("{error:?}"), format!("{error}")] {
+                for sentinel in SENTINELS {
+                    assert!(!rendered.contains(sentinel));
+                }
             }
         }
     }
