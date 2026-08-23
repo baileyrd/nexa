@@ -27,6 +27,9 @@ use crate::tokenization::{
     ModelInputTokenizationEvidence, ModelInputTokenizer, ModelRequestTokenCapacityError,
     TokenizeAndValidateModelRequestCapacityError,
 };
+use crate::usage::{
+    validate_model_response_reported_usage, ModelResponseReportedUsageValidationError,
+};
 use nexa_domain::{ModelInvocationId, ProtocolVersion};
 use nexa_knowledge::{CitationResult, ContextPackage};
 use thiserror::Error;
@@ -71,6 +74,21 @@ pub enum TokenizedInvocationAdmissionError {
     TokenizationCapacity(TokenizeAndValidateModelRequestCapacityError),
     #[error("model provider invocation failed: {0:?}")]
     Invocation(ModelErrorKind),
+    #[error("model output admission failed")]
+    Admission(AdmissionError),
+}
+
+/// Closed failures for usage-validated exact tokenization, invocation, and admission.
+#[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
+pub enum UsageValidatedTokenizedInvocationAdmissionError {
+    #[error("usage-validated tokenized invocation preflight failed")]
+    Preflight(AdmissionError),
+    #[error("model-input tokenization or request-capacity composition failed")]
+    TokenizationCapacity(TokenizeAndValidateModelRequestCapacityError),
+    #[error("model provider invocation failed: {0:?}")]
+    Invocation(ModelErrorKind),
+    #[error("model-response reported-usage validation failed")]
+    ReportedUsage(ModelResponseReportedUsageValidationError),
     #[error("model output admission failed")]
     Admission(AdmissionError),
 }
@@ -303,6 +321,64 @@ pub fn tokenize_invoke_and_admit_model_output_with_token_capacity(
         citations,
     )
     .map_err(TokenizedInvocationAdmissionError::Admission)?;
+
+    Ok(TokenizedInvocationAdmissionResult {
+        tokenization_evidence,
+        admission,
+    })
+}
+
+/// Performs preflight, exact tokenization, one invocation, usage validation, and admission.
+#[allow(clippy::too_many_arguments)]
+pub fn tokenize_invoke_validate_reported_usage_and_admit_model_output_with_token_capacity(
+    tokenization_contract_version: ProtocolVersion,
+    tokenizer: &dyn ModelInputTokenizer,
+    provider: &dyn LanguageModelProvider,
+    request: &ModelRequest,
+    compilation: &PromptCompilationResult,
+    authority: &TrustedPlanningAuthority,
+    context: &ContextPackage,
+    citations: &CitationResult,
+) -> Result<TokenizedInvocationAdmissionResult, UsageValidatedTokenizedInvocationAdmissionError> {
+    validate_admission_preflight(
+        provider.descriptor(),
+        request,
+        compilation,
+        authority,
+        context,
+        citations,
+    )
+    .map_err(UsageValidatedTokenizedInvocationAdmissionError::Preflight)?;
+
+    let tokenization_evidence = tokenize_and_validate_model_request_capacity(
+        tokenization_contract_version,
+        provider.descriptor(),
+        request,
+        tokenizer,
+    )
+    .map_err(UsageValidatedTokenizedInvocationAdmissionError::TokenizationCapacity)?;
+
+    let response = provider
+        .generate(request)
+        .map_err(|error| UsageValidatedTokenizedInvocationAdmissionError::Invocation(error.kind))?;
+
+    validate_model_response_reported_usage(
+        provider.descriptor(),
+        request,
+        &response,
+        &tokenization_evidence,
+    )
+    .map_err(UsageValidatedTokenizedInvocationAdmissionError::ReportedUsage)?;
+
+    let admission = admit_model_output_after_preflight(
+        request,
+        &response,
+        compilation,
+        authority,
+        context,
+        citations,
+    )
+    .map_err(UsageValidatedTokenizedInvocationAdmissionError::Admission)?;
 
     Ok(TokenizedInvocationAdmissionResult {
         tokenization_evidence,

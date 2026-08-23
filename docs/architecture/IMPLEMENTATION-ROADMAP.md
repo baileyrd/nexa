@@ -179,7 +179,6 @@ ADR-0033 adds deterministic caller-directed whole-layer disclosure filtering and
 
 ADR-0034 validates complete ADR-0033 evidence, requires exact singleton target-privacy agreement, and delegates the exact filtered compilation to unchanged ADR-0031 selection. It does not invoke ADR-0032. General privacy policy and correctness, sensitivity inference, semantic/content minimization, field/sub-string redaction, anonymization, partial truncation, and all concrete provider, routing, recovery, semantic-validation, tool, async/networking, telemetry, and persistence capabilities remain deferred. NEXA-TUTOR-001 remains Baseline Draft; the privacy namespace remains reserved; the known ingestion/context checklist inconsistency is preserved.
 
-
 ### Phase 4 narrow increment: filtered authorized available remote invocation and admission
 
 ADR-0035 composes unchanged ADR-0034 as the only selection with the existing exact ADR-0022 request construction and unchanged ADR-0025 preflight, one invocation, and strict ADR-0024 admission. The request input and successful admission replay binding are the exact filtered ADR-0033 compilation. ADR-0034 remains independently non-invoking and ADR-0032 remains independently callable without ADR-0033 evidence. This is not general or automatic routing and adds no fallback, retry, repair, recovery, concrete provider/inference, networking, semantic privacy proof, content redaction, anonymization, partial truncation, tools, async/streaming, telemetry, or persistence. NEXA-TUTOR-001 remains Baseline Draft, the privacy namespace remains reserved, and Phase 4 remains in progress.
@@ -210,7 +209,6 @@ ADR-0041 adds an opt-in synchronous composition that enforces ADR-0028's exact l
 
 ADR-0042 adds an opt-in synchronous composition that enforces the existing explicit-local gate, delegates exact caller-supplied availability-gated selection, constructs the existing request, and delegates exact tokenization, capacity validation, one selected-provider invocation, and strict admission to unchanged ADR-0040. It adds no probing, token-aware selection, fallback, retry, concrete dependency, inference, networking, or semantic validation. NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress.
 
-
 ### Phase 4 narrow increment: authorized available remote selection with exact tokenization and admission
 
 ADR-0043 delegates unchanged prompt-bound authorization and available remote selection to ADR-0031 as the sole permission boundary, constructs the existing request, and delegates exact tokenization, capacity validation, one selected-provider invocation, and strict admission to unchanged ADR-0040. It reuses existing caller authorization and adds no authentication, authorization-policy change, secrets, filtering/minimization proof, concrete remote execution, networking, retry, fallback, or token-aware selection. NEXA-TUTOR-001 remains Baseline Draft, Phase 4 remains in progress, and the known ingestion/context checklist inconsistency is preserved.
@@ -222,3 +220,7 @@ ADR-0044 delegates complete ADR-0033 evidence and the exact selection inputs to 
 ### Phase 4 narrow increment: reported input-usage reconciliation
 
 ADR-0045 adds a standalone synchronous, non-invoking validator that preserves unchanged request, response, and exact tokenization-evidence validation before comparing optional provider-reported input usage. Absent usage remains valid; present usage must equal the exact evidence count. Equality establishes agreement only—not tokenizer correctness, provider truth, billing/cost accuracy, output-token correctness, authenticity/freshness, or telemetry authority. No existing API or deferred provider, tokenizer, invocation, routing, persistence, or semantic capability changes. NEXA-TUTOR-001 remains Baseline Draft, Phase 4 remains in progress, and the known ingestion/context checklist inconsistency is preserved.
+
+### Phase 4 narrow increment: reported-usage-validated exact-tokenization invocation and admission
+
+ADR-0046 adds an opt-in synchronous composition of unchanged full admission preflight, exact tokenization and capacity validation, one supplied-provider invocation, unchanged ADR-0045 reported-usage validation, and unchanged strict admission. Usage validation precedes admission; absent usage remains valid and present input usage must equal the generated evidence. This establishes structural association and equality only, not provider truth, billing/cost, output-token evidence, authenticity/freshness, telemetry authority, or semantic correctness. Existing APIs and deferrals remain unchanged; NEXA-TUTOR-001 remains Baseline Draft, Phase 4 remains in progress, and the known ingestion/context checklist inconsistency is preserved.

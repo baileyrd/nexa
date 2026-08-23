@@ -1955,8 +1955,10 @@ mod tests {
         use crate::admission::AdmissionError;
         use crate::generation::{
             invoke_and_admit_model_output,
-            tokenize_invoke_and_admit_model_output_with_token_capacity, InvocationAdmissionError,
-            TokenizedInvocationAdmissionError,
+            tokenize_invoke_and_admit_model_output_with_token_capacity,
+            tokenize_invoke_validate_reported_usage_and_admit_model_output_with_token_capacity,
+            InvocationAdmissionError, TokenizedInvocationAdmissionError,
+            UsageValidatedTokenizedInvocationAdmissionError,
         };
         use crate::model::ModelInput;
         use crate::tokenization::{
@@ -2112,7 +2114,7 @@ mod tests {
             assert_eq!(provider.calls(), 0, "mutation {mutation}");
 
             let tokenizer = ScriptedModelInputTokenizer::new(
-                tokenizer_descriptor,
+                tokenizer_descriptor.clone(),
                 [ScriptedTokenizationOutcome::TokenCount(1)],
             )
             .unwrap();
@@ -2130,6 +2132,31 @@ mod tests {
                 ),
                 Err(TokenizedInvocationAdmissionError::Preflight(expected)),
                 "tokenized mutation {mutation}"
+            );
+            assert_eq!(tokenizer.remaining().unwrap(), 1, "mutation {mutation}");
+            assert_eq!(provider.calls(), 0, "mutation {mutation}");
+
+            let tokenizer = ScriptedModelInputTokenizer::new(
+                tokenizer_descriptor.clone(),
+                [ScriptedTokenizationOutcome::TokenCount(1)],
+            )
+            .unwrap();
+            let provider = CountingProvider::new(&f);
+            assert_eq!(
+                tokenize_invoke_validate_reported_usage_and_admit_model_output_with_token_capacity(
+                    MODEL_INPUT_TOKENIZATION_V1,
+                    &tokenizer,
+                    &provider,
+                    &f.request,
+                    &f.compilation,
+                    &f.authority,
+                    &f.context,
+                    &f.citations,
+                ),
+                Err(UsageValidatedTokenizedInvocationAdmissionError::Preflight(
+                    expected
+                )),
+                "usage-validated mutation {mutation}"
             );
             assert_eq!(tokenizer.remaining().unwrap(), 1, "mutation {mutation}");
             assert_eq!(provider.calls(), 0, "mutation {mutation}");
@@ -2876,6 +2903,198 @@ mod tests {
             let diagnostics = format!("{error:?} {error}");
             for sentinel in sentinels {
                 assert!(!diagnostics.contains(sentinel));
+            }
+        }
+    }
+
+    #[test]
+    fn usage_validated_tokenized_invocation_enforces_order_and_exact_usage() {
+        use crate::generation::{
+            tokenize_invoke_validate_reported_usage_and_admit_model_output_with_token_capacity,
+            UsageValidatedTokenizedInvocationAdmissionError as Error,
+        };
+        use crate::model::{
+            ModelErrorKind, ModelUsage, RawModelOutput, ScriptedModelProvider, ScriptedOutcome,
+        };
+        use crate::tokenization::{
+            ModelRequestTokenCapacityError, ScriptedModelInputTokenizer,
+            ScriptedTokenizationOutcome, TokenizeAndValidateModelRequestCapacityError,
+            MODEL_INPUT_TOKENIZATION_V1,
+        };
+        use crate::usage::ModelResponseReportedUsageValidationError as UsageError;
+
+        let invoke = |fixture: &AdmissionFixture, count, outcomes| {
+            let tokenizer = ScriptedModelInputTokenizer::new(
+                fixture.descriptor.clone(),
+                [ScriptedTokenizationOutcome::TokenCount(count)],
+            )
+            .unwrap();
+            let provider =
+                ScriptedModelProvider::new(fixture.descriptor.clone(), outcomes).unwrap();
+            let result =
+                tokenize_invoke_validate_reported_usage_and_admit_model_output_with_token_capacity(
+                    MODEL_INPUT_TOKENIZATION_V1,
+                    &tokenizer,
+                    &provider,
+                    &fixture.request,
+                    &fixture.compilation,
+                    &fixture.authority,
+                    &fixture.context,
+                    &fixture.citations,
+                );
+            (result, tokenizer.remaining().unwrap(), provider.remaining())
+        };
+
+        for reported_usage in [
+            None,
+            Some(ModelUsage {
+                input_tokens: 7,
+                output_tokens: 1,
+            }),
+        ] {
+            let mut fixture = admission_fixture();
+            fixture.response.reported_usage = reported_usage;
+            let expected_admission = fixture.admit().unwrap();
+            let (result, tokenizer_remaining, provider_remaining) = invoke(
+                &fixture,
+                7,
+                vec![ScriptedOutcome::Response(fixture.response.clone())],
+            );
+            let result = result.unwrap();
+            assert_eq!(result.tokenization_evidence.input_token_count, 7);
+            assert_eq!(result.admission, expected_admission);
+            assert_eq!((tokenizer_remaining, provider_remaining), (0, 0));
+        }
+
+        for reported in [6, 8] {
+            let mut fixture = admission_fixture();
+            fixture.response.reported_usage = Some(ModelUsage {
+                input_tokens: reported,
+                output_tokens: 1,
+            });
+            let (result, tokenizer_remaining, provider_remaining) = invoke(
+                &fixture,
+                7,
+                vec![ScriptedOutcome::Response(fixture.response.clone())],
+            );
+            assert_eq!(
+                result,
+                Err(Error::ReportedUsage(UsageError::InputTokenCountMismatch))
+            );
+            assert_eq!((tokenizer_remaining, provider_remaining), (0, 0));
+        }
+
+        let fixture = admission_fixture();
+        let (result, tokenizer_remaining, provider_remaining) = invoke(
+            &fixture,
+            fixture.descriptor.capabilities.context_window_tokens,
+            vec![ScriptedOutcome::Response(fixture.response.clone())],
+        );
+        assert_eq!(
+            result,
+            Err(Error::TokenizationCapacity(
+                TokenizeAndValidateModelRequestCapacityError::TokenCapacity(
+                    ModelRequestTokenCapacityError::ExactCapacity
+                )
+            ))
+        );
+        assert_eq!((tokenizer_remaining, provider_remaining), (0, 1));
+
+        let fixture = admission_fixture();
+        let (result, tokenizer_remaining, provider_remaining) = invoke(
+            &fixture,
+            7,
+            vec![
+                ScriptedOutcome::Error(ModelErrorKind::Unavailable),
+                ScriptedOutcome::Response(fixture.response.clone()),
+            ],
+        );
+        assert_eq!(result, Err(Error::Invocation(ModelErrorKind::Unavailable)));
+        assert_eq!((tokenizer_remaining, provider_remaining), (0, 1));
+
+        let mut fixture = admission_fixture();
+        fixture.response.reported_usage = Some(ModelUsage {
+            input_tokens: 7,
+            output_tokens: fixture.request.maximum_output_tokens + 1,
+        });
+        fixture.response.output = RawModelOutput::new("not json").unwrap();
+        let tokenizer = ScriptedModelInputTokenizer::new(
+            fixture.descriptor.clone(),
+            [ScriptedTokenizationOutcome::TokenCount(7)],
+        )
+        .unwrap();
+        let provider = CountingProvider::new(&fixture);
+        let result =
+            tokenize_invoke_validate_reported_usage_and_admit_model_output_with_token_capacity(
+                MODEL_INPUT_TOKENIZATION_V1,
+                &tokenizer,
+                &provider,
+                &fixture.request,
+                &fixture.compilation,
+                &fixture.authority,
+                &fixture.context,
+                &fixture.citations,
+            );
+        assert_eq!(
+            result,
+            Err(Error::ReportedUsage(UsageError::Response(
+                ModelErrorKind::InvalidResponse
+            )))
+        );
+        assert_eq!(tokenizer.remaining().unwrap(), 0);
+        assert_eq!(provider.calls(), 1);
+
+        let mut fixture = admission_fixture();
+        fixture.response.output = RawModelOutput::new("not json").unwrap();
+        let (result, tokenizer_remaining, provider_remaining) = invoke(
+            &fixture,
+            7,
+            vec![ScriptedOutcome::Response(fixture.response.clone())],
+        );
+        assert_eq!(
+            result,
+            Err(Error::Admission(
+                crate::admission::AdmissionError::MalformedSyntax
+            ))
+        );
+        assert_eq!((tokenizer_remaining, provider_remaining), (0, 0));
+    }
+
+    #[test]
+    fn usage_validated_tokenized_invocation_error_diagnostics_are_content_free() {
+        use crate::generation::UsageValidatedTokenizedInvocationAdmissionError as Error;
+        use crate::tokenization::{
+            ModelInputTokenizationError, TokenizeAndValidateModelRequestCapacityError,
+        };
+        use crate::usage::ModelResponseReportedUsageValidationError as UsageError;
+
+        let fixture = admission_fixture();
+        let errors = [
+            Error::Preflight(crate::admission::AdmissionError::InvalidDescriptorRequest),
+            Error::TokenizationCapacity(
+                TokenizeAndValidateModelRequestCapacityError::Tokenization(
+                    ModelInputTokenizationError::Internal,
+                ),
+            ),
+            Error::Invocation(crate::model::ModelErrorKind::Internal),
+            Error::ReportedUsage(UsageError::InputTokenCountMismatch),
+            Error::Admission(crate::admission::AdmissionError::MalformedSyntax),
+        ];
+        let sentinels = [
+            fixture.request.input.as_str(),
+            fixture.response.output.as_str(),
+            "tokenizer-provider-sentinel",
+            "endpoint-sentinel",
+            "credential-sentinel",
+            "learner-sentinel",
+            "context-sentinel",
+            "usage-adjacent-sentinel",
+        ];
+        for error in errors {
+            for diagnostic in [format!("{error:?}"), format!("{error}")] {
+                for sentinel in sentinels {
+                    assert!(!diagnostic.contains(sentinel));
+                }
             }
         }
     }
