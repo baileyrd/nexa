@@ -372,3 +372,14 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. Availabil
 | Limited authority and existing APIs | ADR-0031 remains the sole permission boundary; authorization and availability remain caller evidence; no authentication or authorization-policy change; ADRs 0022–0048 remain unchanged | Preserved |
 
 NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. Authorization and availability grant no authenticity/freshness or monitoring/recovery authority. Optional reported input usage establishes structural association and equality only, granting no tokenizer/provider truth, billing/cost, output-token, telemetry, or semantic authority. The known ingestion/context checklist inconsistency is preserved.
+
+## ADR-0050 filtered-authorized-available-remote usage-validated tokenized composition
+
+| Requirement | Evidence | Status |
+|---|---|---|
+| Unchanged ADR-0034 selection precedes dependencies | Direct focused wrapper tests preserve exact nested filtered/authorized/availability failures and dependency queues | Implemented slice |
+| Exact filtered ADR-0044 request followed by unchanged ADR-0046 | Direct delegation uses only the filtered compilation, original selected shared provider, exact request, and caller tokenizer | Implemented slice |
+| Optional usage, ordering, and single attempt | Direct focused success, mismatch, preflight, tokenization, invocation, response, usage, and admission tests assert exact errors and counts | Implemented slice |
+| Limited authority and existing APIs | ADR-0034 remains the filtered-selection boundary; ADR-0031 remains the sole permission boundary; ADR-0033 and optional usage retain only structural authority; ADRs 0022–0049 remain unchanged | Preserved |
+
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. Authorization and availability grant no authenticity/freshness or monitoring/recovery authority. Optional reported input usage establishes structural association and equality only, granting no tokenizer/provider truth, billing/cost, output-token, telemetry, or semantic authority. ADR-0033 grants no general privacy-policy correctness or semantic/content-level minimization. The known ingestion/context checklist inconsistency is preserved.
