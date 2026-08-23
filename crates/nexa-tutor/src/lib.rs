@@ -11405,7 +11405,7 @@ mod tests {
             state: ModelAvailabilityState::Unavailable,
         }])
         .unwrap();
-        assert!(
+        assert_eq!(
             select_available_local_model_tokenize_invoke_validate_reported_usage_and_admit(
                 &registry,
                 f.request.invocation_id,
@@ -11417,8 +11417,14 @@ mod tests {
                 &f.authority,
                 &f.context,
                 &f.citations,
+            ),
+            Err(
+                AvailableLocalUsageValidatedTokenizedInvocationAdmissionError::AvailabilitySelection(
+                    ModelAvailabilityError::Selection(
+                        crate::selection::ModelSelectionError::NoEligibleModel,
+                    ),
+                ),
             )
-            .is_err()
         );
         assert_eq!(tokenizer.remaining().unwrap(), 1);
         assert_eq!(provider.remaining(), 1);
@@ -11428,7 +11434,7 @@ mod tests {
     }
 
     #[test]
-    fn available_local_usage_validated_tokenized_selection_chooses_next_available_and_returns_exact_evidence(
+    fn available_local_usage_validated_tokenized_selection_is_order_independent_and_pre_tokenization(
     ) {
         use crate::availability::{
             ModelAvailabilityEntry, ModelAvailabilitySnapshot, ModelAvailabilityState,
@@ -11444,105 +11450,112 @@ mod tests {
         use nexa_domain::{ModelId, ModelInvocationId, ModelProviderId};
         use std::sync::Arc;
 
-        let mut f = admission_fixture();
-        let invocation_id = id(9_980, ModelInvocationId::new);
-        let token_count = f.descriptor.capabilities.context_window_tokens - 1000;
-        let mut first_descriptor = f.descriptor.clone();
-        first_descriptor.provider_id = id(9_970, ModelProviderId::new);
-        first_descriptor.model_id = id(9_970, ModelId::new);
-        let mut selected_descriptor = f.descriptor.clone();
-        selected_descriptor.provider_id = id(9_971, ModelProviderId::new);
-        selected_descriptor.model_id = id(9_971, ModelId::new);
-        f.response.invocation_id = invocation_id;
-        f.response.provider_id = selected_descriptor.provider_id;
-        f.response.model_id = selected_descriptor.model_id;
-        let mut selected_request = f.request.clone();
-        selected_request.invocation_id = invocation_id;
-        selected_request.provider_id = selected_descriptor.provider_id;
-        selected_request.model_id = selected_descriptor.model_id;
-        let expected_admission = crate::admission::admit_model_output(
-            &selected_descriptor,
-            &selected_request,
-            &f.response,
-            &f.compilation,
-            &f.authority,
-            &f.context,
-            &f.citations,
-        )
-        .unwrap();
-        let first = Arc::new(
-            ScriptedModelProvider::new(
-                first_descriptor.clone(),
-                [ScriptedOutcome::Response(f.response.clone())],
-            )
-            .unwrap(),
-        );
-        let selected = Arc::new(
-            ScriptedModelProvider::new(
-                selected_descriptor.clone(),
-                [ScriptedOutcome::Response(f.response.clone())],
-            )
-            .unwrap(),
-        );
-        let mut remote_descriptor = f.descriptor.clone();
-        remote_descriptor.provider_id = id(9_972, ModelProviderId::new);
-        remote_descriptor.model_id = id(9_972, ModelId::new);
-        remote_descriptor.privacy_class = PrivacyClass::ApprovedRemote;
-        let remote = Arc::new(
-            ScriptedModelProvider::new(
-                remote_descriptor.clone(),
-                [ScriptedOutcome::Response(f.response.clone())],
-            )
-            .unwrap(),
-        );
-        let registry = ModelRegistry::try_from_providers([
-            first.clone() as Arc<dyn LanguageModelProvider>,
-            selected.clone() as Arc<dyn LanguageModelProvider>,
-            remote.clone() as Arc<dyn LanguageModelProvider>,
-        ])
-        .unwrap();
-        let availability = ModelAvailabilitySnapshot::new(vec![
-            ModelAvailabilityEntry {
-                provider_id: selected_descriptor.provider_id,
-                model_id: selected_descriptor.model_id,
-                state: ModelAvailabilityState::Available,
-            },
-            ModelAvailabilityEntry {
-                provider_id: remote_descriptor.provider_id,
-                model_id: remote_descriptor.model_id,
-                state: ModelAvailabilityState::Available,
-            },
-        ])
-        .unwrap();
-        let tokenizer = ScriptedModelInputTokenizer::new(
-            selected_descriptor.clone(),
-            [ScriptedTokenizationOutcome::TokenCount(token_count)],
-        )
-        .unwrap();
-        let result =
-            select_available_local_model_tokenize_invoke_validate_reported_usage_and_admit(
-                &registry,
-                invocation_id,
-                &local_selection_requirements(),
-                &availability,
-                MODEL_INPUT_TOKENIZATION_V1,
-                &tokenizer,
-                &f.compilation,
-                &f.authority,
-                &f.context,
-                &f.citations,
-            )
-            .unwrap();
-        assert_eq!(result.admission, expected_admission);
-        result
-            .tokenization_evidence
-            .validate_for(&selected_descriptor, &f.compilation.model_input)
-            .unwrap();
-        assert_eq!(result.tokenization_evidence.input_token_count, token_count);
-        assert_eq!(tokenizer.remaining().unwrap(), 0);
-        assert_eq!(selected.remaining(), 0);
-        assert_eq!(first.remaining(), 1);
-        assert_eq!(remote.remaining(), 1);
+        for reverse_registry in [false, true] {
+            for reverse_snapshot in [false, true] {
+                let mut f = admission_fixture();
+                let invocation_id = id(9_980, ModelInvocationId::new);
+                let mut byte_ineligible = f.descriptor.clone();
+                byte_ineligible.provider_id = id(9_970, ModelProviderId::new);
+                byte_ineligible.model_id = id(9_970, ModelId::new);
+                byte_ineligible.capabilities.context_window_tokens = f
+                    .compilation
+                    .compiled_bytes
+                    .checked_add(local_selection_requirements().maximum_output_tokens)
+                    .unwrap()
+                    - 1;
+                let mut selected_descriptor = f.descriptor.clone();
+                selected_descriptor.provider_id = id(9_971, ModelProviderId::new);
+                selected_descriptor.model_id = id(9_971, ModelId::new);
+                let mut remote_descriptor = f.descriptor.clone();
+                remote_descriptor.provider_id = id(9_972, ModelProviderId::new);
+                remote_descriptor.model_id = id(9_972, ModelId::new);
+                remote_descriptor.privacy_class = PrivacyClass::ApprovedRemote;
+                f.response.invocation_id = invocation_id;
+                f.response.provider_id = selected_descriptor.provider_id;
+                f.response.model_id = selected_descriptor.model_id;
+
+                let rejected = Arc::new(
+                    ScriptedModelProvider::new(
+                        byte_ineligible.clone(),
+                        [ScriptedOutcome::Error(
+                            crate::model::ModelErrorKind::Internal,
+                        )],
+                    )
+                    .unwrap(),
+                );
+                let selected = Arc::new(
+                    ScriptedModelProvider::new(
+                        selected_descriptor.clone(),
+                        [ScriptedOutcome::Response(f.response.clone())],
+                    )
+                    .unwrap(),
+                );
+                let remote = Arc::new(
+                    ScriptedModelProvider::new(
+                        remote_descriptor.clone(),
+                        [ScriptedOutcome::Error(
+                            crate::model::ModelErrorKind::Internal,
+                        )],
+                    )
+                    .unwrap(),
+                );
+                let providers: Vec<Arc<dyn LanguageModelProvider>> = if reverse_registry {
+                    vec![remote.clone(), selected.clone(), rejected.clone()]
+                } else {
+                    vec![rejected.clone(), selected.clone(), remote.clone()]
+                };
+                let registry = ModelRegistry::try_from_providers(providers).unwrap();
+                let mut entries = vec![
+                    ModelAvailabilityEntry {
+                        provider_id: byte_ineligible.provider_id,
+                        model_id: byte_ineligible.model_id,
+                        state: ModelAvailabilityState::Available,
+                    },
+                    ModelAvailabilityEntry {
+                        provider_id: selected_descriptor.provider_id,
+                        model_id: selected_descriptor.model_id,
+                        state: ModelAvailabilityState::Available,
+                    },
+                    ModelAvailabilityEntry {
+                        provider_id: remote_descriptor.provider_id,
+                        model_id: remote_descriptor.model_id,
+                        state: ModelAvailabilityState::Available,
+                    },
+                ];
+                if reverse_snapshot {
+                    entries.reverse();
+                }
+                let availability = ModelAvailabilitySnapshot::new(entries).unwrap();
+                let tokenizer = ScriptedModelInputTokenizer::new(
+                    selected_descriptor.clone(),
+                    [ScriptedTokenizationOutcome::TokenCount(7)],
+                )
+                .unwrap();
+                let result =
+                    select_available_local_model_tokenize_invoke_validate_reported_usage_and_admit(
+                        &registry,
+                        invocation_id,
+                        &local_selection_requirements(),
+                        &availability,
+                        MODEL_INPUT_TOKENIZATION_V1,
+                        &tokenizer,
+                        &f.compilation,
+                        &f.authority,
+                        &f.context,
+                        &f.citations,
+                    )
+                    .unwrap();
+                result
+                    .tokenization_evidence
+                    .validate_for(&selected_descriptor, &f.compilation.model_input)
+                    .unwrap();
+                assert_eq!(result.tokenization_evidence.input_token_count, 7);
+                assert_eq!(tokenizer.remaining().unwrap(), 0);
+                assert_eq!(selected.remaining(), 0);
+                assert_eq!(rejected.remaining(), 1);
+                assert_eq!(remote.remaining(), 1);
+            }
+        }
     }
 
     #[test]
@@ -11978,6 +11991,47 @@ mod tests {
         use nexa_domain::ProtocolVersion;
         use std::sync::Arc;
 
+        // The outer requirements gate wins over invalid availability, preflight evidence,
+        // tokenizer failure, and a real queued provider outcome in the same call.
+        let mut f = admission_fixture();
+        f.compilation.contract_version = ProtocolVersion::new(2, 0);
+        let selected = Arc::new(
+            ScriptedModelProvider::new(
+                f.descriptor.clone(),
+                [ScriptedOutcome::Error(ModelErrorKind::Internal)],
+            )
+            .unwrap(),
+        );
+        let registry =
+            ModelRegistry::try_from_providers([selected.clone() as Arc<dyn LanguageModelProvider>])
+                .unwrap();
+        let duplicate = crate::availability::ModelAvailabilityEntry {
+            provider_id: f.descriptor.provider_id,
+            model_id: f.descriptor.model_id,
+            state: crate::availability::ModelAvailabilityState::Available,
+        };
+        let invalid_availability = crate::availability::ModelAvailabilitySnapshot {
+            contract_version: crate::availability::MODEL_AVAILABILITY_V1,
+            entries: vec![duplicate, duplicate],
+        };
+        let tokenizer = ScriptedModelInputTokenizer::new(
+            f.descriptor.clone(),
+            [ScriptedTokenizationOutcome::Error],
+        )
+        .unwrap();
+        let mut malformed = local_selection_requirements();
+        malformed.privacy_preference.clear();
+        assert_eq!(
+            crate::generation::select_available_local_model_tokenize_invoke_validate_reported_usage_and_admit(
+                &registry, f.request.invocation_id, &malformed, &invalid_availability,
+                ProtocolVersion::new(2, 0), &tokenizer, &f.compilation, &f.authority,
+                &f.context, &f.citations,
+            ),
+            Err(Outer::InvalidLocalOnlyRequirements)
+        );
+        assert_eq!(tokenizer.remaining().unwrap(), 1);
+        assert_eq!(selected.remaining(), 1);
+
         // Selection wins even though every downstream input is invalid. The ineligible provider
         // carries a real queued outcome and is part of the failing registry call.
         let mut f = admission_fixture();
@@ -12131,6 +12185,162 @@ mod tests {
     }
 
     #[test]
+    fn available_local_usage_validated_tokenized_keeps_every_non_selected_class_untouched() {
+        use crate::availability::{
+            ModelAvailabilityEntry, ModelAvailabilitySnapshot, ModelAvailabilityState,
+        };
+        use crate::generation::{
+            AvailableLocalUsageValidatedTokenizedInvocationAdmissionError as Outer,
+            UsageValidatedTokenizedInvocationAdmissionError as Inner,
+        };
+        use crate::model::{
+            LanguageModelProvider, ModelErrorKind, ModelUsage, PrivacyClass, RawModelOutput,
+            ScriptedOutcome,
+        };
+        use crate::registry::ModelRegistry;
+        use crate::tokenization::{
+            ModelInputTokenizationError, ScriptedModelInputTokenizer, ScriptedTokenizationOutcome,
+            TokenizeAndValidateModelRequestCapacityError as Capacity, MODEL_INPUT_TOKENIZATION_V1,
+        };
+        use crate::usage::ModelResponseReportedUsageValidationError as Usage;
+        use nexa_domain::{ModelId, ModelProviderId, ProtocolVersion};
+        use std::sync::Arc;
+
+        // Success plus each post-selection failure family uses a fresh five-state inventory.
+        for case in 0..7 {
+            let mut f = admission_fixture();
+            let mut available_descriptor = f.descriptor.clone();
+            available_descriptor.provider_id = id(90_010, ModelProviderId::new);
+            available_descriptor.model_id = id(90_010, ModelId::new);
+            let mut unavailable_descriptor = f.descriptor.clone();
+            unavailable_descriptor.provider_id = id(90_020, ModelProviderId::new);
+            unavailable_descriptor.model_id = id(90_020, ModelId::new);
+            let mut omitted_descriptor = f.descriptor.clone();
+            omitted_descriptor.provider_id = id(90_030, ModelProviderId::new);
+            omitted_descriptor.model_id = id(90_030, ModelId::new);
+            let mut remote_descriptor = f.descriptor.clone();
+            remote_descriptor.provider_id = id(90_040, ModelProviderId::new);
+            remote_descriptor.model_id = id(90_040, ModelId::new);
+            remote_descriptor.privacy_class = PrivacyClass::ApprovedRemote;
+
+            let mut token_outcome = ScriptedTokenizationOutcome::TokenCount(7);
+            let mut selected_outcome = ScriptedOutcome::Response(f.response.clone());
+            let expected = match case {
+                0 => None,
+                1 => {
+                    f.compilation.contract_version = ProtocolVersion::new(2, 0);
+                    Some(Inner::Preflight(
+                        crate::admission::AdmissionError::UnsupportedVersion,
+                    ))
+                }
+                2 => {
+                    token_outcome = ScriptedTokenizationOutcome::Error;
+                    Some(Inner::TokenizationCapacity(Capacity::Tokenization(
+                        ModelInputTokenizationError::TokenizerFailure,
+                    )))
+                }
+                3 => {
+                    selected_outcome = ScriptedOutcome::Error(ModelErrorKind::Unavailable);
+                    Some(Inner::Invocation(ModelErrorKind::Unavailable))
+                }
+                4 => {
+                    f.response.invocation_id = id(90_050, nexa_domain::ModelInvocationId::new);
+                    selected_outcome = ScriptedOutcome::Response(f.response.clone());
+                    Some(Inner::ReportedUsage(Usage::Response(
+                        ModelErrorKind::IdentityMismatch,
+                    )))
+                }
+                5 => {
+                    f.response.reported_usage = Some(ModelUsage {
+                        input_tokens: 6,
+                        output_tokens: 1,
+                    });
+                    selected_outcome = ScriptedOutcome::Response(f.response.clone());
+                    Some(Inner::ReportedUsage(Usage::InputTokenCountMismatch))
+                }
+                _ => {
+                    f.response.output = RawModelOutput::new("not json").unwrap();
+                    selected_outcome = ScriptedOutcome::Response(f.response.clone());
+                    Some(Inner::Admission(
+                        crate::admission::AdmissionError::MalformedSyntax,
+                    ))
+                }
+            };
+            let selected = Arc::new(UncheckedScriptedProvider::new(
+                f.descriptor.clone(),
+                [selected_outcome],
+            ));
+            let available = Arc::new(UncheckedScriptedProvider::new(
+                available_descriptor.clone(),
+                [ScriptedOutcome::Error(ModelErrorKind::Internal)],
+            ));
+            let unavailable = Arc::new(UncheckedScriptedProvider::new(
+                unavailable_descriptor.clone(),
+                [ScriptedOutcome::Error(ModelErrorKind::Internal)],
+            ));
+            let omitted = Arc::new(UncheckedScriptedProvider::new(
+                omitted_descriptor,
+                [ScriptedOutcome::Error(ModelErrorKind::Internal)],
+            ));
+            let remote = Arc::new(UncheckedScriptedProvider::new(
+                remote_descriptor.clone(),
+                [ScriptedOutcome::Error(ModelErrorKind::Internal)],
+            ));
+            let registry = ModelRegistry::try_from_providers([
+                selected.clone() as Arc<dyn LanguageModelProvider>,
+                available.clone(),
+                unavailable.clone(),
+                omitted.clone(),
+                remote.clone(),
+            ])
+            .unwrap();
+            let availability = ModelAvailabilitySnapshot::new(vec![
+                ModelAvailabilityEntry {
+                    provider_id: f.descriptor.provider_id,
+                    model_id: f.descriptor.model_id,
+                    state: ModelAvailabilityState::Available,
+                },
+                ModelAvailabilityEntry {
+                    provider_id: available_descriptor.provider_id,
+                    model_id: available_descriptor.model_id,
+                    state: ModelAvailabilityState::Available,
+                },
+                ModelAvailabilityEntry {
+                    provider_id: unavailable_descriptor.provider_id,
+                    model_id: unavailable_descriptor.model_id,
+                    state: ModelAvailabilityState::Unavailable,
+                },
+                ModelAvailabilityEntry {
+                    provider_id: remote_descriptor.provider_id,
+                    model_id: remote_descriptor.model_id,
+                    state: ModelAvailabilityState::Available,
+                },
+            ])
+            .unwrap();
+            let tokenizer =
+                ScriptedModelInputTokenizer::new(f.descriptor.clone(), [token_outcome]).unwrap();
+            let result = crate::generation::select_available_local_model_tokenize_invoke_validate_reported_usage_and_admit(
+                &registry, f.request.invocation_id, &local_selection_requirements(), &availability,
+                MODEL_INPUT_TOKENIZATION_V1, &tokenizer, &f.compilation, &f.authority,
+                &f.context, &f.citations,
+            );
+            match expected {
+                None => assert!(result.is_ok()),
+                Some(error) => assert_eq!(
+                    result,
+                    Err(Outer::UsageValidatedTokenizedInvocationAdmission(error))
+                ),
+            }
+            assert_eq!(tokenizer.remaining().unwrap(), usize::from(case == 1));
+            assert_eq!(selected.remaining(), usize::from(matches!(case, 1 | 2)));
+            assert_eq!(available.remaining(), 1);
+            assert_eq!(unavailable.remaining(), 1);
+            assert_eq!(omitted.remaining(), 1);
+            assert_eq!(remote.remaining(), 1);
+        }
+    }
+
+    #[test]
     fn available_local_usage_validated_tokenized_composition_diagnostics_are_content_free() {
         use crate::generation::{
             AvailableLocalUsageValidatedTokenizedInvocationAdmissionError as Outer,
@@ -12274,6 +12484,54 @@ mod tests {
         assert_eq!(tokenizer.inner.remaining().unwrap(), 1);
         assert_eq!(ineligible.inner.remaining(), 1);
         assert_closed(error);
+
+        // The other availability leaves are also real wrapper failures with the same
+        // sentinel-bearing prompt, context, tokenizer, and provider state supplied.
+        use crate::availability::{
+            ModelAvailabilityEntry, ModelAvailabilityError, ModelAvailabilitySnapshot,
+            ModelAvailabilityState, MODEL_AVAILABILITY_V1,
+        };
+        use nexa_domain::{ModelId, ModelProviderId};
+        let entry = ModelAvailabilityEntry {
+            provider_id: base.descriptor.provider_id,
+            model_id: base.descriptor.model_id,
+            state: ModelAvailabilityState::Available,
+        };
+        let mut unsupported = ModelAvailabilitySnapshot::new(vec![entry]).unwrap();
+        unsupported.contract_version = ProtocolVersion::new(2, 0);
+        let cases = [
+            (
+                unsupported,
+                ModelAvailabilityError::UnsupportedAvailabilityVersion,
+            ),
+            (
+                ModelAvailabilitySnapshot {
+                    contract_version: MODEL_AVAILABILITY_V1,
+                    entries: vec![entry, entry],
+                },
+                ModelAvailabilityError::InvalidAvailability,
+            ),
+            (
+                ModelAvailabilitySnapshot::new(vec![ModelAvailabilityEntry {
+                    provider_id: id(91_001, ModelProviderId::new),
+                    model_id: id(91_001, ModelId::new),
+                    state: ModelAvailabilityState::Available,
+                }])
+                .unwrap(),
+                ModelAvailabilityError::RegistryInconsistency,
+            ),
+        ];
+        for (availability, expected) in cases {
+            let error = crate::generation::select_available_local_model_tokenize_invoke_validate_reported_usage_and_admit(
+                &registry, base.request.invocation_id, &local_selection_requirements(),
+                &availability, MODEL_INPUT_TOKENIZATION_V1, &tokenizer, &base.compilation,
+                &base.authority, &base.context, &base.citations,
+            ).unwrap_err();
+            assert_eq!(error, Outer::AvailabilitySelection(expected));
+            assert_eq!(tokenizer.inner.remaining().unwrap(), 1);
+            assert_eq!(provider.inner.remaining(), 1);
+            assert_closed(error);
+        }
 
         // Every nested category below is reached through a fresh wrapper call carrying all
         // sentinel-bearing prompt/context/tokenizer/provider/endpoint/credential state.
