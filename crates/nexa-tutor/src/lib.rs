@@ -5353,7 +5353,7 @@ mod tests {
 
         // Each later row deliberately keeps every downstream stage invalid. Exact consumption
         // proves the first failing stage wins and neither sentinel provider can be attempted.
-        for stage in 0..5 {
+        for stage in [0, 1, 2, 4] {
             let mut f = admission_fixture();
             f.response.reported_usage = Some(ModelUsage {
                 input_tokens: 6,
@@ -5377,11 +5377,6 @@ mod tests {
                     ))
                 }
                 2 => Inner::Invocation(ModelErrorKind::Unavailable),
-                3 => {
-                    f.response.invocation_id = id(88_301, nexa_domain::ModelInvocationId::new);
-                    selected_outcome = ScriptedOutcome::Response(f.response.clone());
-                    Inner::Invocation(ModelErrorKind::IdentityMismatch)
-                }
                 _ => {
                     selected_outcome = ScriptedOutcome::Response(f.response.clone());
                     Inner::ReportedUsage(Usage::InputTokenCountMismatch)
@@ -5416,6 +5411,53 @@ mod tests {
             assert_eq!(other.remaining(), 1);
             assert_eq!(remote.remaining(), 1);
         }
+
+        // Reported-response validation wins over both reported-usage equality and admission.
+        // This provider intentionally returns the invalid response without validating it during
+        // invocation, so the exact error proves that the ADR-0045 reported-response layer ran.
+        let mut f = admission_fixture();
+        f.response.invocation_id = id(88_301, nexa_domain::ModelInvocationId::new);
+        f.response.reported_usage = Some(ModelUsage {
+            input_tokens: 6,
+            output_tokens: 1,
+        });
+        f.response.output = RawModelOutput::new("not json").unwrap();
+        let selected = Arc::new(UncheckedScriptedProvider::new(
+            f.descriptor.clone(),
+            [ScriptedOutcome::Response(f.response.clone())],
+        ));
+        let (other, remote) = untouched_sentinel_providers(&f);
+        let registry = ModelRegistry::try_from_providers([
+            selected.clone() as Arc<dyn LanguageModelProvider>,
+            other.clone(),
+            remote.clone(),
+        ])
+        .unwrap();
+        let tokenizer = ScriptedModelInputTokenizer::new(
+            f.descriptor.clone(),
+            [ScriptedTokenizationOutcome::TokenCount(7)],
+        )
+        .unwrap();
+        assert_eq!(
+            select_local_model_tokenize_invoke_validate_reported_usage_and_admit(
+                &registry,
+                f.request.invocation_id,
+                &local_selection_requirements(),
+                MODEL_INPUT_TOKENIZATION_V1,
+                &tokenizer,
+                &f.compilation,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            ),
+            Err(Outer::UsageValidatedTokenizedInvocationAdmission(
+                Inner::ReportedUsage(Usage::Response(ModelErrorKind::IdentityMismatch))
+            ))
+        );
+        assert_eq!(tokenizer.remaining().unwrap(), 0);
+        assert_eq!(selected.remaining(), 0);
+        assert_eq!(other.remaining(), 1);
+        assert_eq!(remote.remaining(), 1);
     }
 
     #[test]
