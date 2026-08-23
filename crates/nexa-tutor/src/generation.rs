@@ -150,6 +150,18 @@ pub enum AvailableLocalTokenizedInvocationAdmissionError {
     TokenizedInvocationAdmission(TokenizedInvocationAdmissionError),
 }
 
+/// Closed failures for availability-gated local selection followed by usage-validated exact
+/// tokenization, invocation, and admission.
+#[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
+pub enum AvailableLocalUsageValidatedTokenizedInvocationAdmissionError {
+    #[error("available local-only usage-validated tokenized invocation requirements are invalid")]
+    InvalidLocalOnlyRequirements,
+    #[error("available local-only model selection failed")]
+    AvailabilitySelection(ModelAvailabilityError),
+    #[error("selected available model usage-validated tokenized invocation or admission failed")]
+    UsageValidatedTokenizedInvocationAdmission(UsageValidatedTokenizedInvocationAdmissionError),
+}
+
 /// Closed failure categories for authorized, availability-gated remote execution.
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
 pub enum AuthorizedAvailableRemoteInvocationAdmissionError {
@@ -599,6 +611,59 @@ pub fn select_available_local_model_tokenize_invoke_and_admit(
         citations,
     )
     .map_err(AvailableLocalTokenizedInvocationAdmissionError::TokenizedInvocationAdmission)
+}
+
+/// Selects one caller-marked-available local model, then validates its reported usage between
+/// exact tokenization/invocation and admission.
+#[allow(clippy::too_many_arguments)]
+pub fn select_available_local_model_tokenize_invoke_validate_reported_usage_and_admit(
+    registry: &ModelRegistry,
+    invocation_id: ModelInvocationId,
+    requirements: &ModelSelectionRequirements,
+    availability: &ModelAvailabilitySnapshot,
+    tokenization_contract_version: ProtocolVersion,
+    tokenizer: &dyn ModelInputTokenizer,
+    compilation: &PromptCompilationResult,
+    authority: &TrustedPlanningAuthority,
+    context: &ContextPackage,
+    citations: &CitationResult,
+) -> Result<
+    TokenizedInvocationAdmissionResult,
+    AvailableLocalUsageValidatedTokenizedInvocationAdmissionError,
+> {
+    validate_explicit_local_requirements(requirements).map_err(|()| {
+        AvailableLocalUsageValidatedTokenizedInvocationAdmissionError::InvalidLocalOnlyRequirements
+    })?;
+
+    let selected = select_available_model(
+        registry,
+        &compilation.model_input,
+        requirements,
+        availability,
+    )
+    .map_err(
+        AvailableLocalUsageValidatedTokenizedInvocationAdmissionError::AvailabilitySelection,
+    )?;
+    let request = request_for_selected(
+        invocation_id,
+        &selected.descriptor,
+        requirements,
+        compilation,
+    );
+
+    tokenize_invoke_validate_reported_usage_and_admit_model_output_with_token_capacity(
+        tokenization_contract_version,
+        tokenizer,
+        selected.provider.as_ref(),
+        &request,
+        compilation,
+        authority,
+        context,
+        citations,
+    )
+    .map_err(
+        AvailableLocalUsageValidatedTokenizedInvocationAdmissionError::UsageValidatedTokenizedInvocationAdmission,
+    )
 }
 
 /// Selects one explicitly authorized, caller-marked-available remote model, invokes it once, and
