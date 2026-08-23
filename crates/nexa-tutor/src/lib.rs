@@ -8639,4 +8639,203 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn filtered_remote_tokenized_composition_gates_dependencies_at_adr_0034() {
+        use crate::authorization::{RemoteModelAuthorization, RemoteModelAuthorizationEntry};
+        use crate::availability::{
+            ModelAvailabilityEntry, ModelAvailabilitySnapshot, ModelAvailabilityState,
+        };
+        use crate::generation::{
+            select_filtered_authorized_available_remote_model_tokenize_invoke_and_admit,
+            FilteredAuthorizedAvailableRemoteTokenizedInvocationAdmissionError as Outer,
+        };
+        use crate::model::{
+            LanguageModelProvider, ModelErrorKind, PrivacyClass, ScriptedModelProvider,
+            ScriptedOutcome,
+        };
+        use crate::registry::ModelRegistry;
+        use crate::remote_prompt::FilteredRemoteSelectionError;
+        use crate::tokenization::{
+            ScriptedModelInputTokenizer, ScriptedTokenizationOutcome, MODEL_INPUT_TOKENIZATION_V1,
+        };
+        use nexa_domain::ModelInvocationId;
+        use std::sync::Arc;
+
+        let f = admission_fixture();
+        let mut descriptor = f.descriptor.clone();
+        descriptor.privacy_class = PrivacyClass::ApprovedRemote;
+        let provider = Arc::new(
+            ScriptedModelProvider::new(
+                descriptor.clone(),
+                [ScriptedOutcome::Error(ModelErrorKind::Internal)],
+            )
+            .unwrap(),
+        );
+        let tokenizer = ScriptedModelInputTokenizer::new(
+            descriptor.clone(),
+            [ScriptedTokenizationOutcome::TokenCount(1)],
+        )
+        .unwrap();
+        let registry =
+            ModelRegistry::try_from_providers([provider.clone() as Arc<dyn LanguageModelProvider>])
+                .unwrap();
+        let availability = ModelAvailabilitySnapshot::new(vec![ModelAvailabilityEntry {
+            provider_id: descriptor.provider_id,
+            model_id: descriptor.model_id,
+            state: ModelAvailabilityState::Available,
+        }])
+        .unwrap();
+        let mut filtered = filtered_remote_fixture(PrivacyClass::ApprovedRemote);
+        let authorization = RemoteModelAuthorization::new(
+            filtered.filtered_compilation.replay_anchor.clone(),
+            vec![RemoteModelAuthorizationEntry {
+                provider_id: descriptor.provider_id,
+                model_id: descriptor.model_id,
+                privacy_class: descriptor.privacy_class,
+            }],
+        )
+        .unwrap();
+        filtered.evidence.filter_replay_anchor = "0".repeat(64);
+
+        assert_eq!(
+            select_filtered_authorized_available_remote_model_tokenize_invoke_and_admit(
+                &registry,
+                id(1700, ModelInvocationId::new),
+                &remote_selection_requirements(vec![PrivacyClass::ApprovedRemote]),
+                &availability,
+                &authorization,
+                MODEL_INPUT_TOKENIZATION_V1,
+                &tokenizer,
+                &filtered,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            ),
+            Err(Outer::FilteredSelection(
+                FilteredRemoteSelectionError::FilterEvidence
+            ))
+        );
+        assert_eq!(tokenizer.remaining().unwrap(), 1);
+        assert_eq!(provider.remaining(), 1);
+    }
+
+    #[test]
+    fn filtered_remote_tokenized_composition_returns_exact_filtered_evidence_and_admission() {
+        use crate::admission::admit_model_output;
+        use crate::authorization::{RemoteModelAuthorization, RemoteModelAuthorizationEntry};
+        use crate::availability::{
+            ModelAvailabilityEntry, ModelAvailabilitySnapshot, ModelAvailabilityState,
+        };
+        use crate::generation::select_filtered_authorized_available_remote_model_tokenize_invoke_and_admit;
+        use crate::model::{
+            LanguageModelProvider, PrivacyClass, ScriptedModelProvider, ScriptedOutcome,
+        };
+        use crate::registry::ModelRegistry;
+        use crate::tokenization::{
+            ScriptedModelInputTokenizer, ScriptedTokenizationOutcome, MODEL_INPUT_TOKENIZATION_V1,
+        };
+        use std::sync::Arc;
+
+        for reverse in [false, true] {
+            let f = admission_fixture();
+            let filtered = filtered_remote_fixture(PrivacyClass::ApprovedRemote);
+            let mut descriptor = f.descriptor.clone();
+            descriptor.privacy_class = PrivacyClass::ApprovedRemote;
+            let selected = Arc::new(
+                ScriptedModelProvider::new(
+                    descriptor.clone(),
+                    [ScriptedOutcome::Response(f.response.clone())],
+                )
+                .unwrap(),
+            );
+            let mut other_descriptor = descriptor.clone();
+            other_descriptor.provider_id = id(999, nexa_domain::ModelProviderId::new);
+            other_descriptor.model_id = id(999, nexa_domain::ModelId::new);
+            let other = Arc::new(
+                ScriptedModelProvider::new(
+                    other_descriptor.clone(),
+                    [ScriptedOutcome::Error(
+                        crate::model::ModelErrorKind::Internal,
+                    )],
+                )
+                .unwrap(),
+            );
+            let providers: Vec<Arc<dyn LanguageModelProvider>> = if reverse {
+                vec![other.clone(), selected.clone()]
+            } else {
+                vec![selected.clone(), other.clone()]
+            };
+            let registry = ModelRegistry::try_from_providers(providers).unwrap();
+            let availability = ModelAvailabilitySnapshot::new(vec![
+                ModelAvailabilityEntry {
+                    provider_id: descriptor.provider_id,
+                    model_id: descriptor.model_id,
+                    state: ModelAvailabilityState::Available,
+                },
+                ModelAvailabilityEntry {
+                    provider_id: other_descriptor.provider_id,
+                    model_id: other_descriptor.model_id,
+                    state: ModelAvailabilityState::Available,
+                },
+            ])
+            .unwrap();
+            let authorization = RemoteModelAuthorization::new(
+                filtered.filtered_compilation.replay_anchor.clone(),
+                vec![
+                    RemoteModelAuthorizationEntry {
+                        provider_id: descriptor.provider_id,
+                        model_id: descriptor.model_id,
+                        privacy_class: descriptor.privacy_class,
+                    },
+                    RemoteModelAuthorizationEntry {
+                        provider_id: other_descriptor.provider_id,
+                        model_id: other_descriptor.model_id,
+                        privacy_class: other_descriptor.privacy_class,
+                    },
+                ],
+            )
+            .unwrap();
+            let tokenizer = ScriptedModelInputTokenizer::new(
+                descriptor.clone(),
+                [ScriptedTokenizationOutcome::TokenCount(1)],
+            )
+            .unwrap();
+            let result =
+                select_filtered_authorized_available_remote_model_tokenize_invoke_and_admit(
+                    &registry,
+                    f.request.invocation_id,
+                    &remote_selection_requirements(vec![PrivacyClass::ApprovedRemote]),
+                    &availability,
+                    &authorization,
+                    MODEL_INPUT_TOKENIZATION_V1,
+                    &tokenizer,
+                    &filtered,
+                    &f.authority,
+                    &f.context,
+                    &f.citations,
+                )
+                .unwrap();
+            result
+                .tokenization_evidence
+                .validate_for(&descriptor, &filtered.filtered_compilation.model_input)
+                .unwrap();
+            let mut expected_request = f.request.clone();
+            expected_request.input = filtered.filtered_compilation.model_input.clone();
+            let expected = admit_model_output(
+                &descriptor,
+                &expected_request,
+                &f.response,
+                &filtered.filtered_compilation,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            )
+            .unwrap();
+            assert_eq!(result.admission, expected);
+            assert_eq!(tokenizer.remaining().unwrap(), 0);
+            assert_eq!(selected.remaining(), 0);
+            assert_eq!(other.remaining(), 1);
+        }
+    }
 }

@@ -148,6 +148,16 @@ pub enum FilteredAuthorizedAvailableRemoteInvocationAdmissionError {
     InvocationAdmission(InvocationAdmissionError),
 }
 
+/// Closed failures for filtered authorized remote selection followed by exact tokenization and
+/// admission.
+#[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
+pub enum FilteredAuthorizedAvailableRemoteTokenizedInvocationAdmissionError {
+    #[error("filtered authorized available remote model selection failed")]
+    FilteredSelection(FilteredRemoteSelectionError),
+    #[error("selected filtered authorized available remote model tokenized invocation or admission failed")]
+    TokenizedInvocationAdmission(TokenizedInvocationAdmissionError),
+}
+
 fn validate_explicit_local_requirements(
     requirements: &ModelSelectionRequirements,
 ) -> Result<(), ()> {
@@ -589,4 +599,56 @@ pub fn select_filtered_authorized_available_remote_model_invoke_and_admit(
         citations,
     )
     .map_err(FilteredAuthorizedAvailableRemoteInvocationAdmissionError::InvocationAdmission)
+}
+
+/// Selects through ADR-0034, tokenizes the exact filtered input, invokes the selected provider
+/// once, and strictly admits its response.
+#[allow(clippy::too_many_arguments)]
+pub fn select_filtered_authorized_available_remote_model_tokenize_invoke_and_admit(
+    registry: &ModelRegistry,
+    invocation_id: ModelInvocationId,
+    requirements: &ModelSelectionRequirements,
+    availability: &ModelAvailabilitySnapshot,
+    authorization: &RemoteModelAuthorization,
+    tokenization_contract_version: ProtocolVersion,
+    tokenizer: &dyn ModelInputTokenizer,
+    filtered_result: &RemotePromptFilterResult,
+    authority: &TrustedPlanningAuthority,
+    context: &ContextPackage,
+    citations: &CitationResult,
+) -> Result<
+    TokenizedInvocationAdmissionResult,
+    FilteredAuthorizedAvailableRemoteTokenizedInvocationAdmissionError,
+> {
+    let selected = select_filtered_authorized_available_remote_model(
+        registry,
+        requirements,
+        availability,
+        authorization,
+        filtered_result,
+    )
+    .map_err(
+        FilteredAuthorizedAvailableRemoteTokenizedInvocationAdmissionError::FilteredSelection,
+    )?;
+    let compilation = &filtered_result.filtered_compilation;
+    let request = request_for_selected(
+        invocation_id,
+        &selected.descriptor,
+        requirements,
+        compilation,
+    );
+
+    tokenize_invoke_and_admit_model_output_with_token_capacity(
+        tokenization_contract_version,
+        tokenizer,
+        selected.provider.as_ref(),
+        &request,
+        compilation,
+        authority,
+        context,
+        citations,
+    )
+    .map_err(
+        FilteredAuthorizedAvailableRemoteTokenizedInvocationAdmissionError::TokenizedInvocationAdmission,
+    )
 }

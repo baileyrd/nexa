@@ -281,7 +281,6 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 
 NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
 
-
 ## ADR-0042 availability-gated local selection and exact-tokenization composition
 
 | Requirement | Evidence | Status |
@@ -305,5 +304,17 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Exact success result and single selected dependency use | Direct test `authorized_remote_tokenized_composition_is_exact_single_attempt_and_content_free` checks replayable tokenization evidence, equality with direct admission, both insertion orders for two eligible authorized remote providers, exact selected shared-handle consumption, and untouched non-selected remote/local providers | Implemented slice |
 | Closed content-free failures | Both direct focused tests format the closed errors and cover content-free selection, tokenizer, provider, and admission failure categories | Implemented slice |
 | Permission and deferrals preserved | No authentication, authorization-policy change, secrets, filtering/minimization proof, concrete remote execution, networking, retry, fallback, or token-aware selection | Preserved |
+
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
+
+## ADR-0044 filtered authorized remote selection and exact-tokenization composition
+
+| Requirement | Evidence | Status |
+|---|---|---|
+| ADR-0034 remains the sole filter-evidence-gated selection boundary | `select_filtered_authorized_available_remote_model_tokenize_invoke_and_admit`; direct tampered-evidence dependency-preservation test | Implemented slice |
+| Exact filtered request followed by unchanged ADR-0040 | Shared request construction from `filtered_result.filtered_compilation` and direct tokenized invocation/admission delegation | Implemented slice |
+| Exact success evidence and deterministic original-handle use | Focused filtered tokenized success test covers both registry insertion orders, exact filtered tokenization association, direct admission equality, and untouched non-selected provider | Implemented slice |
+| Closed content-free failures | `FilteredAuthorizedAvailableRemoteTokenizedInvocationAdmissionError` contains only nested ADR-0034 and ADR-0040 categories | Implemented slice |
+| Privacy, permission, and deferrals preserved | Existing structural whole-layer filtering and caller authorization are reused; no general privacy correctness, semantic minimization, authentication, authorization-policy change, secrets, concrete remote execution, or networking | Preserved |
 
 NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
