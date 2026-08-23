@@ -4208,6 +4208,20 @@ mod tests {
         f.response.invocation_id = invocation_id;
         f.response.provider_id = selected_descriptor.provider_id;
         f.response.model_id = selected_descriptor.model_id;
+        let mut selected_request = f.request.clone();
+        selected_request.invocation_id = invocation_id;
+        selected_request.provider_id = selected_descriptor.provider_id;
+        selected_request.model_id = selected_descriptor.model_id;
+        let expected_admission = crate::admission::admit_model_output(
+            &selected_descriptor,
+            &selected_request,
+            &f.response,
+            &f.compilation,
+            &f.authority,
+            &f.context,
+            &f.citations,
+        )
+        .unwrap();
         let first = Arc::new(
             ScriptedModelProvider::new(
                 first_descriptor.clone(),
@@ -4241,11 +4255,6 @@ mod tests {
         .unwrap();
         let availability = ModelAvailabilitySnapshot::new(vec![
             ModelAvailabilityEntry {
-                provider_id: first_descriptor.provider_id,
-                model_id: first_descriptor.model_id,
-                state: ModelAvailabilityState::Unavailable,
-            },
-            ModelAvailabilityEntry {
                 provider_id: selected_descriptor.provider_id,
                 model_id: selected_descriptor.model_id,
                 state: ModelAvailabilityState::Available,
@@ -4275,6 +4284,7 @@ mod tests {
             &f.citations,
         )
         .unwrap();
+        assert_eq!(result.admission, expected_admission);
         result
             .tokenization_evidence
             .validate_for(&selected_descriptor, &f.compilation.model_input)
@@ -4284,6 +4294,302 @@ mod tests {
         assert_eq!(selected.remaining(), 0);
         assert_eq!(first.remaining(), 1);
         assert_eq!(remote.remaining(), 1);
+    }
+
+    #[test]
+    fn available_local_tokenized_selection_preserves_exact_tokenization_failures() {
+        use crate::availability::{
+            ModelAvailabilityEntry, ModelAvailabilitySnapshot, ModelAvailabilityState,
+        };
+        use crate::generation::{
+            select_available_local_model_tokenize_invoke_and_admit,
+            AvailableLocalTokenizedInvocationAdmissionError as Outer,
+            TokenizedInvocationAdmissionError as Inner,
+        };
+        use crate::model::{
+            LanguageModelProvider, RawModelOutput, ScriptedModelProvider, ScriptedOutcome,
+        };
+        use crate::registry::ModelRegistry;
+        use crate::tokenization::{
+            ModelInputTokenizationError, ModelRequestTokenCapacityError,
+            ScriptedModelInputTokenizer, ScriptedTokenizationOutcome,
+            TokenizeAndValidateModelRequestCapacityError as Capacity, MODEL_INPUT_TOKENIZATION_V1,
+        };
+        use nexa_domain::{ModelId, ProtocolVersion};
+        use std::sync::Arc;
+
+        for (wrong_version, expected) in [
+            (true, ModelInputTokenizationError::UnsupportedVersion),
+            (false, ModelInputTokenizationError::InvalidDescriptor),
+        ] {
+            let mut f = admission_fixture();
+            f.context.tokenizer_profile_id = "knowledge-private-sentinel".into();
+            f.response.output = RawModelOutput::new("model-output-private-sentinel").unwrap();
+            let provider = Arc::new(
+                ScriptedModelProvider::new(
+                    f.descriptor.clone(),
+                    [ScriptedOutcome::Response(f.response.clone())],
+                )
+                .unwrap(),
+            );
+            let registry = ModelRegistry::try_from_providers([
+                provider.clone() as Arc<dyn LanguageModelProvider>
+            ])
+            .unwrap();
+            let availability = ModelAvailabilitySnapshot::new(vec![ModelAvailabilityEntry {
+                provider_id: f.descriptor.provider_id,
+                model_id: f.descriptor.model_id,
+                state: ModelAvailabilityState::Available,
+            }])
+            .unwrap();
+            let mut tokenizer_descriptor = f.descriptor.clone();
+            if !wrong_version {
+                tokenizer_descriptor.model_id = id(10_001, ModelId::new);
+            }
+            let tokenizer = ScriptedModelInputTokenizer::new(
+                tokenizer_descriptor,
+                [ScriptedTokenizationOutcome::TokenCount(1)],
+            )
+            .unwrap();
+            let version = if wrong_version {
+                ProtocolVersion::new(2, 0)
+            } else {
+                MODEL_INPUT_TOKENIZATION_V1
+            };
+
+            let error = select_available_local_model_tokenize_invoke_and_admit(
+                &registry,
+                f.request.invocation_id,
+                &local_selection_requirements(),
+                &availability,
+                version,
+                &tokenizer,
+                &f.compilation,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            )
+            .unwrap_err();
+            assert_eq!(
+                error,
+                Outer::TokenizedInvocationAdmission(Inner::TokenizationCapacity(
+                    Capacity::Tokenization(expected)
+                ))
+            );
+            assert_eq!(tokenizer.remaining().unwrap(), 1);
+            assert_eq!(provider.remaining(), 1);
+            assert_content_free_available_local_error(error);
+        }
+
+        for (outcome, expected) in [
+            (
+                ScriptedTokenizationOutcome::Error,
+                Capacity::Tokenization(ModelInputTokenizationError::TokenizerFailure),
+            ),
+            (
+                ScriptedTokenizationOutcome::TokenCount(
+                    admission_fixture()
+                        .descriptor
+                        .capabilities
+                        .context_window_tokens
+                        - local_selection_requirements().maximum_output_tokens
+                        + 1,
+                ),
+                Capacity::TokenCapacity(ModelRequestTokenCapacityError::ExactCapacity),
+            ),
+        ] {
+            let mut f = admission_fixture();
+            f.context.tokenizer_profile_id = "knowledge-private-sentinel".into();
+            f.response.output = RawModelOutput::new("model-output-private-sentinel").unwrap();
+            let provider = Arc::new(
+                ScriptedModelProvider::new(
+                    f.descriptor.clone(),
+                    [ScriptedOutcome::Response(f.response.clone())],
+                )
+                .unwrap(),
+            );
+            let registry = ModelRegistry::try_from_providers([
+                provider.clone() as Arc<dyn LanguageModelProvider>
+            ])
+            .unwrap();
+            let availability = ModelAvailabilitySnapshot::new(vec![ModelAvailabilityEntry {
+                provider_id: f.descriptor.provider_id,
+                model_id: f.descriptor.model_id,
+                state: ModelAvailabilityState::Available,
+            }])
+            .unwrap();
+            let tokenizer = SentinelTokenizer {
+                inner: ScriptedModelInputTokenizer::new(f.descriptor.clone(), [outcome]).unwrap(),
+                private_diagnostic: "tokenizer-private-sentinel".into(),
+            };
+            let error = select_available_local_model_tokenize_invoke_and_admit(
+                &registry,
+                f.request.invocation_id,
+                &local_selection_requirements(),
+                &availability,
+                MODEL_INPUT_TOKENIZATION_V1,
+                &tokenizer,
+                &f.compilation,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            )
+            .unwrap_err();
+            assert_eq!(
+                error,
+                Outer::TokenizedInvocationAdmission(Inner::TokenizationCapacity(expected))
+            );
+            assert_eq!(tokenizer.inner.remaining().unwrap(), 0);
+            assert_eq!(provider.remaining(), 1);
+            assert_content_free_available_local_error(error);
+        }
+    }
+
+    fn assert_content_free_available_local_error(
+        error: crate::generation::AvailableLocalTokenizedInvocationAdmissionError,
+    ) {
+        let diagnostics = format!("{error:?} {error}");
+        for sentinel in [
+            "model-output-private-sentinel",
+            "prompt-private-sentinel",
+            "learner-private-sentinel",
+            "knowledge-private-sentinel",
+            "endpoint-private-sentinel",
+            "credential-private-sentinel",
+            "tokenizer-private-sentinel",
+            "provider-private-sentinel",
+        ] {
+            assert!(!diagnostics.contains(sentinel), "leaked {sentinel}");
+        }
+    }
+
+    #[test]
+    fn available_local_tokenized_selection_consumes_only_selected_dependencies_on_late_failures() {
+        use crate::admission::AdmissionError;
+        use crate::availability::{
+            ModelAvailabilityEntry, ModelAvailabilitySnapshot, ModelAvailabilityState,
+        };
+        use crate::generation::{
+            select_available_local_model_tokenize_invoke_and_admit,
+            AvailableLocalTokenizedInvocationAdmissionError as Outer,
+            TokenizedInvocationAdmissionError as Inner,
+        };
+        use crate::model::{
+            LanguageModelProvider, ModelErrorKind, PrivacyClass, RawModelOutput,
+            ScriptedModelProvider, ScriptedOutcome,
+        };
+        use crate::registry::ModelRegistry;
+        use crate::tokenization::{
+            ScriptedModelInputTokenizer, ScriptedTokenizationOutcome, MODEL_INPUT_TOKENIZATION_V1,
+        };
+        use nexa_domain::{ModelId, ModelProviderId};
+        use std::sync::Arc;
+
+        for admission_failure in [false, true] {
+            let mut f = admission_fixture();
+            f.context.tokenizer_profile_id = "knowledge-private-sentinel".into();
+            let selected_descriptor = f.descriptor.clone();
+            let selected_outcome = if admission_failure {
+                let mut response = f.response.clone();
+                response.output = RawModelOutput::new("model-output-private-sentinel").unwrap();
+                ScriptedOutcome::Response(response)
+            } else {
+                ScriptedOutcome::Error(ModelErrorKind::Unavailable)
+            };
+            let selected = Arc::new(SentinelProvider {
+                inner: ScriptedModelProvider::new(
+                    selected_descriptor.clone(),
+                    [
+                        selected_outcome,
+                        ScriptedOutcome::Error(ModelErrorKind::Internal),
+                    ],
+                )
+                .unwrap(),
+                endpoint: "endpoint-private-sentinel".into(),
+                credential: "credential-private-sentinel".into(),
+                private_diagnostic: "provider-private-sentinel".into(),
+            });
+            let mut other_descriptor = f.descriptor.clone();
+            other_descriptor.provider_id = id(10_010, ModelProviderId::new);
+            other_descriptor.model_id = id(10_010, ModelId::new);
+            let other = Arc::new(
+                ScriptedModelProvider::new(
+                    other_descriptor,
+                    [ScriptedOutcome::Error(ModelErrorKind::Internal)],
+                )
+                .unwrap(),
+            );
+            let mut remote_descriptor = f.descriptor.clone();
+            remote_descriptor.provider_id = id(10_011, ModelProviderId::new);
+            remote_descriptor.model_id = id(10_011, ModelId::new);
+            remote_descriptor.privacy_class = PrivacyClass::ApprovedRemote;
+            let remote = Arc::new(
+                ScriptedModelProvider::new(
+                    remote_descriptor.clone(),
+                    [ScriptedOutcome::Error(ModelErrorKind::Internal)],
+                )
+                .unwrap(),
+            );
+            let registry = ModelRegistry::try_from_providers([
+                remote.clone() as Arc<dyn LanguageModelProvider>,
+                other.clone() as Arc<dyn LanguageModelProvider>,
+                selected.clone() as Arc<dyn LanguageModelProvider>,
+            ])
+            .unwrap();
+            let availability = ModelAvailabilitySnapshot::new(vec![
+                ModelAvailabilityEntry {
+                    provider_id: selected_descriptor.provider_id,
+                    model_id: selected_descriptor.model_id,
+                    state: ModelAvailabilityState::Available,
+                },
+                ModelAvailabilityEntry {
+                    provider_id: other.descriptor().provider_id,
+                    model_id: other.descriptor().model_id,
+                    state: ModelAvailabilityState::Available,
+                },
+                ModelAvailabilityEntry {
+                    provider_id: remote_descriptor.provider_id,
+                    model_id: remote_descriptor.model_id,
+                    state: ModelAvailabilityState::Available,
+                },
+            ])
+            .unwrap();
+            let tokenizer = SentinelTokenizer {
+                inner: ScriptedModelInputTokenizer::new(
+                    selected_descriptor,
+                    [ScriptedTokenizationOutcome::TokenCount(1)],
+                )
+                .unwrap(),
+                private_diagnostic: "tokenizer-private-sentinel".into(),
+            };
+
+            let error = select_available_local_model_tokenize_invoke_and_admit(
+                &registry,
+                f.request.invocation_id,
+                &local_selection_requirements(),
+                &availability,
+                MODEL_INPUT_TOKENIZATION_V1,
+                &tokenizer,
+                &f.compilation,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            )
+            .unwrap_err();
+            let expected = if admission_failure {
+                Outer::TokenizedInvocationAdmission(Inner::Admission(
+                    AdmissionError::MalformedSyntax,
+                ))
+            } else {
+                Outer::TokenizedInvocationAdmission(Inner::Invocation(ModelErrorKind::Unavailable))
+            };
+            assert_eq!(error, expected);
+            assert_eq!(tokenizer.inner.remaining().unwrap(), 0);
+            assert_eq!(selected.inner.remaining(), 1);
+            assert_eq!(other.remaining(), 1);
+            assert_eq!(remote.remaining(), 1);
+            assert_content_free_available_local_error(error);
+        }
     }
 
     #[test]
