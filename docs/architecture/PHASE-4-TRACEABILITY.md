@@ -294,3 +294,16 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Existing APIs and deferrals | ADRs 0029, 0030, 0040, and 0041 unchanged; no probing, token-aware selection, fallback, retry, or concrete dependency | Preserved |
 
 NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
+
+
+## ADR-0043 authorized available remote selection and exact-tokenization composition
+
+| Requirement | Evidence | Status |
+|---|---|---|
+| ADR-0031 remains the sole permission and selection boundary | `select_authorized_available_remote_model_tokenize_invoke_and_admit` directly delegates exact caller inputs to `select_authorized_available_remote_model` before dependency consumption | Implemented slice |
+| Existing request followed by unchanged ADR-0040 | Shared request construction and direct tokenized invocation/admission delegation | Implemented slice |
+| Exact success result and single selected dependency use | Unchanged `TokenizedInvocationAdmissionResult`; ADR-0031 selected shared provider handle passed to ADR-0040 | Implemented slice |
+| Closed content-free failures | `AuthorizedAvailableRemoteTokenizedInvocationAdmissionError` nests only selection and tokenized invocation/admission failures | Implemented slice |
+| Permission and deferrals preserved | No authentication, authorization-policy change, secrets, filtering/minimization proof, concrete remote execution, networking, retry, fallback, or token-aware selection | Preserved |
+
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
