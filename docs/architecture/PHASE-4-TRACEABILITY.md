@@ -360,3 +360,15 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Existing APIs and exclusions | ADRs 0022–0047 unchanged; no acquisition, authorization, routing, retry, fallback, concrete dependency, networking, telemetry, persistence, or semantic authority | Preserved |
 
 NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. Availability is caller-supplied eligibility evidence only and grants no freshness/authenticity, monitoring, recovery, or authorization authority. Optional usage equality grants no tokenizer/provider truth, billing/cost, output-token, telemetry, or semantic authority. The known ingestion/context checklist inconsistency is preserved.
+
+
+## ADR-0049 authorized-available-remote usage-validated tokenized composition
+
+| Requirement | Evidence | Status |
+|---|---|---|
+| Unchanged authorization and availability selection precedes dependencies | `select_authorized_available_remote_model_tokenize_invoke_validate_reported_usage_and_admit`; direct focused selection and dependency-accounting tests | Implemented slice |
+| Exact ADR-0043 request followed by unchanged ADR-0046 | Direct delegation using the selected original shared provider, exact request, and caller tokenizer | Implemented slice |
+| Optional reported usage and single-attempt behavior | Direct absent/equal/lower/higher usage evidence and existing complete ADR-0031/ADR-0046 ordering suites | Implemented slice |
+| Limited authority and existing APIs | ADR-0031 remains the sole permission boundary; authorization and availability remain caller evidence; no authentication or authorization-policy change; ADRs 0022–0048 remain unchanged | Preserved |
+
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. Authorization and availability grant no authenticity/freshness or monitoring/recovery authority. Optional reported input usage establishes structural association and equality only, granting no tokenizer/provider truth, billing/cost, output-token, telemetry, or semantic authority. The known ingestion/context checklist inconsistency is preserved.

@@ -12752,4 +12752,122 @@ mod tests {
             assert_closed(error);
         }
     }
+
+    #[test]
+    fn authorized_remote_usage_validated_tokenized_composition_preserves_selection_and_usage() {
+        use crate::authorization::{
+            RemoteAuthorizationError, RemoteModelAuthorization, RemoteModelAuthorizationEntry,
+        };
+        use crate::availability::{
+            ModelAvailabilityEntry, ModelAvailabilitySnapshot, ModelAvailabilityState,
+        };
+        use crate::generation::{
+            select_authorized_available_remote_model_tokenize_invoke_validate_reported_usage_and_admit,
+            AuthorizedAvailableRemoteUsageValidatedTokenizedInvocationAdmissionError as Outer,
+            UsageValidatedTokenizedInvocationAdmissionError as Inner,
+        };
+        use crate::model::{
+            LanguageModelProvider, ModelUsage, PrivacyClass, ScriptedModelProvider, ScriptedOutcome,
+        };
+        use crate::registry::ModelRegistry;
+        use crate::tokenization::{
+            ScriptedModelInputTokenizer, ScriptedTokenizationOutcome, MODEL_INPUT_TOKENIZATION_V1,
+        };
+        use crate::usage::ModelResponseReportedUsageValidationError;
+        use nexa_domain::ProtocolVersion;
+        use std::sync::Arc;
+
+        for reported in [None, Some(7), Some(6), Some(8)] {
+            let mut f = admission_fixture();
+            let mut descriptor = f.descriptor.clone();
+            descriptor.privacy_class = PrivacyClass::ApprovedRemote;
+            f.response.provider_id = descriptor.provider_id;
+            f.response.model_id = descriptor.model_id;
+            f.response.reported_usage = reported.map(|input_tokens| ModelUsage {
+                input_tokens,
+                output_tokens: 1,
+            });
+            let provider = Arc::new(
+                ScriptedModelProvider::new(
+                    descriptor.clone(),
+                    [ScriptedOutcome::Response(f.response.clone())],
+                )
+                .unwrap(),
+            );
+            let registry = ModelRegistry::try_from_providers([
+                provider.clone() as Arc<dyn LanguageModelProvider>
+            ])
+            .unwrap();
+            let availability = ModelAvailabilitySnapshot::new(vec![ModelAvailabilityEntry {
+                provider_id: descriptor.provider_id,
+                model_id: descriptor.model_id,
+                state: ModelAvailabilityState::Available,
+            }])
+            .unwrap();
+            let authorization = RemoteModelAuthorization::new(
+                f.compilation.replay_anchor.clone(),
+                vec![RemoteModelAuthorizationEntry {
+                    provider_id: descriptor.provider_id,
+                    model_id: descriptor.model_id,
+                    privacy_class: descriptor.privacy_class,
+                }],
+            )
+            .unwrap();
+            let tokenizer = ScriptedModelInputTokenizer::new(
+                descriptor,
+                [ScriptedTokenizationOutcome::TokenCount(7)],
+            )
+            .unwrap();
+            let result = select_authorized_available_remote_model_tokenize_invoke_validate_reported_usage_and_admit(
+                &registry, f.request.invocation_id,
+                &remote_selection_requirements(vec![PrivacyClass::ApprovedRemote]),
+                &availability, &authorization, MODEL_INPUT_TOKENIZATION_V1, &tokenizer,
+                &f.compilation, &f.authority, &f.context, &f.citations,
+            );
+            if matches!(reported, None | Some(7)) {
+                assert_eq!(result.unwrap().tokenization_evidence.input_token_count, 7);
+            } else {
+                assert_eq!(
+                    result,
+                    Err(Outer::UsageValidatedTokenizedInvocationAdmission(
+                        Inner::ReportedUsage(
+                            ModelResponseReportedUsageValidationError::InputTokenCountMismatch
+                        )
+                    ))
+                );
+            }
+            assert_eq!(tokenizer.remaining().unwrap(), 0);
+            assert_eq!(provider.remaining(), 0);
+        }
+
+        let f = admission_fixture();
+        let registry =
+            ModelRegistry::try_from_providers(Vec::<Arc<dyn LanguageModelProvider>>::new())
+                .unwrap();
+        let availability = ModelAvailabilitySnapshot::new(vec![]).unwrap();
+        let authorization =
+            RemoteModelAuthorization::new(f.compilation.replay_anchor.clone(), vec![]).unwrap();
+        let tokenizer = ScriptedModelInputTokenizer::new(
+            f.descriptor.clone(),
+            [ScriptedTokenizationOutcome::TokenCount(7)],
+        )
+        .unwrap();
+        let mut invalid = remote_selection_requirements(vec![PrivacyClass::ApprovedRemote]);
+        invalid.contract_version = ProtocolVersion::new(2, 0);
+        let error = select_authorized_available_remote_model_tokenize_invoke_validate_reported_usage_and_admit(
+            &registry, f.request.invocation_id, &invalid, &availability, &authorization,
+            MODEL_INPUT_TOKENIZATION_V1, &tokenizer, &f.compilation, &f.authority, &f.context,
+            &f.citations,
+        ).unwrap_err();
+        assert_eq!(
+            error,
+            Outer::AuthorizationAvailabilitySelection(
+                RemoteAuthorizationError::InvalidRemoteRequirements
+            )
+        );
+        assert_eq!(tokenizer.remaining().unwrap(), 1);
+        for diagnostic in [format!("{error:?}"), format!("{error}")] {
+            assert!(!diagnostic.contains(f.compilation.model_input.as_str()));
+        }
+    }
 }
