@@ -1519,6 +1519,105 @@ mod tests {
         }
     }
 
+    struct ObservingTokenizer {
+        inner: crate::tokenization::ScriptedModelInputTokenizer,
+        observed: std::sync::Mutex<Vec<crate::model::ModelInput>>,
+    }
+
+    impl ObservingTokenizer {
+        fn remaining(&self) -> usize {
+            self.inner.remaining().unwrap()
+        }
+
+        fn observed(&self) -> Vec<crate::model::ModelInput> {
+            self.observed.lock().unwrap().clone()
+        }
+    }
+
+    impl crate::tokenization::ModelInputTokenizer for ObservingTokenizer {
+        fn descriptor(&self) -> &crate::model::ModelDescriptor {
+            self.inner.descriptor()
+        }
+
+        fn count_input_tokens(
+            &self,
+            input: &crate::model::ModelInput,
+        ) -> Result<u32, crate::tokenization::ModelInputTokenizationError> {
+            self.observed.lock().unwrap().push(input.clone());
+            self.inner.count_input_tokens(input)
+        }
+    }
+
+    struct ObservingProvider {
+        inner: crate::model::ScriptedModelProvider,
+        observed: std::sync::Mutex<Vec<crate::model::ModelRequest>>,
+    }
+
+    impl ObservingProvider {
+        fn remaining(&self) -> usize {
+            self.inner.remaining()
+        }
+
+        fn observed(&self) -> Vec<crate::model::ModelRequest> {
+            self.observed.lock().unwrap().clone()
+        }
+    }
+
+    impl crate::model::LanguageModelProvider for ObservingProvider {
+        fn descriptor(&self) -> &crate::model::ModelDescriptor {
+            self.inner.descriptor()
+        }
+
+        fn generate(
+            &self,
+            request: &crate::model::ModelRequest,
+        ) -> Result<crate::model::ModelResponse, crate::model::ModelError> {
+            self.observed.lock().unwrap().push(request.clone());
+            self.inner.generate(request)
+        }
+    }
+
+    struct SentinelUncheckedProvider {
+        inner: UncheckedScriptedProvider,
+        endpoint: String,
+        credential: String,
+        private_diagnostic: String,
+    }
+
+    impl SentinelUncheckedProvider {
+        fn remaining(&self) -> usize {
+            self.inner.remaining()
+        }
+    }
+
+    impl crate::model::LanguageModelProvider for SentinelUncheckedProvider {
+        fn descriptor(&self) -> &crate::model::ModelDescriptor {
+            self.inner.descriptor()
+        }
+
+        fn generate(
+            &self,
+            request: &crate::model::ModelRequest,
+        ) -> Result<crate::model::ModelResponse, crate::model::ModelError> {
+            assert!(!self.endpoint.is_empty());
+            assert!(!self.credential.is_empty());
+            assert!(!self.private_diagnostic.is_empty());
+            self.inner.generate(request)
+        }
+    }
+
+    fn assert_content_free_diagnostics(
+        error: &(impl std::fmt::Debug + std::fmt::Display),
+        sentinels: &[&str],
+    ) {
+        let debug = format!("{error:?}");
+        let display = error.to_string();
+        for sentinel in sentinels {
+            assert!(!debug.contains(sentinel), "Debug leaked {sentinel}");
+            assert!(!display.contains(sentinel), "Display leaked {sentinel}");
+        }
+    }
+
     struct UncheckedScriptedProvider {
         descriptor: crate::model::ModelDescriptor,
         outcomes: std::sync::Mutex<std::collections::VecDeque<crate::model::ScriptedOutcome>>,
@@ -13689,13 +13788,14 @@ mod tests {
                 input_tokens,
                 output_tokens: 1,
             });
-            let selected = Arc::new(
-                ScriptedModelProvider::new(
+            let selected = Arc::new(ObservingProvider {
+                inner: ScriptedModelProvider::new(
                     descriptor.clone(),
                     [ScriptedOutcome::Response(f.response.clone())],
                 )
                 .unwrap(),
-            );
+                observed: std::sync::Mutex::new(Vec::new()),
+            });
             let mut other_descriptor = descriptor.clone();
             other_descriptor.provider_id = id(999, nexa_domain::ModelProviderId::new);
             other_descriptor.model_id = id(999, nexa_domain::ModelId::new);
@@ -13743,11 +13843,14 @@ mod tests {
                 ],
             )
             .unwrap();
-            let tokenizer = ScriptedModelInputTokenizer::new(
-                descriptor.clone(),
-                [ScriptedTokenizationOutcome::TokenCount(7)],
-            )
-            .unwrap();
+            let tokenizer = ObservingTokenizer {
+                inner: ScriptedModelInputTokenizer::new(
+                    descriptor.clone(),
+                    [ScriptedTokenizationOutcome::TokenCount(7)],
+                )
+                .unwrap(),
+                observed: std::sync::Mutex::new(Vec::new()),
+            };
             let result =
                 select_filtered_authorized_available_remote_model_tokenize_invoke_validate_reported_usage_and_admit(
                     &registry,
@@ -13782,6 +13885,14 @@ mod tests {
                 ])
                 .maximum_output_tokens,
             };
+            assert_eq!(
+                tokenizer.observed(),
+                vec![filtered.filtered_compilation.model_input.clone()]
+            );
+            assert_eq!(selected.observed(), vec![expected_request.clone()]);
+            assert_eq!(f.response.invocation_id, expected_request.invocation_id);
+            assert_eq!(f.response.provider_id, expected_request.provider_id);
+            assert_eq!(f.response.model_id, expected_request.model_id);
             let direct_provider = ScriptedModelProvider::new(
                 descriptor.clone(),
                 [ScriptedOutcome::Response(f.response.clone())],
@@ -13828,7 +13939,7 @@ mod tests {
             }
             assert_eq!(direct_tokenizer.remaining().unwrap(), 0);
             assert_eq!(direct_provider.remaining(), 0);
-            assert_eq!(tokenizer.remaining().unwrap(), 0);
+            assert_eq!(tokenizer.remaining(), 0);
             assert_eq!(selected.remaining(), 0);
             assert_eq!(other.remaining(), 1);
         }
@@ -13963,6 +14074,24 @@ mod tests {
                     crate::remote_prompt::FilteredRemoteSelectionError::FilterEvidence,
                 )),
                 "filter mutation {mutation}",
+            );
+            let error = Outer::FilteredSelection(
+                crate::remote_prompt::FilteredRemoteSelectionError::FilterEvidence,
+            );
+            assert_content_free_diagnostics(
+                &error,
+                &[
+                    "prompt-private-sentinel",
+                    "learner-private-sentinel",
+                    "knowledge-private-sentinel",
+                    "authorization-private-sentinel",
+                    "tokenizer-private-sentinel",
+                    "provider-private-sentinel",
+                    "endpoint-private-sentinel",
+                    "credential-private-sentinel",
+                    "response-private-sentinel",
+                    "usage-private-sentinel",
+                ],
             );
             assert_eq!(tokenizer.remaining().unwrap(), 1);
             assert_eq!(provider.remaining(), 1);
@@ -14366,7 +14495,7 @@ mod tests {
         // Every case calls only the ADR-0050 wrapper. Earlier failures preserve both queues;
         // tokenization/capacity consumes exactly its tokenizer outcome; invocation and all later
         // stages consume exactly one outcome from each selected dependency.
-        for mode in 0..15 {
+        for mode in 0..13 {
             let mut f = admission_fixture();
             f.descriptor.privacy_class = PrivacyClass::ApprovedRemote;
             f.response.provider_id = f.descriptor.provider_id;
@@ -14432,8 +14561,9 @@ mod tests {
                     Inner::ReportedUsage(Usage::Response(ModelErrorKind::UnsupportedVersion))
                 }
                 9 => {
-                    f.response.output =
-                        RawModelOutput::new("response-private-sentinel not json").unwrap();
+                    // Restore valid admission syntax: excessive reported output usage is the
+                    // only invalid response field in this case.
+                    f.response.output = admission_fixture().response.output;
                     f.response.reported_usage = Some(ModelUsage {
                         input_tokens: 7,
                         output_tokens: remote_selection_requirements(vec![
@@ -14469,51 +14599,116 @@ mod tests {
                     Inner::Admission(AdmissionError::MalformedSyntax)
                 }
             };
-            let selected = Arc::new(UncheckedScriptedProvider::new(
-                f.descriptor.clone(),
-                [
-                    provider_outcome,
-                    ScriptedOutcome::Error(ModelErrorKind::Internal),
-                ],
-            ));
-            let mut untouched_descriptor = f.descriptor.clone();
-            untouched_descriptor.provider_id = id(91_200, ModelProviderId::new);
-            let untouched = Arc::new(
-                ScriptedModelProvider::new(
-                    untouched_descriptor,
-                    [ScriptedOutcome::Error(ModelErrorKind::Internal)],
-                )
-                .unwrap(),
-            );
-            let registry = ModelRegistry::try_from_providers([
-                selected.clone() as Arc<dyn LanguageModelProvider>,
-                untouched.clone() as Arc<dyn LanguageModelProvider>,
-            ])
-            .unwrap();
-            let tokenizer =
-                ScriptedModelInputTokenizer::new(tokenizer_descriptor, token_outcomes).unwrap();
+            let selected = Arc::new(SentinelUncheckedProvider {
+                inner: UncheckedScriptedProvider::new(
+                    f.descriptor.clone(),
+                    [
+                        provider_outcome,
+                        ScriptedOutcome::Error(ModelErrorKind::Internal),
+                    ],
+                ),
+                endpoint: "endpoint-private-sentinel".into(),
+                credential: "credential-private-sentinel".into(),
+                private_diagnostic: "provider-private-sentinel".into(),
+            });
+            let requirements = remote_selection_requirements(vec![PrivacyClass::ApprovedRemote]);
             let filtered = filtered_remote_fixture(PrivacyClass::ApprovedRemote);
-            let authorization = crate::authorization::RemoteModelAuthorization::new(
-                filtered.filtered_compilation.replay_anchor.clone(),
-                vec![crate::authorization::RemoteModelAuthorizationEntry {
-                    provider_id: f.descriptor.provider_id,
-                    model_id: f.descriptor.model_id,
-                    privacy_class: f.descriptor.privacy_class,
-                }],
+            let make_untouched =
+                |number: u128, privacy_class: PrivacyClass, byte_ineligible: bool| {
+                    let mut descriptor = f.descriptor.clone();
+                    descriptor.provider_id = id(number, ModelProviderId::new);
+                    descriptor.model_id = id(number, nexa_domain::ModelId::new);
+                    descriptor.privacy_class = privacy_class;
+                    if byte_ineligible {
+                        descriptor.capabilities.context_window_tokens =
+                            filtered.filtered_compilation.compiled_bytes
+                                + requirements.maximum_output_tokens
+                                - 1;
+                    }
+                    Arc::new(
+                        ScriptedModelProvider::new(
+                            descriptor,
+                            [ScriptedOutcome::Error(ModelErrorKind::Internal)],
+                        )
+                        .unwrap(),
+                    )
+                };
+            // Complete disjoint matrix: eligible non-selected, unauthorized, explicitly
+            // unavailable, availability-omitted, conservative-byte-ineligible, and local.
+            let other = make_untouched(91_200, PrivacyClass::ApprovedRemote, false);
+            let unauthorized = make_untouched(91_201, PrivacyClass::ApprovedRemote, false);
+            let unavailable = make_untouched(91_202, PrivacyClass::ApprovedRemote, false);
+            let omitted = make_untouched(91_203, PrivacyClass::ApprovedRemote, false);
+            let byte_ineligible = make_untouched(91_204, PrivacyClass::ApprovedRemote, true);
+            let local = make_untouched(91_205, PrivacyClass::LocalOnly, false);
+            let untouched = [
+                &other,
+                &unauthorized,
+                &unavailable,
+                &omitted,
+                &byte_ineligible,
+                &local,
+            ];
+            let registry = ModelRegistry::try_from_providers(
+                std::iter::once(selected.clone() as Arc<dyn LanguageModelProvider>).chain(
+                    untouched
+                        .iter()
+                        .map(|provider| Arc::clone(provider) as Arc<dyn LanguageModelProvider>),
+                ),
             )
             .unwrap();
-            let availability = crate::availability::ModelAvailabilitySnapshot::new(vec![
-                crate::availability::ModelAvailabilityEntry {
-                    provider_id: f.descriptor.provider_id,
-                    model_id: f.descriptor.model_id,
-                    state: crate::availability::ModelAvailabilityState::Available,
-                },
-            ])
+            let tokenizer = SentinelTokenizer {
+                inner: ScriptedModelInputTokenizer::new(tokenizer_descriptor, token_outcomes)
+                    .unwrap(),
+                private_diagnostic: "tokenizer-private-sentinel".into(),
+            };
+            let authorized_descriptors = [
+                selected.descriptor(),
+                other.descriptor(),
+                unavailable.descriptor(),
+                omitted.descriptor(),
+                byte_ineligible.descriptor(),
+            ];
+            let authorization = crate::authorization::RemoteModelAuthorization::new(
+                filtered.filtered_compilation.replay_anchor.clone(),
+                authorized_descriptors
+                    .into_iter()
+                    .map(
+                        |descriptor| crate::authorization::RemoteModelAuthorizationEntry {
+                            provider_id: descriptor.provider_id,
+                            model_id: descriptor.model_id,
+                            privacy_class: descriptor.privacy_class,
+                        },
+                    )
+                    .collect(),
+            )
+            .unwrap();
+            let availability = crate::availability::ModelAvailabilitySnapshot::new(
+                [
+                    selected.descriptor(),
+                    other.descriptor(),
+                    unauthorized.descriptor(),
+                    unavailable.descriptor(),
+                    byte_ineligible.descriptor(),
+                    local.descriptor(),
+                ]
+                .into_iter()
+                .map(|descriptor| crate::availability::ModelAvailabilityEntry {
+                    provider_id: descriptor.provider_id,
+                    model_id: descriptor.model_id,
+                    state: if descriptor == unavailable.descriptor() {
+                        crate::availability::ModelAvailabilityState::Unavailable
+                    } else {
+                        crate::availability::ModelAvailabilityState::Available
+                    },
+                })
+                .collect(),
+            )
             .unwrap();
             let error = crate::generation::select_filtered_authorized_available_remote_model_tokenize_invoke_validate_reported_usage_and_admit(
                 &registry,
                 f.request.invocation_id,
-                &remote_selection_requirements(vec![PrivacyClass::ApprovedRemote]),
+                &requirements,
                 &availability,
                 &authorization,
                 version,
@@ -14529,20 +14724,33 @@ mod tests {
                 Outer::UsageValidatedTokenizedInvocationAdmission(expected),
                 "nested mode {mode}"
             );
-            assert_eq!(tokenizer.remaining().unwrap(), usize::from(mode <= 2));
+            assert_eq!(tokenizer.inner.remaining().unwrap(), usize::from(mode <= 2));
             assert_eq!(selected.remaining(), if mode < 6 { 2 } else { 1 });
-            assert_eq!(untouched.remaining(), 1);
-            let diagnostics = format!("{error:?} {error}");
-            for sentinel in [
-                "prompt-private-sentinel",
-                "learner-private-sentinel",
-                "response-private-sentinel",
-                "provider-private-sentinel",
-                "endpoint-private-sentinel",
-                "credential-private-sentinel",
-            ] {
-                assert!(!diagnostics.contains(sentinel));
+            for provider in untouched {
+                assert_eq!(
+                    provider.remaining(),
+                    1,
+                    "mode {mode} touched a disjoint provider"
+                );
             }
+            assert_content_free_diagnostics(
+                &error,
+                &[
+                    "prompt-private-sentinel",
+                    "identity-private-sentinel",
+                    "learner-private-sentinel",
+                    "knowledge-private-sentinel",
+                    "conversation-private-sentinel",
+                    "tool-private-sentinel",
+                    "authorization-private-sentinel",
+                    "tokenizer-private-sentinel",
+                    "provider-private-sentinel",
+                    "endpoint-private-sentinel",
+                    "credential-private-sentinel",
+                    "response-private-sentinel",
+                    "usage-private-sentinel",
+                ],
+            );
         }
     }
 
