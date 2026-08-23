@@ -41,6 +41,7 @@ macro_rules! validating_deserialize {
             }
         }
     };
+
 }
 
 pub const V1: ProtocolVersion = ProtocolVersion::new(1, 0);
@@ -11228,5 +11229,119 @@ mod tests {
                 }
             }
         }
+    }
+    #[test]
+    fn available_local_usage_validated_tokenized_composition_preserves_order_and_usage() {
+        use crate::availability::{
+            ModelAvailabilityEntry, ModelAvailabilityError, ModelAvailabilitySnapshot,
+            ModelAvailabilityState,
+        };
+        use crate::generation::{
+            select_available_local_model_tokenize_invoke_validate_reported_usage_and_admit,
+            AvailableLocalUsageValidatedTokenizedInvocationAdmissionError as Outer,
+            UsageValidatedTokenizedInvocationAdmissionError as Inner,
+        };
+        use crate::model::{
+            LanguageModelProvider, ModelUsage, ScriptedModelProvider, ScriptedOutcome,
+        };
+        use crate::registry::ModelRegistry;
+        use crate::tokenization::{
+            ScriptedModelInputTokenizer, ScriptedTokenizationOutcome, MODEL_INPUT_TOKENIZATION_V1,
+        };
+        use crate::usage::ModelResponseReportedUsageValidationError;
+        use std::sync::Arc;
+
+        let mut f = admission_fixture();
+        f.response.reported_usage = Some(ModelUsage {
+            input_tokens: 6,
+            output_tokens: 1,
+        });
+        let provider = Arc::new(
+            ScriptedModelProvider::new(
+                f.descriptor.clone(),
+                [ScriptedOutcome::Response(f.response.clone())],
+            )
+            .unwrap(),
+        );
+        let registry =
+            ModelRegistry::try_from_providers([provider.clone() as Arc<dyn LanguageModelProvider>])
+                .unwrap();
+        let tokenizer = ScriptedModelInputTokenizer::new(
+            f.descriptor.clone(),
+            [ScriptedTokenizationOutcome::TokenCount(7)],
+        )
+        .unwrap();
+        let availability = ModelAvailabilitySnapshot::new(vec![ModelAvailabilityEntry {
+            provider_id: f.descriptor.provider_id,
+            model_id: f.descriptor.model_id,
+            state: ModelAvailabilityState::Available,
+        }])
+        .unwrap();
+
+        let mut invalid = local_selection_requirements();
+        invalid.privacy_preference.clear();
+        assert_eq!(
+            select_available_local_model_tokenize_invoke_validate_reported_usage_and_admit(
+                &registry,
+                f.request.invocation_id,
+                &invalid,
+                &ModelAvailabilitySnapshot::new(vec![]).unwrap(),
+                MODEL_INPUT_TOKENIZATION_V1,
+                &tokenizer,
+                &f.compilation,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            ),
+            Err(Outer::InvalidLocalOnlyRequirements)
+        );
+        assert_eq!(tokenizer.remaining().unwrap(), 1);
+        assert_eq!(provider.remaining(), 1);
+
+        assert_eq!(
+            select_available_local_model_tokenize_invoke_validate_reported_usage_and_admit(
+                &registry,
+                f.request.invocation_id,
+                &local_selection_requirements(),
+                &ModelAvailabilitySnapshot::new(vec![]).unwrap(),
+                MODEL_INPUT_TOKENIZATION_V1,
+                &tokenizer,
+                &f.compilation,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            ),
+            Err(Outer::AvailabilitySelection(
+                ModelAvailabilityError::Selection(
+                    crate::selection::ModelSelectionError::NoEligibleModel
+                )
+            ))
+        );
+        assert_eq!(tokenizer.remaining().unwrap(), 1);
+        assert_eq!(provider.remaining(), 1);
+
+        let error = select_available_local_model_tokenize_invoke_validate_reported_usage_and_admit(
+            &registry,
+            f.request.invocation_id,
+            &local_selection_requirements(),
+            &availability,
+            MODEL_INPUT_TOKENIZATION_V1,
+            &tokenizer,
+            &f.compilation,
+            &f.authority,
+            &f.context,
+            &f.citations,
+        )
+        .unwrap_err();
+        assert_eq!(
+            error,
+            Outer::UsageValidatedTokenizedInvocationAdmission(Inner::ReportedUsage(
+                ModelResponseReportedUsageValidationError::InputTokenCountMismatch
+            ))
+        );
+        assert_eq!(tokenizer.remaining().unwrap(), 0);
+        assert_eq!(provider.remaining(), 0);
+        let diagnostics = format!("{error:?} {error}");
+        assert!(!diagnostics.contains(f.compilation.model_input.as_str()));
     }
 }

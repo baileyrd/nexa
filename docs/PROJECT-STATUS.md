@@ -51,3 +51,14 @@ The current Cargo workspace contains the contract kernel; avatar/3D; student, pe
 2. Confirm PR #41 / `7c8de456e51cd4031e26ff33fe8011e7cbec7989` is the verified predecessor on `main`, then inspect later merges and read ADRs 0036 through 0047 after ADRs 0021–0035.
 3. Choose a later evidence-backed incomplete Phase 4 increment after ADR-0047's explicit local-only selection and reported-usage-validated exact-tokenization invocation/admission composition, without assuming this task's eventual merge SHA; state its exclusions and identify specification/ADR/traceability impact before coding.
 4. Keep the PR independently reviewable, report documentation/implementation conflicts, and run every validation command in `AGENTS.md`.
+
+## ADR-0048 available-local selection with reported-usage-validated exact-tokenization invocation and admission
+
+| Requirement | Evidence | Status |
+|---|---|---|
+| Explicit-local validation and unchanged caller-availability-gated selection precede dependencies | `select_available_local_model_tokenize_invoke_validate_reported_usage_and_admit`; focused direct wrapper ordering and dependency-accounting tests | Implemented slice |
+| Exact ADR-0042 request construction followed by unchanged ADR-0046 | Direct delegation using the selected original shared provider, exact request, and caller tokenizer | Implemented slice |
+| Optional reported usage and single-attempt behavior | Direct absent/equal/lower/higher, response, admission, and untouched-provider evidence | Implemented slice |
+| Limited authority and existing APIs | Availability remains caller-supplied eligibility evidence only; usage establishes structural association and equality only; ADRs 0022–0047 remain unchanged | Preserved |
+
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. Caller-supplied availability grants no freshness/authenticity, health-monitoring, recovery, or authorization authority. Reported input usage grants no tokenizer/provider truth, billing/cost, output-token, telemetry, or semantic authority. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.

@@ -348,3 +348,15 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Existing APIs and explicit deferrals | ADRs 0022 through 0046 unchanged; no availability, authorization, routing, retry, concrete dependency, networking, telemetry, or semantic authority | Preserved |
 
 NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
+
+## ADR-0048 available-local usage-validated tokenized composition
+
+| Requirement | Evidence | Status |
+|---|---|---|
+| Local-only gate before availability and dependencies | New direct `available_local_usage_validated_tokenized_composition` focused tests; exact outer errors and remaining FIFO outcomes | Implemented slice |
+| Unchanged ADR-0029 availability selection and exact ADR-0042 request | Canonical selected original provider and untouched unavailable, omitted, non-selected, and remote provider assertions | Implemented slice |
+| Unchanged complete ADR-0046 ordering | Nested preflight, tokenization/capacity, invocation, reported-response/usage, and admission errors with exact dependency counts | Implemented slice |
+| Exact success and limited authority | Exact generated evidence and direct ADR-0046 admission equality; absent/equal usage succeeds and mismatches fail | Implemented slice |
+| Existing APIs and exclusions | ADRs 0022–0047 unchanged; no acquisition, authorization, routing, retry, fallback, concrete dependency, networking, telemetry, persistence, or semantic authority | Preserved |
+
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. Availability is caller-supplied eligibility evidence only and grants no freshness/authenticity, monitoring, recovery, or authorization authority. Optional usage equality grants no tokenizer/provider truth, billing/cost, output-token, telemetry, or semantic authority. The known ingestion/context checklist inconsistency is preserved.
