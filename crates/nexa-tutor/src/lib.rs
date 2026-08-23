@@ -2910,6 +2910,7 @@ mod tests {
     #[test]
     fn usage_validated_tokenized_invocation_enforces_order_and_exact_usage() {
         use crate::generation::{
+            tokenize_invoke_and_admit_model_output_with_token_capacity,
             tokenize_invoke_validate_reported_usage_and_admit_model_output_with_token_capacity,
             UsageValidatedTokenizedInvocationAdmissionError as Error,
         };
@@ -2917,9 +2918,9 @@ mod tests {
             ModelErrorKind, ModelUsage, RawModelOutput, ScriptedModelProvider, ScriptedOutcome,
         };
         use crate::tokenization::{
-            ModelRequestTokenCapacityError, ScriptedModelInputTokenizer,
-            ScriptedTokenizationOutcome, TokenizeAndValidateModelRequestCapacityError,
-            MODEL_INPUT_TOKENIZATION_V1,
+            ModelInputTokenizationError, ModelRequestTokenCapacityError,
+            ScriptedModelInputTokenizer, ScriptedTokenizationOutcome,
+            TokenizeAndValidateModelRequestCapacityError, MODEL_INPUT_TOKENIZATION_V1,
         };
         use crate::usage::ModelResponseReportedUsageValidationError as UsageError;
 
@@ -2955,15 +2956,39 @@ mod tests {
             let mut fixture = admission_fixture();
             fixture.response.reported_usage = reported_usage;
             let expected_admission = fixture.admit().unwrap();
+            let direct_tokenizer = ScriptedModelInputTokenizer::new(
+                fixture.descriptor.clone(),
+                [ScriptedTokenizationOutcome::TokenCount(7)],
+            )
+            .unwrap();
+            let direct_provider = ScriptedModelProvider::new(
+                fixture.descriptor.clone(),
+                [ScriptedOutcome::Response(fixture.response.clone())],
+            )
+            .unwrap();
+            let direct = tokenize_invoke_and_admit_model_output_with_token_capacity(
+                MODEL_INPUT_TOKENIZATION_V1,
+                &direct_tokenizer,
+                &direct_provider,
+                &fixture.request,
+                &fixture.compilation,
+                &fixture.authority,
+                &fixture.context,
+                &fixture.citations,
+            )
+            .unwrap();
             let (result, tokenizer_remaining, provider_remaining) = invoke(
                 &fixture,
                 7,
                 vec![ScriptedOutcome::Response(fixture.response.clone())],
             );
             let result = result.unwrap();
-            assert_eq!(result.tokenization_evidence.input_token_count, 7);
+            assert_eq!(result.tokenization_evidence, direct.tokenization_evidence);
             assert_eq!(result.admission, expected_admission);
+            assert_eq!(result.admission, direct.admission);
             assert_eq!((tokenizer_remaining, provider_remaining), (0, 0));
+            assert_eq!(direct_tokenizer.remaining().unwrap(), 0);
+            assert_eq!(direct_provider.remaining(), 0);
         }
 
         for reported in [6, 8] {
@@ -2999,6 +3024,76 @@ mod tests {
             ))
         );
         assert_eq!((tokenizer_remaining, provider_remaining), (0, 1));
+
+        // Every failure reachable while producing exact tokenization evidence retains its
+        // unchanged nested error and cannot consume a provider outcome.
+        let fixture = admission_fixture();
+        let cases = [
+            (
+                ProtocolVersion::new(2, 0),
+                fixture.descriptor.clone(),
+                vec![ScriptedTokenizationOutcome::TokenCount(7)],
+                ModelInputTokenizationError::UnsupportedVersion,
+                1,
+            ),
+            (
+                MODEL_INPUT_TOKENIZATION_V1,
+                {
+                    let mut descriptor = fixture.descriptor.clone();
+                    descriptor.provider_id = id(700, nexa_domain::ModelProviderId::new);
+                    descriptor
+                },
+                vec![ScriptedTokenizationOutcome::TokenCount(7)],
+                ModelInputTokenizationError::InvalidDescriptor,
+                1,
+            ),
+            (
+                MODEL_INPUT_TOKENIZATION_V1,
+                fixture.descriptor.clone(),
+                vec![ScriptedTokenizationOutcome::Error],
+                ModelInputTokenizationError::TokenizerFailure,
+                0,
+            ),
+            (
+                MODEL_INPUT_TOKENIZATION_V1,
+                fixture.descriptor.clone(),
+                vec![],
+                ModelInputTokenizationError::ScriptExhausted,
+                0,
+            ),
+            (
+                MODEL_INPUT_TOKENIZATION_V1,
+                fixture.descriptor.clone(),
+                vec![ScriptedTokenizationOutcome::TokenCount(0)],
+                ModelInputTokenizationError::InvalidEvidence,
+                0,
+            ),
+        ];
+        for (version, descriptor, outcomes, expected, remaining) in cases {
+            let tokenizer = ScriptedModelInputTokenizer::new(descriptor, outcomes).unwrap();
+            let provider = ScriptedModelProvider::new(
+                fixture.descriptor.clone(),
+                [ScriptedOutcome::Response(fixture.response.clone())],
+            )
+            .unwrap();
+            assert_eq!(
+                tokenize_invoke_validate_reported_usage_and_admit_model_output_with_token_capacity(
+                    version,
+                    &tokenizer,
+                    &provider,
+                    &fixture.request,
+                    &fixture.compilation,
+                    &fixture.authority,
+                    &fixture.context,
+                    &fixture.citations,
+                ),
+                Err(Error::TokenizationCapacity(
+                    TokenizeAndValidateModelRequestCapacityError::Tokenization(expected)
+                ))
+            );
+            assert_eq!(tokenizer.remaining().unwrap(), remaining);
+            assert_eq!(provider.remaining(), 1);
+        }
 
         let fixture = admission_fixture();
         let (result, tokenizer_remaining, provider_remaining) = invoke(
@@ -3044,6 +3139,45 @@ mod tests {
         assert_eq!(tokenizer.remaining().unwrap(), 0);
         assert_eq!(provider.calls(), 1);
 
+        for mutation in 0..2 {
+            let mut fixture = admission_fixture();
+            fixture.response.reported_usage = Some(ModelUsage {
+                input_tokens: 6,
+                output_tokens: 1,
+            });
+            fixture.response.output = RawModelOutput::new("not json").unwrap();
+            let expected = if mutation == 0 {
+                fixture.response.invocation_id = id(702, nexa_domain::ModelInvocationId::new);
+                ModelErrorKind::IdentityMismatch
+            } else {
+                fixture.response.contract_version = ProtocolVersion::new(2, 0);
+                ModelErrorKind::UnsupportedVersion
+            };
+            let tokenizer = ScriptedModelInputTokenizer::new(
+                fixture.descriptor.clone(),
+                [ScriptedTokenizationOutcome::TokenCount(7)],
+            )
+            .unwrap();
+            let provider = CountingProvider::new(&fixture);
+            let result =
+                tokenize_invoke_validate_reported_usage_and_admit_model_output_with_token_capacity(
+                    MODEL_INPUT_TOKENIZATION_V1,
+                    &tokenizer,
+                    &provider,
+                    &fixture.request,
+                    &fixture.compilation,
+                    &fixture.authority,
+                    &fixture.context,
+                    &fixture.citations,
+                );
+            assert_eq!(
+                result,
+                Err(Error::ReportedUsage(UsageError::Response(expected)))
+            );
+            assert_eq!(tokenizer.remaining().unwrap(), 0);
+            assert_eq!(provider.calls(), 1);
+        }
+
         let mut fixture = admission_fixture();
         fixture.response.output = RawModelOutput::new("not json").unwrap();
         let (result, tokenizer_remaining, provider_remaining) = invoke(
@@ -3062,24 +3196,173 @@ mod tests {
 
     #[test]
     fn usage_validated_tokenized_invocation_error_diagnostics_are_content_free() {
-        use crate::generation::UsageValidatedTokenizedInvocationAdmissionError as Error;
-        use crate::tokenization::{
-            ModelInputTokenizationError, TokenizeAndValidateModelRequestCapacityError,
+        use crate::generation::{
+            tokenize_invoke_validate_reported_usage_and_admit_model_output_with_token_capacity,
+            UsageValidatedTokenizedInvocationAdmissionError as Error,
         };
-        use crate::usage::ModelResponseReportedUsageValidationError as UsageError;
+        use crate::model::{
+            ModelErrorKind, ModelUsage, RawModelOutput, ScriptedModelProvider, ScriptedOutcome,
+        };
+        use crate::tokenization::{
+            ScriptedModelInputTokenizer, ScriptedTokenizationOutcome, MODEL_INPUT_TOKENIZATION_V1,
+        };
+
+        let run = |fixture: &AdmissionFixture, version, token_outcomes, provider_outcomes| {
+            let tokenizer =
+                ScriptedModelInputTokenizer::new(fixture.descriptor.clone(), token_outcomes)
+                    .unwrap();
+            let provider =
+                ScriptedModelProvider::new(fixture.descriptor.clone(), provider_outcomes).unwrap();
+            tokenize_invoke_validate_reported_usage_and_admit_model_output_with_token_capacity(
+                version,
+                &tokenizer,
+                &provider,
+                &fixture.request,
+                &fixture.compilation,
+                &fixture.authority,
+                &fixture.context,
+                &fixture.citations,
+            )
+            .unwrap_err()
+        };
+
+        let mut errors = Vec::new();
+        let mut fixture = admission_fixture();
+        fixture.compilation.contract_version = ProtocolVersion::new(2, 0);
+        errors.push(run(
+            &fixture,
+            MODEL_INPUT_TOKENIZATION_V1,
+            vec![ScriptedTokenizationOutcome::TokenCount(7)],
+            vec![ScriptedOutcome::Response(fixture.response.clone())],
+        ));
 
         let fixture = admission_fixture();
-        let errors = [
-            Error::Preflight(crate::admission::AdmissionError::InvalidDescriptorRequest),
-            Error::TokenizationCapacity(
-                TokenizeAndValidateModelRequestCapacityError::Tokenization(
-                    ModelInputTokenizationError::Internal,
-                ),
+        for (version, outcomes) in [
+            (
+                ProtocolVersion::new(2, 0),
+                vec![ScriptedTokenizationOutcome::TokenCount(7)],
             ),
-            Error::Invocation(crate::model::ModelErrorKind::Internal),
-            Error::ReportedUsage(UsageError::InputTokenCountMismatch),
-            Error::Admission(crate::admission::AdmissionError::MalformedSyntax),
-        ];
+            (
+                MODEL_INPUT_TOKENIZATION_V1,
+                vec![ScriptedTokenizationOutcome::Error],
+            ),
+            (MODEL_INPUT_TOKENIZATION_V1, vec![]),
+            (
+                MODEL_INPUT_TOKENIZATION_V1,
+                vec![ScriptedTokenizationOutcome::TokenCount(0)],
+            ),
+            (
+                MODEL_INPUT_TOKENIZATION_V1,
+                vec![ScriptedTokenizationOutcome::TokenCount(
+                    fixture.descriptor.capabilities.context_window_tokens,
+                )],
+            ),
+        ] {
+            errors.push(run(
+                &fixture,
+                version,
+                outcomes,
+                vec![ScriptedOutcome::Response(fixture.response.clone())],
+            ));
+        }
+        // Descriptor/tokenizer association is the remaining tokenization failure shape.
+        let tokenizer_fixture = admission_fixture();
+        let mut other_descriptor = tokenizer_fixture.descriptor.clone();
+        other_descriptor.provider_id = id(703, nexa_domain::ModelProviderId::new);
+        let tokenizer = ScriptedModelInputTokenizer::new(
+            other_descriptor,
+            [ScriptedTokenizationOutcome::TokenCount(7)],
+        )
+        .unwrap();
+        let provider = ScriptedModelProvider::new(
+            tokenizer_fixture.descriptor.clone(),
+            [ScriptedOutcome::Response(
+                tokenizer_fixture.response.clone(),
+            )],
+        )
+        .unwrap();
+        errors.push(
+            tokenize_invoke_validate_reported_usage_and_admit_model_output_with_token_capacity(
+                MODEL_INPUT_TOKENIZATION_V1,
+                &tokenizer,
+                &provider,
+                &tokenizer_fixture.request,
+                &tokenizer_fixture.compilation,
+                &tokenizer_fixture.authority,
+                &tokenizer_fixture.context,
+                &tokenizer_fixture.citations,
+            )
+            .unwrap_err(),
+        );
+
+        errors.push(run(
+            &fixture,
+            MODEL_INPUT_TOKENIZATION_V1,
+            vec![ScriptedTokenizationOutcome::TokenCount(7)],
+            vec![ScriptedOutcome::Error(ModelErrorKind::Internal)],
+        ));
+        for mutation in 0..3 {
+            let mut fixture = admission_fixture();
+            fixture.response.reported_usage = Some(ModelUsage {
+                input_tokens: 6,
+                output_tokens: 1,
+            });
+            if mutation == 0 {
+                fixture
+                    .response
+                    .reported_usage
+                    .as_mut()
+                    .unwrap()
+                    .output_tokens = fixture.request.maximum_output_tokens + 1;
+            } else if mutation == 1 {
+                fixture.response.invocation_id = id(704, nexa_domain::ModelInvocationId::new);
+            } else {
+                fixture.response.contract_version = ProtocolVersion::new(2, 0);
+            }
+            let tokenizer = ScriptedModelInputTokenizer::new(
+                fixture.descriptor.clone(),
+                [ScriptedTokenizationOutcome::TokenCount(7)],
+            )
+            .unwrap();
+            let provider = CountingProvider::new(&fixture);
+            errors.push(
+                tokenize_invoke_validate_reported_usage_and_admit_model_output_with_token_capacity(
+                    MODEL_INPUT_TOKENIZATION_V1,
+                    &tokenizer,
+                    &provider,
+                    &fixture.request,
+                    &fixture.compilation,
+                    &fixture.authority,
+                    &fixture.context,
+                    &fixture.citations,
+                )
+                .unwrap_err(),
+            );
+        }
+        let mut fixture = admission_fixture();
+        fixture.response.output = RawModelOutput::new("response-output-sentinel not json").unwrap();
+        errors.push(run(
+            &fixture,
+            MODEL_INPUT_TOKENIZATION_V1,
+            vec![ScriptedTokenizationOutcome::TokenCount(7)],
+            vec![ScriptedOutcome::Response(fixture.response.clone())],
+        ));
+
+        assert!(errors
+            .iter()
+            .any(|error| matches!(error, Error::Preflight(_))));
+        assert!(errors
+            .iter()
+            .any(|error| matches!(error, Error::TokenizationCapacity(_))));
+        assert!(errors
+            .iter()
+            .any(|error| matches!(error, Error::Invocation(_))));
+        assert!(errors
+            .iter()
+            .any(|error| matches!(error, Error::ReportedUsage(_))));
+        assert!(errors
+            .iter()
+            .any(|error| matches!(error, Error::Admission(_))));
         let sentinels = [
             fixture.request.input.as_str(),
             fixture.response.output.as_str(),

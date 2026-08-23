@@ -94,6 +94,7 @@ Phase 4 is **in progress**. Governed caller-supplied embeddings and deterministi
 | Static selection | Deferred by ADR-0026 and implemented separately by ADR-0027 | Implemented slice |
 | Dynamic routing, automatic local-first policy, fallback, privacy authorization, concrete providers, and inference | Still deferred; ADR-0025 continues to require an explicitly supplied provider | Not implemented |
 
+
 ## Deterministic model selection
 
 | Requirement | Evidence | Status |
@@ -191,6 +192,7 @@ NEXA-TUTOR-001 remains Baseline Draft; the reserved privacy specification namesp
 | ADR-0032 invocation, general privacy policy/correctness, semantic filtering/redaction, partial truncation, and existing provider/routing/networking/persistence scope | Explicitly deferred by ADR-0034 | Not implemented |
 
 NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy namespace remains reserved. The known ingestion/context roadmap inconsistency is preserved.
+
 
 ## Filtered authorized available remote invocation and admission
 
@@ -291,6 +293,7 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Existing APIs and deferrals | ADRs 0029, 0030, 0040, and 0041 unchanged; no probing, token-aware selection, fallback, retry, or concrete dependency | Preserved |
 
 NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
+
 
 ## ADR-0043 authorized available remote selection and exact-tokenization composition
 
