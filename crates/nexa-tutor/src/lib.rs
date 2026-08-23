@@ -7230,6 +7230,16 @@ mod tests {
 
         let mut unsupported_requirements = requirements.clone();
         unsupported_requirements.contract_version = ProtocolVersion::new(2, 0);
+        let mut local_only_requirements = requirements.clone();
+        local_only_requirements.privacy_preference = vec![PrivacyClass::LocalOnly];
+        let mut mixed_requirements = requirements.clone();
+        mixed_requirements.privacy_preference =
+            vec![PrivacyClass::ApprovedRemote, PrivacyClass::LocalOnly];
+        let mut empty_requirements = requirements.clone();
+        empty_requirements.privacy_preference.clear();
+        let mut duplicate_requirements = requirements.clone();
+        duplicate_requirements.privacy_preference =
+            vec![PrivacyClass::ApprovedRemote, PrivacyClass::ApprovedRemote];
         let mut unsupported_authorization = valid_authorization.clone();
         unsupported_authorization.contract_version = ProtocolVersion::new(2, 0);
         let mut malformed_authorization = valid_authorization.clone();
@@ -7240,6 +7250,14 @@ mod tests {
             f.compilation.replay_anchor.clone(),
             vec![RemoteModelAuthorizationEntry {
                 model_id: id(99_001, ModelId::new),
+                ..entry
+            }],
+        )
+        .unwrap();
+        let privacy_mismatch = RemoteModelAuthorization::new(
+            f.compilation.replay_anchor.clone(),
+            vec![RemoteModelAuthorizationEntry {
+                privacy_class: PrivacyClass::RestrictedRemote,
                 ..entry
             }],
         )
@@ -7273,6 +7291,30 @@ mod tests {
                 RemoteAuthorizationError::InvalidRemoteRequirements,
             ),
             (
+                &local_only_requirements,
+                &valid_availability,
+                &valid_authorization,
+                RemoteAuthorizationError::InvalidRemoteRequirements,
+            ),
+            (
+                &mixed_requirements,
+                &valid_availability,
+                &valid_authorization,
+                RemoteAuthorizationError::InvalidRemoteRequirements,
+            ),
+            (
+                &empty_requirements,
+                &valid_availability,
+                &valid_authorization,
+                RemoteAuthorizationError::InvalidRemoteRequirements,
+            ),
+            (
+                &duplicate_requirements,
+                &valid_availability,
+                &valid_authorization,
+                RemoteAuthorizationError::InvalidRemoteRequirements,
+            ),
+            (
                 &requirements,
                 &valid_availability,
                 &unsupported_authorization,
@@ -7294,6 +7336,12 @@ mod tests {
                 &requirements,
                 &valid_availability,
                 &bad_registry,
+                RemoteAuthorizationError::AuthorizationRegistryInconsistency,
+            ),
+            (
+                &requirements,
+                &valid_availability,
+                &privacy_mismatch,
                 RemoteAuthorizationError::AuthorizationRegistryInconsistency,
             ),
             (
@@ -7387,10 +7435,14 @@ mod tests {
         use nexa_domain::{ModelId, ModelInvocationId, ModelProviderId, ProtocolVersion};
         use std::sync::Arc;
 
-        for mode in 0..7 {
+        for (mode, reverse_registry_order) in (0..7).flat_map(|mode| [(mode, false), (mode, true)])
+        {
             let mut f = admission_fixture();
             f.context.tokenizer_profile_id = "knowledge-private-sentinel".into();
-            let invocation_id = id(99_100 + mode, ModelInvocationId::new);
+            let invocation_id = id(
+                99_100 + mode * 2 + u128::from(reverse_registry_order),
+                ModelInvocationId::new,
+            );
             let mut selected_descriptor = f.descriptor.clone();
             selected_descriptor.provider_id = id(99_110, ModelProviderId::new);
             selected_descriptor.model_id = id(99_110, ModelId::new);
@@ -7437,7 +7489,7 @@ mod tests {
                 )
                 .unwrap(),
             );
-            let providers: Vec<Arc<dyn LanguageModelProvider>> = if mode % 2 == 0 {
+            let providers: Vec<Arc<dyn LanguageModelProvider>> = if reverse_registry_order {
                 vec![other.clone(), local.clone(), selected.clone()]
             } else {
                 vec![selected.clone(), local.clone(), other.clone()]
@@ -7458,11 +7510,18 @@ mod tests {
             .unwrap();
             let authorization = RemoteModelAuthorization::new(
                 f.compilation.replay_anchor.clone(),
-                vec![RemoteModelAuthorizationEntry {
-                    provider_id: selected_descriptor.provider_id,
-                    model_id: selected_descriptor.model_id,
-                    privacy_class: selected_descriptor.privacy_class,
-                }],
+                vec![
+                    RemoteModelAuthorizationEntry {
+                        provider_id: selected_descriptor.provider_id,
+                        model_id: selected_descriptor.model_id,
+                        privacy_class: selected_descriptor.privacy_class,
+                    },
+                    RemoteModelAuthorizationEntry {
+                        provider_id: other_descriptor.provider_id,
+                        model_id: other_descriptor.model_id,
+                        privacy_class: other_descriptor.privacy_class,
+                    },
+                ],
             )
             .unwrap();
             let requirements = remote_selection_requirements(vec![PrivacyClass::ApprovedRemote]);
