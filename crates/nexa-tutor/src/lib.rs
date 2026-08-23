@@ -13659,14 +13659,17 @@ mod tests {
     #[test]
     fn filtered_remote_usage_validated_tokenized_composition_returns_exact_filtered_evidence_and_admission(
     ) {
-        use crate::admission::admit_model_output;
         use crate::authorization::{RemoteModelAuthorization, RemoteModelAuthorizationEntry};
         use crate::availability::{
             ModelAvailabilityEntry, ModelAvailabilitySnapshot, ModelAvailabilityState,
         };
-        use crate::generation::select_filtered_authorized_available_remote_model_tokenize_invoke_validate_reported_usage_and_admit;
+        use crate::generation::{
+            select_filtered_authorized_available_remote_model_tokenize_invoke_validate_reported_usage_and_admit,
+            tokenize_invoke_validate_reported_usage_and_admit_model_output_with_token_capacity,
+        };
         use crate::model::{
-            LanguageModelProvider, PrivacyClass, ScriptedModelProvider, ScriptedOutcome,
+            LanguageModelProvider, ModelRequest, ModelUsage, PrivacyClass, ScriptedModelProvider,
+            ScriptedOutcome, MODEL_INVOCATION_V1,
         };
         use crate::registry::ModelRegistry;
         use crate::tokenization::{
@@ -13674,11 +13677,18 @@ mod tests {
         };
         use std::sync::Arc;
 
-        for reverse in [false, true] {
-            let f = admission_fixture();
+        for (reverse, reported_usage) in [false, true]
+            .into_iter()
+            .flat_map(|reverse| [(reverse, None), (reverse, Some(7))])
+        {
+            let mut f = admission_fixture();
             let filtered = filtered_remote_fixture(PrivacyClass::ApprovedRemote);
             let mut descriptor = f.descriptor.clone();
             descriptor.privacy_class = PrivacyClass::ApprovedRemote;
+            f.response.reported_usage = reported_usage.map(|input_tokens| ModelUsage {
+                input_tokens,
+                output_tokens: 1,
+            });
             let selected = Arc::new(
                 ScriptedModelProvider::new(
                     descriptor.clone(),
@@ -13735,7 +13745,7 @@ mod tests {
             .unwrap();
             let tokenizer = ScriptedModelInputTokenizer::new(
                 descriptor.clone(),
-                [ScriptedTokenizationOutcome::TokenCount(1)],
+                [ScriptedTokenizationOutcome::TokenCount(7)],
             )
             .unwrap();
             let result =
@@ -13757,19 +13767,67 @@ mod tests {
                 .tokenization_evidence
                 .validate_for(&descriptor, &filtered.filtered_compilation.model_input)
                 .unwrap();
-            let mut expected_request = f.request.clone();
-            expected_request.input = filtered.filtered_compilation.model_input.clone();
-            let expected = admit_model_output(
-                &descriptor,
-                &expected_request,
-                &f.response,
-                &filtered.filtered_compilation,
-                &f.authority,
-                &f.context,
-                &f.citations,
+            let expected_request = ModelRequest {
+                invocation_id: f.request.invocation_id,
+                provider_id: descriptor.provider_id,
+                model_id: descriptor.model_id,
+                contract_version: MODEL_INVOCATION_V1,
+                input: filtered.filtered_compilation.model_input.clone(),
+                required_capabilities: remote_selection_requirements(vec![
+                    PrivacyClass::ApprovedRemote,
+                ])
+                .required_capabilities,
+                maximum_output_tokens: remote_selection_requirements(vec![
+                    PrivacyClass::ApprovedRemote,
+                ])
+                .maximum_output_tokens,
+            };
+            let direct_provider = ScriptedModelProvider::new(
+                descriptor.clone(),
+                [ScriptedOutcome::Response(f.response.clone())],
             )
             .unwrap();
-            assert_eq!(result.admission, expected);
+            let direct_tokenizer = ScriptedModelInputTokenizer::new(
+                descriptor.clone(),
+                [ScriptedTokenizationOutcome::TokenCount(7)],
+            )
+            .unwrap();
+            let expected =
+                tokenize_invoke_validate_reported_usage_and_admit_model_output_with_token_capacity(
+                    MODEL_INPUT_TOKENIZATION_V1,
+                    &direct_tokenizer,
+                    &direct_provider,
+                    &expected_request,
+                    &filtered.filtered_compilation,
+                    &f.authority,
+                    &f.context,
+                    &f.citations,
+                )
+                .unwrap();
+            assert_eq!(result, expected);
+            assert_eq!(result.tokenization_evidence.input_token_count, 7);
+            let filtered_input = filtered.filtered_compilation.model_input.as_str();
+            for included in [
+                "prompt-private-sentinel",
+                "identity-private-sentinel",
+                "policy",
+                "pedagogy",
+                "learner-private-sentinel",
+                "input",
+                "output",
+            ] {
+                assert!(filtered_input.contains(included), "missing {included}");
+            }
+            for omitted in [
+                "knowledge-private-sentinel",
+                "conversation-private-sentinel",
+                "tool-private-sentinel",
+            ] {
+                assert!(!filtered_input.contains(omitted), "retained {omitted}");
+                assert!(!format!("{result:?}").contains(omitted), "leaked {omitted}");
+            }
+            assert_eq!(direct_tokenizer.remaining().unwrap(), 0);
+            assert_eq!(direct_provider.remaining(), 0);
             assert_eq!(tokenizer.remaining().unwrap(), 0);
             assert_eq!(selected.remaining(), 0);
             assert_eq!(other.remaining(), 1);
@@ -14095,7 +14153,21 @@ mod tests {
                 )
             };
             assert_eq!(call(r, a, auth, &filtered), Err(error));
-            assert!(!format!("{error:?} {error}").contains("authorization-private-sentinel"));
+            let diagnostic = format!("{error:?} {error}");
+            for sentinel in [
+                "prompt-private-sentinel",
+                "learner-private-sentinel",
+                "knowledge-private-sentinel",
+                "authorization-private-sentinel",
+                "tokenizer-private-sentinel",
+                "provider-private-sentinel",
+                "endpoint-private-sentinel",
+                "credential-private-sentinel",
+                "response-private-sentinel",
+                "usage-private-sentinel",
+            ] {
+                assert!(!diagnostic.contains(sentinel), "leaked {sentinel}");
+            }
             assert_eq!(tokenizer.remaining().unwrap(), 1);
             assert_eq!(provider.remaining(), 1);
         }
@@ -14114,6 +14186,364 @@ mod tests {
         );
         assert_eq!(tokenizer.remaining().unwrap(), 1);
         assert_eq!(provider.remaining(), 1);
+    }
+
+    #[test]
+    fn filtered_remote_usage_validated_tokenized_selection_is_canonical_byte_gated_and_disjoint() {
+        use crate::authorization::{RemoteModelAuthorization, RemoteModelAuthorizationEntry};
+        use crate::availability::{
+            ModelAvailabilityEntry, ModelAvailabilitySnapshot, ModelAvailabilityState,
+        };
+        use crate::generation::select_filtered_authorized_available_remote_model_tokenize_invoke_validate_reported_usage_and_admit;
+        use crate::model::{
+            LanguageModelProvider, ModelErrorKind, PrivacyClass, ScriptedModelProvider,
+            ScriptedOutcome,
+        };
+        use crate::registry::ModelRegistry;
+        use crate::tokenization::{
+            ScriptedModelInputTokenizer, ScriptedTokenizationOutcome, MODEL_INPUT_TOKENIZATION_V1,
+        };
+        use nexa_domain::{ModelId, ModelProviderId};
+        use std::sync::Arc;
+
+        for preferred in [PrivacyClass::ApprovedRemote, PrivacyClass::RestrictedRemote] {
+            for reverse in [false, true] {
+                let mut f = admission_fixture();
+                let filtered = filtered_remote_fixture(preferred);
+                let make_descriptor = |number, privacy| {
+                    let mut descriptor = f.descriptor.clone();
+                    descriptor.provider_id = id(number, ModelProviderId::new);
+                    descriptor.model_id = id(number, ModelId::new);
+                    descriptor.privacy_class = privacy;
+                    descriptor
+                };
+                let approved_low = make_descriptor(92_001, PrivacyClass::ApprovedRemote);
+                let approved_high = make_descriptor(92_002, PrivacyClass::ApprovedRemote);
+                let restricted = make_descriptor(92_003, PrivacyClass::RestrictedRemote);
+                let unauthorized = make_descriptor(92_004, preferred);
+                let unavailable = make_descriptor(92_005, preferred);
+                let omitted = make_descriptor(92_006, preferred);
+                let unavailable_provider_id = unavailable.provider_id;
+                let omitted_provider_id = omitted.provider_id;
+                let local = make_descriptor(92_007, PrivacyClass::LocalOnly);
+                let mut byte_ineligible = make_descriptor(92_000, preferred);
+                let requirements = remote_selection_requirements(vec![preferred]);
+                byte_ineligible.capabilities.context_window_tokens =
+                    filtered.filtered_compilation.compiled_bytes
+                        + requirements.maximum_output_tokens
+                        - 1;
+                let selected_descriptor = if preferred == PrivacyClass::ApprovedRemote {
+                    approved_low.clone()
+                } else {
+                    restricted.clone()
+                };
+                f.response.provider_id = selected_descriptor.provider_id;
+                f.response.model_id = selected_descriptor.model_id;
+                let descriptors = [
+                    approved_high,
+                    restricted,
+                    unauthorized,
+                    unavailable,
+                    omitted,
+                    local,
+                    byte_ineligible,
+                    approved_low,
+                ];
+                let providers: Vec<_> = descriptors
+                    .iter()
+                    .map(|descriptor| {
+                        Arc::new(
+                            ScriptedModelProvider::new(
+                                descriptor.clone(),
+                                [if *descriptor == selected_descriptor {
+                                    ScriptedOutcome::Response(f.response.clone())
+                                } else {
+                                    ScriptedOutcome::Error(ModelErrorKind::Internal)
+                                }],
+                            )
+                            .unwrap(),
+                        )
+                    })
+                    .collect();
+                let mut handles: Vec<Arc<dyn LanguageModelProvider>> = providers
+                    .iter()
+                    .cloned()
+                    .map(|provider| provider as Arc<dyn LanguageModelProvider>)
+                    .collect();
+                if reverse {
+                    handles.reverse();
+                }
+                let registry = ModelRegistry::try_from_providers(handles).unwrap();
+                let authorized = [
+                    &descriptors[0],
+                    &descriptors[1],
+                    &descriptors[3],
+                    &descriptors[6],
+                    &descriptors[7],
+                ];
+                let mut authorization_entries: Vec<_> = authorized
+                    .iter()
+                    .map(|descriptor| RemoteModelAuthorizationEntry {
+                        provider_id: descriptor.provider_id,
+                        model_id: descriptor.model_id,
+                        privacy_class: descriptor.privacy_class,
+                    })
+                    .collect();
+                if reverse {
+                    authorization_entries.reverse();
+                }
+                let authorization = RemoteModelAuthorization::new(
+                    filtered.filtered_compilation.replay_anchor.clone(),
+                    authorization_entries,
+                )
+                .unwrap();
+                let mut availability_entries: Vec<_> = descriptors
+                    .iter()
+                    .filter(|descriptor| descriptor.provider_id != omitted_provider_id)
+                    .map(|descriptor| ModelAvailabilityEntry {
+                        provider_id: descriptor.provider_id,
+                        model_id: descriptor.model_id,
+                        state: if descriptor.provider_id == unavailable_provider_id {
+                            ModelAvailabilityState::Unavailable
+                        } else {
+                            ModelAvailabilityState::Available
+                        },
+                    })
+                    .collect();
+                if reverse {
+                    availability_entries.reverse();
+                }
+                let availability = ModelAvailabilitySnapshot::new(availability_entries).unwrap();
+                let tokenizer = ScriptedModelInputTokenizer::new(
+                    selected_descriptor.clone(),
+                    [ScriptedTokenizationOutcome::TokenCount(7)],
+                )
+                .unwrap();
+                let result = select_filtered_authorized_available_remote_model_tokenize_invoke_validate_reported_usage_and_admit(
+                    &registry, f.request.invocation_id, &requirements, &availability,
+                    &authorization, MODEL_INPUT_TOKENIZATION_V1, &tokenizer, &filtered,
+                    &f.authority, &f.context, &f.citations,
+                ).unwrap();
+                result
+                    .tokenization_evidence
+                    .validate_for(
+                        &selected_descriptor,
+                        &filtered.filtered_compilation.model_input,
+                    )
+                    .unwrap();
+                assert_eq!(tokenizer.remaining().unwrap(), 0);
+                for (provider, descriptor) in providers.iter().zip(descriptors.iter()) {
+                    assert_eq!(
+                        provider.remaining(),
+                        usize::from(*descriptor != selected_descriptor)
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn filtered_remote_usage_validated_tokenized_composition_proves_complete_stage_precedence_and_counts(
+    ) {
+        use crate::admission::AdmissionError;
+        use crate::generation::{
+            FilteredAuthorizedAvailableRemoteUsageValidatedTokenizedInvocationAdmissionError as Outer,
+            UsageValidatedTokenizedInvocationAdmissionError as Inner,
+        };
+        use crate::model::{
+            LanguageModelProvider, ModelErrorKind, ModelUsage, PrivacyClass, RawModelOutput,
+            ScriptedModelProvider, ScriptedOutcome,
+        };
+        use crate::registry::ModelRegistry;
+        use crate::tokenization::{
+            ModelInputTokenizationError, ScriptedModelInputTokenizer, ScriptedTokenizationOutcome,
+            TokenizeAndValidateModelRequestCapacityError as Capacity, MODEL_INPUT_TOKENIZATION_V1,
+        };
+        use crate::usage::ModelResponseReportedUsageValidationError as Usage;
+        use nexa_domain::{ModelInvocationId, ModelProviderId, ProtocolVersion};
+        use std::sync::Arc;
+
+        // Every case calls only the ADR-0050 wrapper. Earlier failures preserve both queues;
+        // tokenization/capacity consumes exactly its tokenizer outcome; invocation and all later
+        // stages consume exactly one outcome from each selected dependency.
+        for mode in 0..15 {
+            let mut f = admission_fixture();
+            f.descriptor.privacy_class = PrivacyClass::ApprovedRemote;
+            f.response.provider_id = f.descriptor.provider_id;
+            f.response.model_id = f.descriptor.model_id;
+            // Keep later stages invalid by default so each earlier failure also proves
+            // mandatory multi-invalid precedence through usage reconciliation and admission.
+            f.response.output = RawModelOutput::new("response-private-sentinel not json").unwrap();
+            f.response.reported_usage = Some(ModelUsage {
+                input_tokens: 6,
+                output_tokens: 1,
+            });
+            let mut tokenizer_descriptor = f.descriptor.clone();
+            let mut version = MODEL_INPUT_TOKENIZATION_V1;
+            let mut token_outcomes = vec![ScriptedTokenizationOutcome::TokenCount(7)];
+            let mut provider_outcome = ScriptedOutcome::Response(f.response.clone());
+            let expected = match mode {
+                0 => {
+                    f.authority.permitted_capabilities.clear();
+                    Inner::Preflight(AdmissionError::PolicyPedagogySafetyCapability)
+                }
+                1 => {
+                    version = ProtocolVersion::new(2, 0);
+                    Inner::TokenizationCapacity(Capacity::Tokenization(
+                        ModelInputTokenizationError::UnsupportedVersion,
+                    ))
+                }
+                2 => {
+                    tokenizer_descriptor.provider_id = id(91_100, ModelProviderId::new);
+                    Inner::TokenizationCapacity(Capacity::Tokenization(
+                        ModelInputTokenizationError::InvalidDescriptor,
+                    ))
+                }
+                3 => {
+                    token_outcomes = vec![ScriptedTokenizationOutcome::Error];
+                    Inner::TokenizationCapacity(Capacity::Tokenization(
+                        ModelInputTokenizationError::TokenizerFailure,
+                    ))
+                }
+                4 => {
+                    token_outcomes = vec![ScriptedTokenizationOutcome::TokenCount(0)];
+                    Inner::TokenizationCapacity(Capacity::Tokenization(
+                        ModelInputTokenizationError::InvalidEvidence,
+                    ))
+                }
+                5 => {
+                    token_outcomes = vec![ScriptedTokenizationOutcome::TokenCount(u32::MAX)];
+                    Inner::TokenizationCapacity(Capacity::TokenCapacity(
+                        crate::tokenization::ModelRequestTokenCapacityError::ExactCapacity,
+                    ))
+                }
+                6 => {
+                    provider_outcome = ScriptedOutcome::Error(ModelErrorKind::Unavailable);
+                    Inner::Invocation(ModelErrorKind::Unavailable)
+                }
+                7 => {
+                    f.response.invocation_id = id(91_101, ModelInvocationId::new);
+                    provider_outcome = ScriptedOutcome::Response(f.response.clone());
+                    Inner::ReportedUsage(Usage::Response(ModelErrorKind::IdentityMismatch))
+                }
+                8 => {
+                    f.response.contract_version = ProtocolVersion::new(2, 0);
+                    provider_outcome = ScriptedOutcome::Response(f.response.clone());
+                    Inner::ReportedUsage(Usage::Response(ModelErrorKind::UnsupportedVersion))
+                }
+                9 => {
+                    f.response.output =
+                        RawModelOutput::new("response-private-sentinel not json").unwrap();
+                    f.response.reported_usage = Some(ModelUsage {
+                        input_tokens: 7,
+                        output_tokens: remote_selection_requirements(vec![
+                            PrivacyClass::ApprovedRemote,
+                        ])
+                        .maximum_output_tokens
+                            + 1,
+                    });
+                    provider_outcome = ScriptedOutcome::Response(f.response.clone());
+                    Inner::ReportedUsage(Usage::Response(ModelErrorKind::InvalidResponse))
+                }
+                10 => {
+                    f.response.reported_usage = Some(ModelUsage {
+                        input_tokens: 6,
+                        output_tokens: 1,
+                    });
+                    provider_outcome = ScriptedOutcome::Response(f.response.clone());
+                    Inner::ReportedUsage(Usage::InputTokenCountMismatch)
+                }
+                11 => {
+                    f.response.reported_usage = Some(ModelUsage {
+                        input_tokens: 8,
+                        output_tokens: 1,
+                    });
+                    provider_outcome = ScriptedOutcome::Response(f.response.clone());
+                    Inner::ReportedUsage(Usage::InputTokenCountMismatch)
+                }
+                _ => {
+                    f.response.output =
+                        RawModelOutput::new("response-private-sentinel not json").unwrap();
+                    f.response.reported_usage = None;
+                    provider_outcome = ScriptedOutcome::Response(f.response.clone());
+                    Inner::Admission(AdmissionError::MalformedSyntax)
+                }
+            };
+            let selected = Arc::new(UncheckedScriptedProvider::new(
+                f.descriptor.clone(),
+                [
+                    provider_outcome,
+                    ScriptedOutcome::Error(ModelErrorKind::Internal),
+                ],
+            ));
+            let mut untouched_descriptor = f.descriptor.clone();
+            untouched_descriptor.provider_id = id(91_200, ModelProviderId::new);
+            let untouched = Arc::new(
+                ScriptedModelProvider::new(
+                    untouched_descriptor,
+                    [ScriptedOutcome::Error(ModelErrorKind::Internal)],
+                )
+                .unwrap(),
+            );
+            let registry = ModelRegistry::try_from_providers([
+                selected.clone() as Arc<dyn LanguageModelProvider>,
+                untouched.clone() as Arc<dyn LanguageModelProvider>,
+            ])
+            .unwrap();
+            let tokenizer =
+                ScriptedModelInputTokenizer::new(tokenizer_descriptor, token_outcomes).unwrap();
+            let filtered = filtered_remote_fixture(PrivacyClass::ApprovedRemote);
+            let authorization = crate::authorization::RemoteModelAuthorization::new(
+                filtered.filtered_compilation.replay_anchor.clone(),
+                vec![crate::authorization::RemoteModelAuthorizationEntry {
+                    provider_id: f.descriptor.provider_id,
+                    model_id: f.descriptor.model_id,
+                    privacy_class: f.descriptor.privacy_class,
+                }],
+            )
+            .unwrap();
+            let availability = crate::availability::ModelAvailabilitySnapshot::new(vec![
+                crate::availability::ModelAvailabilityEntry {
+                    provider_id: f.descriptor.provider_id,
+                    model_id: f.descriptor.model_id,
+                    state: crate::availability::ModelAvailabilityState::Available,
+                },
+            ])
+            .unwrap();
+            let error = crate::generation::select_filtered_authorized_available_remote_model_tokenize_invoke_validate_reported_usage_and_admit(
+                &registry,
+                f.request.invocation_id,
+                &remote_selection_requirements(vec![PrivacyClass::ApprovedRemote]),
+                &availability,
+                &authorization,
+                version,
+                &tokenizer,
+                &filtered,
+                &f.authority,
+                &f.context,
+                &f.citations,
+            )
+            .unwrap_err();
+            assert_eq!(
+                error,
+                Outer::UsageValidatedTokenizedInvocationAdmission(expected),
+                "nested mode {mode}"
+            );
+            assert_eq!(tokenizer.remaining().unwrap(), usize::from(mode <= 2));
+            assert_eq!(selected.remaining(), if mode < 6 { 2 } else { 1 });
+            assert_eq!(untouched.remaining(), 1);
+            let diagnostics = format!("{error:?} {error}");
+            for sentinel in [
+                "prompt-private-sentinel",
+                "learner-private-sentinel",
+                "response-private-sentinel",
+                "provider-private-sentinel",
+                "endpoint-private-sentinel",
+                "credential-private-sentinel",
+            ] {
+                assert!(!diagnostics.contains(sentinel));
+            }
+        }
     }
 
     #[test]
