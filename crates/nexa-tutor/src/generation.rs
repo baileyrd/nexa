@@ -108,6 +108,18 @@ pub enum AvailableLocalInvocationAdmissionError {
     InvocationAdmission(InvocationAdmissionError),
 }
 
+/// Closed failures for availability-gated local selection followed by exact tokenization and
+/// admission.
+#[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
+pub enum AvailableLocalTokenizedInvocationAdmissionError {
+    #[error("available local-only tokenized invocation composition requirements are invalid")]
+    InvalidLocalOnlyRequirements,
+    #[error("available local-only model selection failed")]
+    AvailabilitySelection(ModelAvailabilityError),
+    #[error("selected available model tokenized invocation or admission failed")]
+    TokenizedInvocationAdmission(TokenizedInvocationAdmissionError),
+}
+
 /// Closed failure categories for authorized, availability-gated remote execution.
 #[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
 pub enum AuthorizedAvailableRemoteInvocationAdmissionError {
@@ -388,6 +400,52 @@ pub fn select_available_local_model_invoke_and_admit(
         citations,
     )
     .map_err(AvailableLocalInvocationAdmissionError::InvocationAdmission)
+}
+
+/// Selects one caller-marked-available local model, tokenizes its exact input, invokes it once,
+/// and admits its exact response.
+#[allow(clippy::too_many_arguments)]
+pub fn select_available_local_model_tokenize_invoke_and_admit(
+    registry: &ModelRegistry,
+    invocation_id: ModelInvocationId,
+    requirements: &ModelSelectionRequirements,
+    availability: &ModelAvailabilitySnapshot,
+    tokenization_contract_version: ProtocolVersion,
+    tokenizer: &dyn ModelInputTokenizer,
+    compilation: &PromptCompilationResult,
+    authority: &TrustedPlanningAuthority,
+    context: &ContextPackage,
+    citations: &CitationResult,
+) -> Result<TokenizedInvocationAdmissionResult, AvailableLocalTokenizedInvocationAdmissionError> {
+    validate_explicit_local_requirements(requirements).map_err(|()| {
+        AvailableLocalTokenizedInvocationAdmissionError::InvalidLocalOnlyRequirements
+    })?;
+
+    let selected = select_available_model(
+        registry,
+        &compilation.model_input,
+        requirements,
+        availability,
+    )
+    .map_err(AvailableLocalTokenizedInvocationAdmissionError::AvailabilitySelection)?;
+    let request = request_for_selected(
+        invocation_id,
+        &selected.descriptor,
+        requirements,
+        compilation,
+    );
+
+    tokenize_invoke_and_admit_model_output_with_token_capacity(
+        tokenization_contract_version,
+        tokenizer,
+        selected.provider.as_ref(),
+        &request,
+        compilation,
+        authority,
+        context,
+        citations,
+    )
+    .map_err(AvailableLocalTokenizedInvocationAdmissionError::TokenizedInvocationAdmission)
 }
 
 /// Selects one explicitly authorized, caller-marked-available remote model, invokes it once, and
