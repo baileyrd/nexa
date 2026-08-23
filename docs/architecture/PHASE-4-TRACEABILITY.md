@@ -318,3 +318,12 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Privacy, permission, and deferrals preserved | Existing structural whole-layer filtering and caller authorization are reused; no general privacy correctness, semantic minimization, authentication, authorization-policy change, secrets, concrete remote execution, or networking | Preserved |
 
 NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
+
+## ADR-0045 model-response reported-usage reconciliation
+
+| Requirement | Evidence | Status |
+|---|---|---|
+| Ordered exact association validation | Direct `usage` tests preserve request, response, and tokenization-evidence categories and mandated failure precedence | Implemented slice |
+| Optional usage and exact input-count equality | Direct tests cover absent usage, equality, lower/higher mismatch, and unchanged maximum-output validation | Implemented slice |
+| Pure, non-consuming, content-free boundary | Direct tests retain scripted tokenizer/provider outcomes and verify every error category excludes private sentinels | Implemented slice |
+| Limited claim and unchanged authorities | ADR-0045 establishes equality only; provider usage remains optional evidence without truth, billing, output-token, or telemetry authority; NEXA-TUTOR-001 remains Baseline Draft | Preserved |
