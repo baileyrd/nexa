@@ -1,7 +1,11 @@
 use nexa_domain::{CorrelationId, SessionId, TraceId, WorkflowId};
-use nexa_orchestrator::{CancellationTarget, InteractionWorkflow};
+use nexa_orchestrator::{
+    plan_workflow_cancellation, ActiveCancellationTarget, CancellationSemantics,
+    CancellationTarget, InteractionWorkflow, WorkflowCancellationPlan,
+};
 use nexa_orchestrator_runtime::{
-    WorkflowTaskCompletionKind, WorkflowTaskGroup, WorkflowTaskGroupError, WorkflowTaskGroupState,
+    CancellationTargetExecutionOutcome, WorkflowTaskCompletionKind, WorkflowTaskGroup,
+    WorkflowTaskGroupError, WorkflowTaskGroupState,
 };
 use std::future::Future;
 use std::sync::{
@@ -27,6 +31,26 @@ fn workflow() -> InteractionWorkflow {
         CorrelationId::new(Uuid::from_u128(3)).unwrap(),
         TraceId::new(Uuid::from_u128(4)).unwrap(),
     )
+}
+
+fn plan(
+    workflow: InteractionWorkflow,
+    targets: &[(CancellationTarget, CancellationSemantics)],
+) -> WorkflowCancellationPlan {
+    let cancelled = workflow.cancel().unwrap();
+    let active: Vec<_> = targets
+        .iter()
+        .map(|&(target, semantics)| ActiveCancellationTarget::new(target, semantics))
+        .collect();
+    plan_workflow_cancellation(
+        &cancelled,
+        workflow.workflow_id(),
+        workflow.session_id(),
+        workflow.correlation_id(),
+        workflow.trace_id(),
+        &active,
+    )
+    .unwrap()
 }
 
 #[tokio::test]
@@ -338,4 +362,273 @@ async fn dropping_owner_aborts_target_work_instead_of_detaching_it() {
     started_rx.await.unwrap();
     drop(group);
     dropped_rx.await.unwrap();
+}
+
+#[tokio::test]
+async fn exact_all_target_plan_cancels_and_joins_every_target_in_canonical_order() {
+    let mut group = WorkflowTaskGroup::new(workflow());
+    let (stopped_tx, mut stopped_rx) = mpsc::channel(5);
+    for target in TARGETS {
+        let stopped_tx = stopped_tx.clone();
+        group
+            .spawn_for_target(target, move |token| async move {
+                token.cancelled().await;
+                stopped_tx.send(target).await.unwrap();
+            })
+            .unwrap();
+    }
+    drop(stopped_tx);
+    let execution_plan = plan(
+        workflow(),
+        &TARGETS.map(|target| (target, CancellationSemantics::Cancellable)),
+    );
+    let evidence = group
+        .execute_cancellation_plan(&execution_plan)
+        .await
+        .unwrap();
+    let mut stopped = Vec::new();
+    while let Some(target) = stopped_rx.recv().await {
+        stopped.push(target);
+    }
+    stopped.sort_unstable();
+    assert_eq!(stopped, TARGETS);
+    assert_eq!(evidence.workflow(), workflow());
+    assert_eq!(
+        evidence
+            .target_outcomes()
+            .iter()
+            .map(|item| item.target())
+            .collect::<Vec<_>>(),
+        TARGETS
+    );
+    assert!(evidence
+        .target_outcomes()
+        .iter()
+        .all(|item| item.outcome() == CancellationTargetExecutionOutcome::Stopped));
+    assert_eq!(evidence.remaining_unclassified_task_count(), 0);
+    assert_eq!(group.task_count(), 0);
+}
+
+#[tokio::test]
+async fn mixed_plan_is_selective_reports_exact_counts_and_cancels_unclassified_work() {
+    let mut group = WorkflowTaskGroup::new(workflow());
+    let (cancelled_tx, cancelled_rx) = oneshot::channel();
+    group
+        .spawn_for_target(CancellationTarget::Retrieval, move |token| async move {
+            token.cancelled().await;
+            cancelled_tx.send(()).unwrap();
+        })
+        .unwrap();
+    let (report_token_tx, report_token_rx) = oneshot::channel();
+    let (release_tx, release_rx) = oneshot::channel();
+    group
+        .spawn_for_target(CancellationTarget::Speech, move |token| async move {
+            report_token_tx.send(token.clone()).unwrap();
+            release_rx.await.unwrap();
+        })
+        .unwrap();
+    group
+        .spawn_for_target(CancellationTarget::Speech, |_| std::future::pending())
+        .unwrap();
+    let report_token = report_token_rx.await.unwrap();
+    let (unclassified_tx, unclassified_rx) = oneshot::channel();
+    group
+        .spawn(move |token| async move {
+            token.cancelled().await;
+            unclassified_tx.send(()).unwrap();
+        })
+        .unwrap();
+
+    let execution_plan = plan(
+        workflow(),
+        &[
+            (
+                CancellationTarget::Speech,
+                CancellationSemantics::NonCancellable,
+            ),
+            (
+                CancellationTarget::Retrieval,
+                CancellationSemantics::Cancellable,
+            ),
+        ],
+    );
+    let evidence = group
+        .execute_cancellation_plan(&execution_plan)
+        .await
+        .unwrap();
+    assert_eq!(cancelled_rx.await, Ok(()));
+    assert_eq!(unclassified_rx.await, Ok(()));
+    assert!(!report_token.is_cancelled());
+    assert_eq!(evidence.accepted_unclassified_task_count(), 1);
+    assert_eq!(
+        evidence.target_outcomes()[1].outcome(),
+        CancellationTargetExecutionOutcome::ReportedNonCancellable {
+            owned_task_count: 2
+        }
+    );
+    assert_eq!(group.target_task_count(CancellationTarget::Retrieval), 0);
+    assert_eq!(group.target_task_count(CancellationTarget::Speech), 2);
+    assert_eq!(group.unclassified_task_count(), 0);
+    assert_eq!(group.task_count(), 2);
+    release_tx.send(()).unwrap();
+}
+
+#[tokio::test]
+async fn preflight_coverage_and_each_identity_mismatch_are_side_effect_free() {
+    let mut group = WorkflowTaskGroup::new(workflow());
+    group
+        .spawn_for_target(CancellationTarget::Behavior, |_| std::future::pending())
+        .unwrap();
+    let empty = plan(workflow(), &[]);
+    assert_eq!(
+        group.execute_cancellation_plan(&empty).await,
+        Err(WorkflowTaskGroupError::PlanCoverageMismatch)
+    );
+    assert_eq!(group.state(), WorkflowTaskGroupState::Accepting);
+    assert!(!group.is_cancellation_requested());
+    assert_eq!(group.target_task_count(CancellationTarget::Behavior), 1);
+    assert_eq!(group.spawn(|_| async {}), Ok(()));
+    assert_eq!(
+        group.spawn_for_target(CancellationTarget::Speech, |_| async {}),
+        Ok(())
+    );
+
+    for changed in 0..4 {
+        let other = InteractionWorkflow::new(
+            WorkflowId::new(Uuid::from_u128(if changed == 0 { 11 } else { 1 })).unwrap(),
+            SessionId::new(Uuid::from_u128(if changed == 1 { 12 } else { 2 })).unwrap(),
+            CorrelationId::new(Uuid::from_u128(if changed == 2 { 13 } else { 3 })).unwrap(),
+            TraceId::new(Uuid::from_u128(if changed == 3 { 14 } else { 4 })).unwrap(),
+        );
+        let mismatched = plan(
+            other,
+            &[
+                (
+                    CancellationTarget::Behavior,
+                    CancellationSemantics::Cancellable,
+                ),
+                (
+                    CancellationTarget::Speech,
+                    CancellationSemantics::Cancellable,
+                ),
+            ],
+        );
+        assert_eq!(
+            group.execute_cancellation_plan(&mismatched).await,
+            Err(WorkflowTaskGroupError::AssociationMismatch)
+        );
+        assert_eq!(group.state(), WorkflowTaskGroupState::Accepting);
+    }
+}
+
+#[tokio::test]
+async fn plan_repeats_are_idempotent_conflicts_close_and_legacy_paths_conflict() {
+    let exact = plan(workflow(), &[]);
+    let different = plan(
+        workflow(),
+        &[(
+            CancellationTarget::Retrieval,
+            CancellationSemantics::Cancellable,
+        )],
+    );
+    let mut group = WorkflowTaskGroup::new(workflow());
+    let first = group.execute_cancellation_plan(&exact).await.unwrap();
+    assert_eq!(group.execute_cancellation_plan(&exact).await, Ok(first));
+    assert_eq!(
+        group.execute_cancellation_plan(&different).await,
+        Err(WorkflowTaskGroupError::ConflictingCompletion)
+    );
+    assert_eq!(
+        group.cancel_and_wait().await,
+        Err(WorkflowTaskGroupError::ConflictingCompletion)
+    );
+    assert_eq!(
+        group.drain().await,
+        Err(WorkflowTaskGroupError::ConflictingCompletion)
+    );
+
+    let mut legacy = WorkflowTaskGroup::new(workflow());
+    legacy.cancel_and_wait().await.unwrap();
+    assert_eq!(
+        legacy.execute_cancellation_plan(&exact).await,
+        Err(WorkflowTaskGroupError::ConflictingCompletion)
+    );
+}
+
+#[tokio::test]
+async fn added_empty_and_omitted_live_targets_fail_before_spawn_closure() {
+    let mut group = WorkflowTaskGroup::new(workflow());
+    group
+        .spawn_for_target(CancellationTarget::Retrieval, |_| std::future::pending())
+        .unwrap();
+    let added = plan(
+        workflow(),
+        &[
+            (
+                CancellationTarget::Retrieval,
+                CancellationSemantics::Cancellable,
+            ),
+            (
+                CancellationTarget::ToolExecution,
+                CancellationSemantics::Cancellable,
+            ),
+        ],
+    );
+    let omitted = plan(workflow(), &[]);
+    for invalid in [&added, &omitted] {
+        assert_eq!(
+            group.execute_cancellation_plan(invalid).await,
+            Err(WorkflowTaskGroupError::PlanCoverageMismatch)
+        );
+        assert_eq!(group.state(), WorkflowTaskGroupState::Accepting);
+        assert_eq!(group.target_task_count(CancellationTarget::Retrieval), 1);
+    }
+    assert_eq!(group.spawn(|_| async {}), Ok(()));
+    assert_eq!(
+        group.spawn_for_target(CancellationTarget::Speech, |_| async {}),
+        Ok(())
+    );
+}
+
+#[tokio::test]
+async fn selected_failure_joins_all_required_work_and_keeps_reported_work_owned() {
+    let mut group = WorkflowTaskGroup::new(workflow());
+    group
+        .spawn_for_target(CancellationTarget::Retrieval, |_| async {
+            panic!("selected private payload")
+        })
+        .unwrap();
+    let (joined_tx, joined_rx) = oneshot::channel();
+    group
+        .spawn(move |token| async move {
+            token.cancelled().await;
+            joined_tx.send(()).unwrap();
+        })
+        .unwrap();
+    group
+        .spawn_for_target(CancellationTarget::Behavior, |_| std::future::pending())
+        .unwrap();
+    let execution_plan = plan(
+        workflow(),
+        &[
+            (
+                CancellationTarget::Retrieval,
+                CancellationSemantics::Cancellable,
+            ),
+            (
+                CancellationTarget::Behavior,
+                CancellationSemantics::NonCancellable,
+            ),
+        ],
+    );
+    let error = group
+        .execute_cancellation_plan(&execution_plan)
+        .await
+        .unwrap_err();
+    assert_eq!(joined_rx.await, Ok(()));
+    assert_eq!(error, WorkflowTaskGroupError::TaskJoinFailure);
+    assert!(!format!("{error:?} {error}").contains("selected private payload"));
+    assert_eq!(group.target_task_count(CancellationTarget::Retrieval), 0);
+    assert_eq!(group.target_task_count(CancellationTarget::Behavior), 1);
+    assert_eq!(group.task_count(), 1);
 }
