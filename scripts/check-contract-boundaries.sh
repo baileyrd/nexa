@@ -18,6 +18,7 @@ expected={
  "nexa-knowledge": {"nexa-domain", "serde", "sha2", "thiserror"},
  "nexa-tutor": {"nexa-domain", "nexa-knowledge", "serde", "serde_json", "sha2", "thiserror"},
  "nexa-orchestrator": {"nexa-domain", "serde", "thiserror"},
+ "nexa-orchestrator-runtime": {"nexa-orchestrator", "tokio", "tokio-util"},
 }
 # Ignore dev-only dependencies while enforcing all normal dependency edges.
 for package, allowed in expected.items():
@@ -31,6 +32,13 @@ print("contract dependency DAG passed")
 # Renderer, platform, provider, executor, networking, and persistence crates must never enter contract crates.
 if rg -n --glob 'Cargo.toml' --glob '*.rs' '\b(wgpu|winit|gltf|tokio|async-std|rodio|cpal|reqwest|hyper|sqlx|rusqlite)\b' crates/nexa-{domain,events,nbp,avatar,student,pedagogy,lessons,assessment,learning-core,knowledge,tutor,orchestrator}; then
   echo "contract crate references a forbidden implementation dependency" >&2
+  exit 1
+fi
+
+# Tokio is isolated in the runtime adapter and must not enter protected synchronous crates.
+if rg -n --glob 'Cargo.toml' --glob '*.rs' '\b(tokio|tokio-util|tokio_util)\b' \
+  crates/nexa-{domain,events,nbp,avatar,student,pedagogy,lessons,assessment,learning-core,knowledge,tutor,orchestrator}; then
+  echo "protected contract/domain crate references Tokio" >&2
   exit 1
 fi
 

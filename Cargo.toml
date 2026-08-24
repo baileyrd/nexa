@@ -11,6 +11,7 @@ members = [
     "crates/nexa-knowledge",
     "crates/nexa-nbp",
     "crates/nexa-orchestrator",
+    "crates/nexa-orchestrator-runtime",
     "crates/nexa-pedagogy",
     "crates/nexa-student",
     "crates/nexa-tutor",
@@ -35,6 +36,8 @@ pollster = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+tokio = { version = "1", features = ["rt", "sync"] }
+tokio-util = { version = "0.7", features = ["rt"] }
 sha2 = "0.10"
 uuid = { version = "1", features = ["serde", "v7"] }
 wgpu = "0.19"

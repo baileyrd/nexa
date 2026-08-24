@@ -1,0 +1,16 @@
+[package]
+name = "nexa-orchestrator-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+nexa-orchestrator = { path = "../nexa-orchestrator" }
+tokio.workspace = true
+tokio-util.workspace = true
+
+[dev-dependencies]
+nexa-domain = { path = "../nexa-domain" }
+tokio = { workspace = true, features = ["macros"] }
+uuid.workspace = true
