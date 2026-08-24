@@ -80,7 +80,7 @@ Exit: grounded responses carry citations, confidence, and machine-validated tuto
 - [x] deterministic session/workflow lifecycle and lifecycle cancellation foundation (ADR-0051)
 - [ ] cancellation-safe execution and propagation
 
-ADR-0057 composes the existing exact-plan runtime with renderer-neutral `AvatarPort` cancellation for Behavior only, with side-effect-free preflight, cooperative token waiting, one exact adapter call, joining, immutable evidence, and idempotent repetition. Retrieval, tutor generation, speech, tools/labs, real renderer/provider/network cancellation, and policy/recovery concerns remain deferred, so the broader checklist item stays incomplete.
+ADR-0057 composes the existing exact-plan runtime with renderer-neutral `AvatarPort` cancellation for Behavior only, with side-effect-free preflight, cooperative token waiting, one exact adapter call, joining, observed immutable evidence, exact preview/actual agreement, and terminalized success, failure, or caller drop. Retrieval, tutor generation, speech, tools/labs, real renderer/provider/network cancellation, and policy/recovery concerns remain deferred, so the broader checklist item stays incomplete.
 - [ ] speech input/output ports
 - [ ] behavior synchronization
 - [ ] tool/lab execution

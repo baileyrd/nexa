@@ -41,22 +41,31 @@ impl std::error::Error for BehaviorCancellationError {}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct AvatarCancellationEvidence {
-    request: AvatarRequest,
+    requests: Vec<AvatarRequest>,
     report: AvatarReport,
 }
 
 impl AvatarCancellationEvidence {
-    pub const fn request(&self) -> &AvatarRequest {
-        &self.request
+    pub fn request(&self) -> &AvatarRequest {
+        &self.requests[0]
     }
     pub const fn report(&self) -> &AvatarReport {
         &self.report
     }
-    pub const fn cancellation_request_count(&self) -> usize {
-        1
+    pub fn requests(&self) -> &[AvatarRequest] {
+        &self.requests
     }
-    pub const fn submit_request_count(&self) -> usize {
-        0
+    pub fn cancellation_request_count(&self) -> usize {
+        self.requests
+            .iter()
+            .filter(|request| matches!(request, AvatarRequest::Cancel { .. }))
+            .count()
+    }
+    pub fn submit_request_count(&self) -> usize {
+        self.requests
+            .iter()
+            .filter(|request| matches!(request, AvatarRequest::Submit { .. }))
+            .count()
     }
 }
 
@@ -81,7 +90,15 @@ pub struct BehaviorCancellationComposition<A> {
     request: AvatarRequest,
     plan: WorkflowCancellationPlan,
     adapter: Arc<Mutex<A>>,
-    terminal: Option<BehaviorCancellationEvidence>,
+    preview: AvatarReport,
+    terminal: ExecutionState,
+}
+
+enum ExecutionState {
+    Ready,
+    Running,
+    Succeeded(Box<BehaviorCancellationEvidence>),
+    Failed,
 }
 
 impl<A: AvatarPort + Send + 'static> BehaviorCancellationComposition<A> {
@@ -146,12 +163,24 @@ impl<A: AvatarPort + Send + 'static> BehaviorCancellationComposition<A> {
             request,
             plan,
             adapter: Arc::new(Mutex::new(adapter)),
-            terminal: None,
+            preview,
+            terminal: ExecutionState::Ready,
         })
     }
 
     pub const fn plan(&self) -> &WorkflowCancellationPlan {
         &self.plan
+    }
+
+    /// Provides bounded, read-only access to the owned adapter without exposing its lock.
+    pub fn inspect_adapter<R>(
+        &self,
+        inspect: impl FnOnce(&A) -> R,
+    ) -> Result<R, BehaviorCancellationError> {
+        self.adapter
+            .lock()
+            .map(|adapter| inspect(&adapter))
+            .map_err(|_| BehaviorCancellationError::RuntimeFailure)
     }
 
     pub async fn execute(
@@ -166,42 +195,68 @@ impl<A: AvatarPort + Send + 'static> BehaviorCancellationComposition<A> {
         if requested != self.request {
             return Err(BehaviorCancellationError::ConflictingExecution);
         }
-        if let Some(evidence) = &self.terminal {
-            return Ok(evidence.clone());
+        match &self.terminal {
+            ExecutionState::Succeeded(evidence) => return Ok((**evidence).clone()),
+            ExecutionState::Running | ExecutionState::Failed => {
+                return Err(BehaviorCancellationError::RuntimeFailure)
+            }
+            ExecutionState::Ready => {}
         }
+
+        // Terminalize before any task is spawned. If this caller future is dropped, retrying
+        // cannot start another operation and the local task group's Drop aborts owned work.
+        self.terminal = ExecutionState::Running;
 
         let mut tasks = WorkflowTaskGroup::new(self.workflow);
         let adapter = Arc::clone(&self.adapter);
         let request = self.request.clone();
-        let report = Arc::new(Mutex::new(None));
-        let task_report = Arc::clone(&report);
-        tasks
+        let invocation = Arc::new(Mutex::new(None));
+        let task_invocation = Arc::clone(&invocation);
+        if tasks
             .spawn_for_target(CancellationTarget::Behavior, move |token| async move {
                 token.cancelled().await;
-                let result = adapter
-                    .lock()
-                    .expect("avatar adapter mutex poisoned")
-                    .handle(request);
-                *task_report.lock().expect("avatar report mutex poisoned") = Some(result);
+                let invoked_request = request.clone();
+                let result = match adapter.lock() {
+                    Ok(mut adapter) => adapter.handle(request),
+                    Err(_) => return,
+                };
+                if let Ok(mut invocation) = task_invocation.lock() {
+                    *invocation = Some((invoked_request, result));
+                }
             })
-            .map_err(map_runtime_error)?;
-        let runtime = tasks
-            .execute_cancellation_plan(&self.plan)
-            .await
-            .map_err(map_runtime_error)?;
-        let avatar_report = report
-            .lock()
-            .expect("avatar report mutex poisoned")
-            .clone()
-            .ok_or(BehaviorCancellationError::RuntimeFailure)?;
+            .is_err()
+        {
+            self.terminal = ExecutionState::Failed;
+            return Err(BehaviorCancellationError::RuntimeFailure);
+        }
+        let runtime = match tasks.execute_cancellation_plan(&self.plan).await {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                self.terminal = ExecutionState::Failed;
+                return Err(map_runtime_error(error));
+            }
+        };
+        let actual = invocation.lock().ok().and_then(|value| value.clone());
+        let Some((invoked_request, avatar_report)) = actual else {
+            self.terminal = ExecutionState::Failed;
+            return Err(BehaviorCancellationError::RuntimeFailure);
+        };
+        if invoked_request != self.request
+            || avatar_report != self.preview
+            || avatar_report.message_id != self.request.message_id()
+            || avatar_report.terminal_status() != RuntimeStatus::Cancelled
+        {
+            self.terminal = ExecutionState::Failed;
+            return Err(BehaviorCancellationError::RuntimeFailure);
+        }
         let evidence = BehaviorCancellationEvidence {
             runtime,
             avatar: AvatarCancellationEvidence {
-                request: self.request.clone(),
+                requests: vec![invoked_request],
                 report: avatar_report,
             },
         };
-        self.terminal = Some(evidence.clone());
+        self.terminal = ExecutionState::Succeeded(Box::new(evidence.clone()));
         Ok(evidence)
     }
 }
@@ -317,6 +372,15 @@ mod tests {
                     evidence.avatar().report().terminal_status(),
                     RuntimeStatus::Cancelled
                 );
+                assert_eq!(
+                    composition
+                        .inspect_adapter(|adapter| adapter.requests().to_vec())
+                        .unwrap(),
+                    vec![AvatarRequest::Cancel {
+                        message_id: message_id(),
+                        cancellation: cancellation(),
+                    }]
+                );
 
                 let repeat = composition
                     .execute(message_id(), cancellation())
@@ -328,6 +392,13 @@ mod tests {
                 assert_eq!(
                     composition.execute(message_id(), conflict).await,
                     Err(BehaviorCancellationError::ConflictingExecution)
+                );
+                assert_eq!(
+                    composition
+                        .inspect_adapter(|adapter| adapter.requests().to_vec())
+                        .unwrap()
+                        .len(),
+                    1
                 );
             });
     }
@@ -510,5 +581,195 @@ mod tests {
                 Err(BehaviorCancellationError::InvalidPreview)
             ));
         }
+    }
+
+    #[derive(Clone)]
+    struct DivergentAdapter {
+        actual: AvatarReport,
+        requests: Arc<Mutex<Vec<AvatarRequest>>>,
+    }
+
+    impl AvatarPort for DivergentAdapter {
+        fn capabilities(&self) -> AvatarCapabilities {
+            AvatarCapabilities::new([AvatarCapability::Cancellation])
+        }
+        fn preview(&self, _: &AvatarRequest) -> AvatarReport {
+            AvatarReport::cancelled(message_id(), cancellation().behavior_id)
+        }
+        fn submit(&mut self, _: MessageId, _: nexa_nbp::BehaviorCommand) -> AvatarReport {
+            unreachable!()
+        }
+        fn cancel(&mut self, message_id: MessageId, cancellation: BehaviorCancel) -> AvatarReport {
+            self.requests.lock().unwrap().push(AvatarRequest::Cancel {
+                message_id,
+                cancellation,
+            });
+            self.actual.clone()
+        }
+    }
+
+    #[test]
+    fn divergent_actual_reports_fail_closed_and_terminalize_after_one_mutation() {
+        let reports = [
+            AvatarReport::cancelled(
+                MessageId::from_str("018f1f64-4f09-7cc0-98c2-7b3e8f249099").unwrap(),
+                cancellation().behavior_id,
+            ),
+            AvatarReport::cancelled(
+                message_id(),
+                BehaviorId::from_str("018f1f64-4f09-7cc0-98c2-7b3e8f249099").unwrap(),
+            ),
+            AvatarReport::rejected(
+                message_id(),
+                cancellation().behavior_id,
+                SemanticKey::new("private.adapter.failure").unwrap(),
+                "private adapter details".into(),
+            ),
+        ];
+        for actual in reports {
+            let requests = Arc::new(Mutex::new(Vec::new()));
+            let (workflow_id, session_id, correlation_id, trace_id) = ids();
+            let mut composition = BehaviorCancellationComposition::new(
+                workflow(true),
+                workflow_id,
+                session_id,
+                correlation_id,
+                trace_id,
+                message_id(),
+                cancellation(),
+                DivergentAdapter {
+                    actual,
+                    requests: Arc::clone(&requests),
+                },
+            )
+            .unwrap();
+            tokio::runtime::Builder::new_current_thread()
+                .build()
+                .unwrap()
+                .block_on(async {
+                    let error = composition
+                        .execute(message_id(), cancellation())
+                        .await
+                        .unwrap_err();
+                    assert_eq!(error, BehaviorCancellationError::RuntimeFailure);
+                    assert!(!format!("{error:?} {error}").contains("private"));
+                    assert_eq!(requests.lock().unwrap().len(), 1);
+                    assert_eq!(
+                        composition.execute(message_id(), cancellation()).await,
+                        Err(BehaviorCancellationError::RuntimeFailure)
+                    );
+                    assert_eq!(requests.lock().unwrap().len(), 1);
+                });
+        }
+    }
+
+    #[derive(Clone)]
+    struct BlockingProbeAdapter {
+        invoked: std::sync::mpsc::Sender<()>,
+        release: Arc<Mutex<std::sync::mpsc::Receiver<()>>>,
+        requests: Arc<Mutex<Vec<AvatarRequest>>>,
+    }
+
+    impl AvatarPort for BlockingProbeAdapter {
+        fn capabilities(&self) -> AvatarCapabilities {
+            AvatarCapabilities::new([AvatarCapability::Cancellation])
+        }
+        fn preview(&self, _: &AvatarRequest) -> AvatarReport {
+            AvatarReport::cancelled(message_id(), cancellation().behavior_id)
+        }
+        fn submit(&mut self, _: MessageId, _: nexa_nbp::BehaviorCommand) -> AvatarReport {
+            unreachable!()
+        }
+        fn cancel(&mut self, message_id: MessageId, cancellation: BehaviorCancel) -> AvatarReport {
+            self.requests.lock().unwrap().push(AvatarRequest::Cancel {
+                message_id,
+                cancellation: cancellation.clone(),
+            });
+            self.invoked.send(()).unwrap();
+            self.release.lock().unwrap().recv().unwrap();
+            AvatarReport::cancelled(message_id, cancellation.behavior_id)
+        }
+    }
+
+    #[test]
+    fn target_task_waits_for_cancellation_and_is_joined_before_success() {
+        let (invoked_tx, invoked_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let (completed_tx, completed_rx) = std::sync::mpsc::channel();
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let adapter = BlockingProbeAdapter {
+            invoked: invoked_tx,
+            release: Arc::new(Mutex::new(release_rx)),
+            requests: Arc::clone(&requests),
+        };
+        assert!(invoked_rx.try_recv().is_err());
+        std::thread::scope(|scope| {
+            scope.spawn(move || {
+                let (workflow_id, session_id, correlation_id, trace_id) = ids();
+                let mut composition = BehaviorCancellationComposition::new(
+                    workflow(true),
+                    workflow_id,
+                    session_id,
+                    correlation_id,
+                    trace_id,
+                    message_id(),
+                    cancellation(),
+                    adapter,
+                )
+                .unwrap();
+                let result = tokio::runtime::Builder::new_current_thread()
+                    .build()
+                    .unwrap()
+                    .block_on(composition.execute(message_id(), cancellation()));
+                completed_tx.send(result).unwrap();
+            });
+            invoked_rx.recv().unwrap();
+            assert_eq!(requests.lock().unwrap().len(), 1);
+            assert!(completed_rx.try_recv().is_err());
+            release_tx.send(()).unwrap();
+            let evidence = completed_rx.recv().unwrap().unwrap();
+            assert_eq!(evidence.avatar().requests().len(), 1);
+        });
+    }
+
+    #[test]
+    fn dropping_in_flight_execution_aborts_owned_task_without_detachment() {
+        use std::future::Future;
+        use std::task::{Context, Poll, Waker};
+
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let adapter = DivergentAdapter {
+            actual: AvatarReport::cancelled(message_id(), cancellation().behavior_id),
+            requests: Arc::clone(&requests),
+        };
+        let (workflow_id, session_id, correlation_id, trace_id) = ids();
+        let mut composition = BehaviorCancellationComposition::new(
+            workflow(true),
+            workflow_id,
+            session_id,
+            correlation_id,
+            trace_id,
+            message_id(),
+            cancellation(),
+            adapter,
+        )
+        .unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let mut execution = Box::pin(composition.execute(message_id(), cancellation()));
+            let mut context = Context::from_waker(Waker::noop());
+            assert_eq!(execution.as_mut().poll(&mut context), Poll::Pending);
+            assert!(requests.lock().unwrap().is_empty());
+            drop(execution);
+            tokio::task::yield_now().await;
+            assert!(requests.lock().unwrap().is_empty());
+            assert_eq!(
+                composition.execute(message_id(), cancellation()).await,
+                Err(BehaviorCancellationError::RuntimeFailure)
+            );
+            assert!(requests.lock().unwrap().is_empty());
+        });
     }
 }
