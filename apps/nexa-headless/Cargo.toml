@@ -13,4 +13,5 @@ nexa-orchestrator-runtime = { path = "../../crates/nexa-orchestrator-runtime" }
 tokio = { workspace = true }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["macros"] }
 uuid.workspace = true

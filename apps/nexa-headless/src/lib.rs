@@ -92,6 +92,25 @@ pub struct BehaviorCancellationComposition<A> {
     adapter: Arc<Mutex<A>>,
     preview: AvatarReport,
     terminal: ExecutionState,
+    #[cfg(test)]
+    lifecycle_probe: Option<TestLifecycleProbe>,
+}
+
+#[cfg(test)]
+struct TestLifecycleProbe {
+    started_waiting: std::sync::mpsc::Sender<()>,
+    allow_cancellation: tokio::sync::oneshot::Receiver<()>,
+    task_dropped: std::sync::mpsc::Sender<()>,
+}
+
+#[cfg(test)]
+struct TestTaskDropProbe(std::sync::mpsc::Sender<()>);
+
+#[cfg(test)]
+impl Drop for TestTaskDropProbe {
+    fn drop(&mut self) {
+        let _ = self.0.send(());
+    }
 }
 
 enum ExecutionState {
@@ -165,6 +184,8 @@ impl<A: AvatarPort + Send + 'static> BehaviorCancellationComposition<A> {
             adapter: Arc::new(Mutex::new(adapter)),
             preview,
             terminal: ExecutionState::Ready,
+            #[cfg(test)]
+            lifecycle_probe: None,
         })
     }
 
@@ -212,8 +233,34 @@ impl<A: AvatarPort + Send + 'static> BehaviorCancellationComposition<A> {
         let request = self.request.clone();
         let invocation = Arc::new(Mutex::new(None));
         let task_invocation = Arc::clone(&invocation);
+        #[cfg(test)]
+        let task_probe = self
+            .lifecycle_probe
+            .as_ref()
+            .map(|probe| (probe.started_waiting.clone(), probe.task_dropped.clone()));
         if tasks
             .spawn_for_target(CancellationTarget::Behavior, move |token| async move {
+                #[cfg(test)]
+                let _drop_probe = if let Some((started_waiting, task_dropped)) = task_probe {
+                    let guard = TestTaskDropProbe(task_dropped);
+                    let mut cancellation_wait = Box::pin(token.cancelled());
+                    let mut started_waiting = Some(started_waiting);
+                    std::future::poll_fn(|context| {
+                        let status = std::future::Future::poll(cancellation_wait.as_mut(), context);
+                        if status.is_pending() {
+                            if let Some(started_waiting) = started_waiting.take() {
+                                let _ = started_waiting.send(());
+                            }
+                        }
+                        status
+                    })
+                    .await;
+                    Some(guard)
+                } else {
+                    token.cancelled().await;
+                    None
+                };
+                #[cfg(not(test))]
                 token.cancelled().await;
                 let invoked_request = request.clone();
                 let result = match adapter.lock() {
@@ -228,6 +275,13 @@ impl<A: AvatarPort + Send + 'static> BehaviorCancellationComposition<A> {
         {
             self.terminal = ExecutionState::Failed;
             return Err(BehaviorCancellationError::RuntimeFailure);
+        }
+        #[cfg(test)]
+        if let Some(probe) = self.lifecycle_probe.take() {
+            if probe.allow_cancellation.await.is_err() {
+                self.terminal = ExecutionState::Failed;
+                return Err(BehaviorCancellationError::RuntimeFailure);
+            }
         }
         let runtime = match tasks.execute_cancellation_plan(&self.plan).await {
             Ok(runtime) => runtime,
@@ -696,13 +750,15 @@ mod tests {
         let (invoked_tx, invoked_rx) = std::sync::mpsc::channel();
         let (release_tx, release_rx) = std::sync::mpsc::channel();
         let (completed_tx, completed_rx) = std::sync::mpsc::channel();
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (allow_tx, allow_rx) = tokio::sync::oneshot::channel();
+        let (dropped_tx, _dropped_rx) = std::sync::mpsc::channel();
         let requests = Arc::new(Mutex::new(Vec::new()));
         let adapter = BlockingProbeAdapter {
             invoked: invoked_tx,
             release: Arc::new(Mutex::new(release_rx)),
             requests: Arc::clone(&requests),
         };
-        assert!(invoked_rx.try_recv().is_err());
         std::thread::scope(|scope| {
             scope.spawn(move || {
                 let (workflow_id, session_id, correlation_id, trace_id) = ids();
@@ -717,12 +773,22 @@ mod tests {
                     adapter,
                 )
                 .unwrap();
+                composition.lifecycle_probe = Some(TestLifecycleProbe {
+                    started_waiting: started_tx,
+                    allow_cancellation: allow_rx,
+                    task_dropped: dropped_tx,
+                });
                 let result = tokio::runtime::Builder::new_current_thread()
                     .build()
                     .unwrap()
                     .block_on(composition.execute(message_id(), cancellation()));
                 completed_tx.send(result).unwrap();
             });
+            started_rx.recv().unwrap();
+            assert!(invoked_rx.try_recv().is_err());
+            assert!(requests.lock().unwrap().is_empty());
+            assert!(completed_rx.try_recv().is_err());
+            allow_tx.send(()).unwrap();
             invoked_rx.recv().unwrap();
             assert_eq!(requests.lock().unwrap().len(), 1);
             assert!(completed_rx.try_recv().is_err());
@@ -734,9 +800,6 @@ mod tests {
 
     #[test]
     fn dropping_in_flight_execution_aborts_owned_task_without_detachment() {
-        use std::future::Future;
-        use std::task::{Context, Poll, Waker};
-
         let requests = Arc::new(Mutex::new(Vec::new()));
         let adapter = DivergentAdapter {
             actual: AvatarReport::cancelled(message_id(), cancellation().behavior_id),
@@ -754,21 +817,43 @@ mod tests {
             adapter,
         )
         .unwrap();
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .build()
-            .unwrap();
-        runtime.block_on(async {
-            let mut execution = Box::pin(composition.execute(message_id(), cancellation()));
-            let mut context = Context::from_waker(Waker::noop());
-            assert_eq!(execution.as_mut().poll(&mut context), Poll::Pending);
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (_allow_tx, allow_rx) = tokio::sync::oneshot::channel();
+        let (task_dropped_tx, task_dropped_rx) = std::sync::mpsc::channel();
+        let (drop_execution_tx, drop_execution_rx) = tokio::sync::oneshot::channel();
+        let (completed_tx, completed_rx) = std::sync::mpsc::channel();
+        composition.lifecycle_probe = Some(TestLifecycleProbe {
+            started_waiting: started_tx,
+            allow_cancellation: allow_rx,
+            task_dropped: task_dropped_tx,
+        });
+
+        std::thread::scope(|scope| {
+            scope.spawn(move || {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .build()
+                    .unwrap();
+                runtime.block_on(async {
+                    let mut execution = Box::pin(composition.execute(message_id(), cancellation()));
+                    tokio::select! {
+                        result = &mut execution => panic!("execution completed before drop: {result:?}"),
+                        result = drop_execution_rx => result.unwrap(),
+                    }
+                    drop(execution);
+                    tokio::task::yield_now().await;
+                    assert_eq!(
+                        composition.execute(message_id(), cancellation()).await,
+                        Err(BehaviorCancellationError::RuntimeFailure)
+                    );
+                    completed_tx.send(()).unwrap();
+                });
+            });
+
+            started_rx.recv().unwrap();
             assert!(requests.lock().unwrap().is_empty());
-            drop(execution);
-            tokio::task::yield_now().await;
-            assert!(requests.lock().unwrap().is_empty());
-            assert_eq!(
-                composition.execute(message_id(), cancellation()).await,
-                Err(BehaviorCancellationError::RuntimeFailure)
-            );
+            drop_execution_tx.send(()).unwrap();
+            task_dropped_rx.recv().unwrap();
+            completed_rx.recv().unwrap();
             assert!(requests.lock().unwrap().is_empty());
         });
     }
