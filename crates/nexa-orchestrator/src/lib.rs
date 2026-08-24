@@ -696,6 +696,11 @@ pub enum CancellationPropagationError {
     #[error("workflow cancellation propagation acknowledgement mismatch")]
     AcknowledgementMismatch,
 }
+versioned_enum_wire!(CancellationPropagationError, CancellationPropagationErrorWire, {
+    UnsupportedVersion => "unsupported_version", AssociationMismatch => "association_mismatch",
+    InvalidPlan => "invalid_plan", DependencyFailure => "dependency_failure",
+    AcknowledgementMismatch => "acknowledgement_mismatch"
+});
 
 /// Validates a plan, calls one supplied port once, and validates exact acceptance evidence.
 pub fn propagate_workflow_cancellation(
@@ -791,5 +796,127 @@ impl WorkflowCancellationPropagationPort for ScriptedWorkflowCancellationPropaga
                 Err(CancellationPropagationDependencyError)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod cancellation_propagation_private_tests {
+    use super::*;
+    use uuid::Uuid;
+
+    fn id<T>(value: u128, make: impl FnOnce(Uuid) -> Result<T, nexa_domain::ValueError>) -> T {
+        make(Uuid::from_u128(value)).unwrap()
+    }
+
+    fn valid_plan() -> WorkflowCancellationPlan {
+        WorkflowCancellationPlan {
+            version: CANCELLATION_PROPAGATION_V1,
+            workflow_id: id(1, WorkflowId::new),
+            session_id: id(2, SessionId::new),
+            correlation_id: id(3, CorrelationId::new),
+            trace_id: id(4, TraceId::new),
+            directives: vec![],
+        }
+    }
+
+    fn assert_private_failure(
+        plan: &WorkflowCancellationPlan,
+        outcome: WorkflowCancellationAcknowledgement,
+        expected: CancellationPropagationError,
+        debug: &str,
+        display: &str,
+        expected_calls: usize,
+        expected_consumed: usize,
+    ) {
+        let mut port = ScriptedWorkflowCancellationPropagationPort::new([
+            ScriptedCancellationPropagationOutcome::Acknowledged(outcome),
+        ]);
+        let error = propagate_workflow_cancellation(
+            &mut port,
+            plan,
+            plan.workflow_id,
+            plan.session_id,
+            plan.correlation_id,
+            plan.trace_id,
+        )
+        .unwrap_err();
+        assert_eq!(error, expected);
+        assert_eq!(format!("{error:?}"), debug);
+        assert_eq!(error.to_string(), display);
+        assert_eq!(port.received_plans.len(), expected_calls);
+        assert_eq!(port.consumed, expected_consumed);
+        assert_eq!(port.outcomes.len(), 1 - expected_consumed);
+    }
+
+    #[test]
+    fn defensive_plan_failures_precede_the_port() {
+        let valid = valid_plan();
+        let outcome = WorkflowCancellationAcknowledgement::for_plan(&valid);
+        let mut unsupported = valid.clone();
+        unsupported.version = ProtocolVersion::new(2, 0);
+        assert_private_failure(
+            &unsupported,
+            outcome.clone(),
+            CancellationPropagationError::UnsupportedVersion,
+            "UnsupportedVersion",
+            "unsupported workflow cancellation propagation version",
+            0,
+            0,
+        );
+
+        let mut invalid = valid.clone();
+        invalid.directives = vec![
+            PlannedCancellationDirective {
+                version: CANCELLATION_PROPAGATION_V1,
+                target: CancellationTarget::Speech,
+                directive: CancellationDirective::RequestCancellation,
+            },
+            PlannedCancellationDirective {
+                version: CANCELLATION_PROPAGATION_V1,
+                target: CancellationTarget::Retrieval,
+                directive: CancellationDirective::RequestCancellation,
+            },
+        ];
+        assert_private_failure(
+            &invalid,
+            outcome,
+            CancellationPropagationError::InvalidPlan,
+            "InvalidPlan",
+            "invalid workflow cancellation propagation plan",
+            0,
+            0,
+        );
+    }
+
+    #[test]
+    fn defensive_acknowledgement_version_and_directive_versions_consume_once() {
+        let plan = valid_plan();
+        let mut wrong_version = WorkflowCancellationAcknowledgement::for_plan(&plan);
+        wrong_version.version = ProtocolVersion::new(2, 0);
+        assert_private_failure(
+            &plan,
+            wrong_version,
+            CancellationPropagationError::AcknowledgementMismatch,
+            "AcknowledgementMismatch",
+            "workflow cancellation propagation acknowledgement mismatch",
+            1,
+            1,
+        );
+
+        let mut wrong_directive_version = WorkflowCancellationAcknowledgement::for_plan(&plan);
+        wrong_directive_version.directives = vec![PlannedCancellationDirective {
+            version: ProtocolVersion::new(2, 0),
+            target: CancellationTarget::Retrieval,
+            directive: CancellationDirective::RequestCancellation,
+        }];
+        assert_private_failure(
+            &plan,
+            wrong_directive_version,
+            CancellationPropagationError::AcknowledgementMismatch,
+            "AcknowledgementMismatch",
+            "workflow cancellation propagation acknowledgement mismatch",
+            1,
+            1,
+        );
     }
 }

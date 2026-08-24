@@ -13,7 +13,7 @@ Phase 5 is **in progress**. This matrix records the ADR-0051 lifecycle, ADR-0052
 | Content-free diagnostics | closed errors and direct `Debug`/`Display` tests | Implemented foundation |
 | Dependency-light synchronous boundary | workspace metadata boundary script and forbidden-capability scans | Implemented foundation |
 | Deterministic propagation planning | `plan_workflow_cancellation`; private validated contract construction; direct all-target/semantics, five-target bound, permutation, duplicate, empty, lifecycle, association, strict-wire matrix, identity, and operation-diagnostic tests | Implemented foundation |
-| Exact-plan propagation port | `propagate_workflow_cancellation`, `WorkflowCancellationPropagationPort`, and `WorkflowCancellationAcknowledgement`; direct empty/all-target, identity, acknowledgement mismatch, strict-wire, FIFO, exhaustion, failure-normalization, and exact diagnostics tests | Implemented foundation |
+| Exact-plan propagation port | `propagate_workflow_cancellation`, `WorkflowCancellationPropagationPort`, and `WorkflowCancellationAcknowledgement`; direct exact-JSON/round-trip and strict negative wire matrices, target × directive semantics, all operation failures, identity and acknowledgement mismatch, FIFO, exhaustion, exact consumption, failure-normalization, and returned-error diagnostics tests | Implemented foundation |
 | Deterministic scripted propagation adapter | `ScriptedWorkflowCancellationPropagationPort`; direct FIFO, zero/one outcome consumption, exact received-plan, dependency failure, and exhaustion tests | Implemented foundation |
 | Real cancellation, structured concurrency, subsystem integration, and proof that work stopped | Explicitly deferred by ADR-0051, ADR-0052, and ADR-0053 | Not implemented |
 
