@@ -150,6 +150,57 @@ fn every_target_survives_the_exact_path_with_both_directive_semantics() {
 }
 
 #[test]
+fn scripted_port_consumes_empty_and_all_target_plans_in_fifo_order() {
+    let empty_plan = plan(&[]);
+    let all_target_plan = plan(&[
+        Active::new(Target::ToolExecution, Semantics::Cancellable),
+        Active::new(Target::Behavior, Semantics::NonCancellable),
+        Active::new(Target::Speech, Semantics::Cancellable),
+        Active::new(Target::TutorGeneration, Semantics::NonCancellable),
+        Active::new(Target::Retrieval, Semantics::Cancellable),
+    ]);
+    let empty_acknowledgement = Acknowledgement::for_plan(&empty_plan);
+    let all_target_acknowledgement = Acknowledgement::for_plan(&all_target_plan);
+    let mut port = ScriptedPort::new([
+        Outcome::Acknowledged(empty_acknowledgement.clone()),
+        Outcome::Acknowledged(all_target_acknowledgement.clone()),
+    ]);
+
+    assert_eq!(
+        propagate(&mut port, &empty_plan).unwrap(),
+        empty_acknowledgement
+    );
+    assert_eq!(port.received_plans(), std::slice::from_ref(&empty_plan));
+    assert_eq!(port.consumed_outcomes(), 1);
+    assert_eq!(port.remaining_outcomes(), 1);
+
+    assert_eq!(
+        propagate(&mut port, &all_target_plan).unwrap(),
+        all_target_acknowledgement
+    );
+    assert_eq!(
+        port.received_plans(),
+        &[empty_plan.clone(), all_target_plan.clone()]
+    );
+    assert_eq!(port.consumed_outcomes(), 2);
+    assert_eq!(port.remaining_outcomes(), 0);
+    assert_eq!(
+        all_target_plan
+            .directives()
+            .iter()
+            .map(|directive| (directive.target(), directive.directive()))
+            .collect::<Vec<_>>(),
+        vec![
+            (Target::Retrieval, Directive::RequestCancellation),
+            (Target::TutorGeneration, Directive::ReportNonCancellable,),
+            (Target::Speech, Directive::RequestCancellation),
+            (Target::Behavior, Directive::ReportNonCancellable),
+            (Target::ToolExecution, Directive::RequestCancellation),
+        ]
+    );
+}
+
+#[test]
 fn acknowledgement_wire_rejects_each_nil_and_malformed_identity() {
     let original = canonical_json(json!([]));
     for field in ["workflow_id", "session_id", "correlation_id", "trace_id"] {
