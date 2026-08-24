@@ -305,9 +305,9 @@ versioned_enum_wire!(CancellationDirective, CancellationDirectiveWire, {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ActiveCancellationTarget {
-    pub version: ProtocolVersion,
-    pub target: CancellationTarget,
-    pub semantics: CancellationSemantics,
+    version: ProtocolVersion,
+    target: CancellationTarget,
+    semantics: CancellationSemantics,
 }
 
 impl ActiveCancellationTarget {
@@ -317,6 +317,30 @@ impl ActiveCancellationTarget {
             target,
             semantics,
         }
+    }
+
+    /// Validates an explicitly versioned target received outside the wire decoder.
+    pub fn try_new(
+        version: ProtocolVersion,
+        target: CancellationTarget,
+        semantics: CancellationSemantics,
+    ) -> Result<Self, CancellationPlanningError> {
+        if version != CANCELLATION_PROPAGATION_V1 {
+            return Err(CancellationPlanningError::UnsupportedVersion);
+        }
+        Ok(Self::new(target, semantics))
+    }
+
+    pub const fn version(&self) -> ProtocolVersion {
+        self.version
+    }
+
+    pub const fn target(&self) -> CancellationTarget {
+        self.target
+    }
+
+    pub const fn semantics(&self) -> CancellationSemantics {
+        self.semantics
     }
 }
 
@@ -343,9 +367,23 @@ impl<'de> Deserialize<'de> for ActiveCancellationTarget {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PlannedCancellationDirective {
-    pub version: ProtocolVersion,
-    pub target: CancellationTarget,
-    pub directive: CancellationDirective,
+    version: ProtocolVersion,
+    target: CancellationTarget,
+    directive: CancellationDirective,
+}
+
+impl PlannedCancellationDirective {
+    pub const fn version(&self) -> ProtocolVersion {
+        self.version
+    }
+
+    pub const fn target(&self) -> CancellationTarget {
+        self.target
+    }
+
+    pub const fn directive(&self) -> CancellationDirective {
+        self.directive
+    }
 }
 
 impl<'de> Deserialize<'de> for PlannedCancellationDirective {
@@ -375,12 +413,38 @@ impl<'de> Deserialize<'de> for PlannedCancellationDirective {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkflowCancellationPlan {
-    pub version: ProtocolVersion,
-    pub workflow_id: WorkflowId,
-    pub session_id: SessionId,
-    pub correlation_id: CorrelationId,
-    pub trace_id: TraceId,
-    pub directives: Vec<PlannedCancellationDirective>,
+    version: ProtocolVersion,
+    workflow_id: WorkflowId,
+    session_id: SessionId,
+    correlation_id: CorrelationId,
+    trace_id: TraceId,
+    directives: Vec<PlannedCancellationDirective>,
+}
+
+impl WorkflowCancellationPlan {
+    pub const fn version(&self) -> ProtocolVersion {
+        self.version
+    }
+
+    pub const fn workflow_id(&self) -> WorkflowId {
+        self.workflow_id
+    }
+
+    pub const fn session_id(&self) -> SessionId {
+        self.session_id
+    }
+
+    pub const fn correlation_id(&self) -> CorrelationId {
+        self.correlation_id
+    }
+
+    pub const fn trace_id(&self) -> TraceId {
+        self.trace_id
+    }
+
+    pub fn directives(&self) -> &[PlannedCancellationDirective] {
+        &self.directives
+    }
 }
 
 impl<'de> Deserialize<'de> for WorkflowCancellationPlan {
@@ -399,6 +463,11 @@ impl<'de> Deserialize<'de> for WorkflowCancellationPlan {
         if wire.version != CANCELLATION_PROPAGATION_V1 {
             return Err(serde::de::Error::custom(
                 CancellationPlanningError::UnsupportedVersion,
+            ));
+        }
+        if wire.directives.len() > CANCELLATION_TARGET_LIMIT {
+            return Err(serde::de::Error::custom(
+                CancellationPlanningError::TooManyTargets,
             ));
         }
         if wire
@@ -432,11 +501,16 @@ pub enum CancellationPlanningError {
     AssociationMismatch,
     #[error("duplicate cancellation target")]
     DuplicateTarget,
+    #[error("too many cancellation targets")]
+    TooManyTargets,
 }
 versioned_enum_wire!(CancellationPlanningError, CancellationPlanningErrorWire, {
     UnsupportedVersion => "unsupported_version", WorkflowNotCancelled => "workflow_not_cancelled",
-    AssociationMismatch => "association_mismatch", DuplicateTarget => "duplicate_target"
+    AssociationMismatch => "association_mismatch", DuplicateTarget => "duplicate_target",
+    TooManyTargets => "too_many_targets"
 });
+
+const CANCELLATION_TARGET_LIMIT: usize = 5;
 
 /// Purely plans propagation for an already-cancelled workflow.
 pub fn plan_workflow_cancellation(
@@ -458,6 +532,9 @@ pub fn plan_workflow_cancellation(
     ) != (workflow_id, session_id, correlation_id, trace_id)
     {
         return Err(CancellationPlanningError::AssociationMismatch);
+    }
+    if active_targets.len() > CANCELLATION_TARGET_LIMIT {
+        return Err(CancellationPlanningError::TooManyTargets);
     }
     if active_targets
         .iter()

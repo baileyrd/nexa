@@ -10,11 +10,11 @@ ADR-0051 establishes lifecycle cancellation but deliberately does not propagate 
 
 ## Decision
 
-`nexa-orchestrator` provides a pure `plan_workflow_cancellation` operation. It accepts an existing cancelled `InteractionWorkflow`, trusted workflow/session/correlation/trace references, and a bounded collection of active targets. The closed target vocabulary is retrieval, tutor generation, speech, behavior, and tool execution. Each target declares either cancellable or non-cancellable semantics.
+`nexa-orchestrator` provides a pure `plan_workflow_cancellation` operation. It accepts an existing cancelled `InteractionWorkflow`, trusted workflow/session/correlation/trace references, and a collection bounded to at most the five active-target categories. The closed target vocabulary is retrieval, tutor generation, speech, behavior, and tool execution. Each target declares either cancellable or non-cancellable semantics. Inputs exceeding that five-category bound fail before collection allocation or canonicalization.
 
-The operation fails closed for a non-cancelled workflow, any identity reassociation, unsupported V1 input, or duplicate category. It permits no targets. Successful output preserves all four identities and contains exactly one directive per supplied target: request cancellation or report non-cancellable. Directives are sorted in the target vocabulary's declared order, independent of caller order.
+The operation fails closed for a non-cancelled workflow, any identity reassociation, unsupported V1 input, duplicate category, or an over-bound collection. It permits no targets. Successful output preserves all four identities and contains exactly one directive per supplied target: request cancellation or report non-cancellable. Directives are sorted in the target vocabulary's declared order, independent of caller order.
 
-All new forms are strict, versioned V1 wire contracts. Unknown fields, versions, variants, malformed values, and nil identities are rejected. Errors are closed and content-free. Planning performs no I/O or side effect and grants no authority to execute a directive.
+All new forms are strict, versioned V1 wire contracts. Unknown fields, versions, variants, malformed values, nil identities, duplicate or noncanonical directives, and over-bound directive collections are rejected. Validation-critical fields are private: active targets use their V1 constructor, while directives and plans can be produced only by planning or validated deserialization; getters preserve read access. Consequently every publicly serializable value retains its V1, identity, ordering, uniqueness, and boundedness invariants. Errors are closed and content-free. Planning performs no I/O or side effect and grants no authority to execute a directive.
 
 ## Consequences and deferrals
 

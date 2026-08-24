@@ -12,7 +12,7 @@ Phase 5 is **in progress**. This matrix records the ADR-0051 lifecycle foundatio
 | V1 deterministic strict wire | validating round trips and unknown version/field/variant/nil rejection | Implemented foundation |
 | Content-free diagnostics | closed errors and direct `Debug`/`Display` tests | Implemented foundation |
 | Dependency-light synchronous boundary | workspace metadata boundary script and forbidden-capability scans | Implemented foundation |
-| Deterministic propagation planning | `plan_workflow_cancellation`; direct all-target/semantics, permutation, duplicate, empty, lifecycle, association, wire, and diagnostic tests | Implemented foundation |
+| Deterministic propagation planning | `plan_workflow_cancellation`; private validated contract construction; direct all-target/semantics, five-target bound, permutation, duplicate, empty, lifecycle, association, strict-wire matrix, identity, and operation-diagnostic tests | Implemented foundation |
 | Runtime cancellation, execution propagation, composition, and integrations | Explicitly deferred by ADR-0051 and ADR-0052 | Not implemented |
 
 NEXA-ORCH-001 remains Baseline Draft. No async runtime, I/O, provider, speech, renderer, tool, persistence, networking, clock, health, recovery, or side-effect capability is implied.
