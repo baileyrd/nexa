@@ -75,10 +75,12 @@ Exit: grounded responses carry citations, confidence, and machine-validated tuto
 
 ## Phase 5 — Orchestrate a complete session
 
-**Status:** In progress. ADR-0051 activates `nexa-orchestrator` with the first synchronous, provider-neutral lifecycle and cancellation foundation only.
+**Status:** In progress. ADR-0051 activates `nexa-orchestrator` with synchronous lifecycle cancellation; ADR-0052 adds only deterministic, provider-neutral propagation planning for active subsystem categories.
 
 - [x] deterministic session/workflow lifecycle and lifecycle cancellation foundation (ADR-0051)
 - [ ] cancellation-safe execution and propagation
+
+ADR-0052 plans canonical request-cancellation/report-non-cancellable directives without executing them. Runtime cancellation, structured concurrency, subsystem integration, and proof of cancellation-safe execution remain deferred, so the broader checklist item stays incomplete.
 - [ ] speech input/output ports
 - [ ] behavior synchronization
 - [ ] tool/lab execution
