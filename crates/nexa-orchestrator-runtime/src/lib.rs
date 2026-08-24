@@ -263,8 +263,13 @@ impl WorkflowTaskGroup {
             match result {
                 Ok((id, ())) => self.remove_association(id),
                 Err(error) => {
+                    let failure_is_required = self
+                        .associations
+                        .get(&error.id())
+                        .copied()
+                        .is_some_and(|association| self.association_is_required(association));
                     self.remove_association(error.id());
-                    self.plan_join_failed = true;
+                    self.plan_join_failed |= failure_is_required;
                 }
             }
         }
@@ -283,10 +288,29 @@ impl WorkflowTaskGroup {
     }
 
     fn preflight(&self, plan: &WorkflowCancellationPlan) -> Result<(), WorkflowTaskGroupError> {
+        self.preflight_with_invariants(
+            plan,
+            plan.version() == CANCELLATION_PROPAGATION_V1,
+            plan.directives()
+                .iter()
+                .all(|directive| directive.version() == CANCELLATION_PROPAGATION_V1),
+            plan.directives()
+                .windows(2)
+                .all(|pair| pair[0].target() < pair[1].target()),
+        )
+    }
+
+    fn preflight_with_invariants(
+        &self,
+        plan: &WorkflowCancellationPlan,
+        supported_plan_version: bool,
+        supported_directive_versions: bool,
+        canonical_directives: bool,
+    ) -> Result<(), WorkflowTaskGroupError> {
         if self.state != WorkflowTaskGroupState::Accepting {
             return Err(WorkflowTaskGroupError::ConflictingCompletion);
         }
-        if plan.version() != CANCELLATION_PROPAGATION_V1 {
+        if !supported_plan_version {
             return Err(WorkflowTaskGroupError::UnsupportedPlanVersion);
         }
         if (
@@ -302,16 +326,7 @@ impl WorkflowTaskGroup {
         ) {
             return Err(WorkflowTaskGroupError::AssociationMismatch);
         }
-        if plan.directives().len() > 5
-            || plan
-                .directives()
-                .iter()
-                .any(|d| d.version() != CANCELLATION_PROPAGATION_V1)
-            || plan
-                .directives()
-                .windows(2)
-                .any(|pair| pair[0].target() >= pair[1].target())
-        {
+        if plan.directives().len() > 5 || !supported_directive_versions || !canonical_directives {
             return Err(WorkflowTaskGroupError::InvalidPlan);
         }
         let covered = plan.directives().iter().fold([false; 5], |mut set, d| {
@@ -332,6 +347,18 @@ impl WorkflowTaskGroup {
                         && self.target_task_counts[target_index(d.target())] != 0
                 })
             })
+    }
+
+    fn association_is_required(&self, association: TaskAssociation) -> bool {
+        match association {
+            TaskAssociation::Unclassified => true,
+            TaskAssociation::Target(target) => self.accepted_plan.as_ref().is_some_and(|plan| {
+                plan.directives().iter().any(|directive| {
+                    directive.target() == target
+                        && directive.directive() == CancellationDirective::RequestCancellation
+                })
+            }),
+        }
     }
 
     fn remove_association(&mut self, id: Id) {
@@ -431,5 +458,91 @@ const fn target_index(target: CancellationTarget) -> usize {
 impl Drop for WorkflowTaskGroup {
     fn drop(&mut self) {
         self.tasks.abort_all();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nexa_orchestrator::{
+        plan_workflow_cancellation, ActiveCancellationTarget, CancellationSemantics,
+    };
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    fn workflow() -> InteractionWorkflow {
+        use nexa_domain::{CorrelationId, SessionId, TraceId, WorkflowId};
+        use uuid::Uuid;
+
+        InteractionWorkflow::new(
+            WorkflowId::new(Uuid::from_u128(1)).unwrap(),
+            SessionId::new(Uuid::from_u128(2)).unwrap(),
+            CorrelationId::new(Uuid::from_u128(3)).unwrap(),
+            TraceId::new(Uuid::from_u128(4)).unwrap(),
+        )
+    }
+
+    fn valid_plan(workflow: InteractionWorkflow) -> WorkflowCancellationPlan {
+        plan_workflow_cancellation(
+            &workflow.cancel().unwrap(),
+            workflow.workflow_id(),
+            workflow.session_id(),
+            workflow.correlation_id(),
+            workflow.trace_id(),
+            &[ActiveCancellationTarget::new(
+                CancellationTarget::Retrieval,
+                CancellationSemantics::Cancellable,
+            )],
+        )
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn unsupported_and_noncanonical_preflight_are_side_effect_free() {
+        let polls = Arc::new(AtomicUsize::new(0));
+        let polls_in_task = Arc::clone(&polls);
+        let expected = workflow();
+        let plan = valid_plan(expected);
+        let mut group = WorkflowTaskGroup::new(expected);
+        group
+            .spawn_for_target(CancellationTarget::Retrieval, move |_| {
+                std::future::poll_fn(move |_| {
+                    polls_in_task.fetch_add(1, Ordering::SeqCst);
+                    std::task::Poll::Pending
+                })
+            })
+            .unwrap();
+        let before = (
+            group.task_count(),
+            group.target_task_count(CancellationTarget::Retrieval),
+            group.unclassified_task_count(),
+        );
+
+        assert_eq!(
+            group.preflight_with_invariants(&plan, false, true, true),
+            Err(WorkflowTaskGroupError::UnsupportedPlanVersion)
+        );
+        assert_eq!(
+            group.preflight_with_invariants(&plan, true, true, false),
+            Err(WorkflowTaskGroupError::InvalidPlan)
+        );
+        assert_eq!(polls.load(Ordering::SeqCst), 0);
+        assert_eq!(
+            (
+                group.task_count(),
+                group.target_task_count(CancellationTarget::Retrieval),
+                group.unclassified_task_count(),
+            ),
+            before
+        );
+        assert_eq!(group.state(), WorkflowTaskGroupState::Accepting);
+        assert!(!group.is_cancellation_requested());
+        assert_eq!(group.spawn(|_| async {}), Ok(()));
+        assert_eq!(
+            group.spawn_for_target(CancellationTarget::Speech, |_| async {}),
+            Ok(())
+        );
     }
 }
