@@ -70,6 +70,7 @@ This registry is the navigation and governance authority for Nexa system specifi
 | ADR-0052 | [Deterministic workflow cancellation propagation planning](adr/0052-deterministic-workflow-cancellation-propagation-planning.md) | Accepted | Phase 5 synchronous canonical cancellation-propagation planning foundation |
 | ADR-0053 | [Provider-neutral workflow cancellation propagation port](adr/0053-provider-neutral-workflow-cancellation-propagation-port.md) | Accepted | Phase 5 synchronous exact-plan propagation-port and scripted-adapter foundation |
 | ADR-0054 | [Tokio owned workflow task and cancellation foundation](adr/0054-tokio-owned-workflow-task-cancellation-foundation.md) | Accepted | Phase 5 Tokio owned-task, cancellation-token, join/drain, and abort-on-drop runtime foundation |
+| ADR-0055 | [Target-aware workflow task ownership foundation](adr/0055-target-aware-workflow-task-ownership-foundation.md) | Accepted | Phase 5 closed-target task association and hierarchical token ownership foundation |
 | ADR-0014 | [Learning-core composition and atomicity](adr/0014-learning-core-composition-and-atomicity.md) | Accepted | Phase 3 policy composition, unit of work, idempotency, and deferred durable adapters |
 | ADR-0008 | [Controlled 3D workspace migration and ownership](adr/0008-controlled-3d-workspace-migration.md) | Accepted | 3D library, viewer, and validator ownership after migration |
 
@@ -93,7 +94,7 @@ This registry is the navigation and governance authority for Nexa system specifi
 | 11 | NEXA-3D-ART-001 | 3D production pipeline | Baseline Draft | Assets/tooling |
 | 11 | NEXA-3D-REF-001 | Canonical 3D reference | Baseline Draft | Assets |
 | 11 | NEXA-3D-RUNTIME-001 | 3D validation runtime | Implemented slice | `crates/nexa-3d`; `apps/nexa-3d-viewer`; `tools/nexa-3d-validate` |
-| 12 | NEXA-ORCH-001 | Session orchestration | Baseline Draft; ADR-0051 lifecycle, ADR-0052 propagation-planning, ADR-0053 propagation-port, and ADR-0054 Tokio owned-task foundations implemented | `nexa-orchestrator`; `nexa-orchestrator-runtime` |
+| 12 | NEXA-ORCH-001 | Session orchestration | Baseline Draft; ADR-0051 lifecycle, ADR-0052 propagation-planning, ADR-0053 propagation-port, ADR-0054 Tokio owned-task, and ADR-0055 target-aware ownership foundations implemented | `nexa-orchestrator`; `nexa-orchestrator-runtime` |
 
 Directories 13 through 27 reserve future specification namespaces. A reserved directory is not an approved subsystem contract.
 
