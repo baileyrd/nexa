@@ -13959,9 +13959,7 @@ mod tests {
             select_filtered_authorized_available_remote_model_tokenize_invoke_validate_reported_usage_and_admit,
             FilteredAuthorizedAvailableRemoteUsageValidatedTokenizedInvocationAdmissionError as Outer,
         };
-        use crate::model::{
-            LanguageModelProvider, PrivacyClass, ScriptedModelProvider, ScriptedOutcome,
-        };
+        use crate::model::{LanguageModelProvider, PrivacyClass, ScriptedOutcome};
         use crate::registry::ModelRegistry;
         use crate::selection::ModelSelectionError;
         use crate::tokenization::{
@@ -13974,13 +13972,15 @@ mod tests {
         let filtered = filtered_remote_fixture(PrivacyClass::ApprovedRemote);
         let mut descriptor = f.descriptor.clone();
         descriptor.privacy_class = PrivacyClass::ApprovedRemote;
-        let provider = Arc::new(
-            ScriptedModelProvider::new(
+        let provider = Arc::new(SentinelUncheckedProvider {
+            inner: UncheckedScriptedProvider::new(
                 descriptor.clone(),
                 [ScriptedOutcome::Response(f.response.clone())],
-            )
-            .unwrap(),
-        );
+            ),
+            endpoint: "endpoint-private-sentinel".into(),
+            credential: "credential-private-sentinel".into(),
+            private_diagnostic: "provider-private-sentinel".into(),
+        });
         let registry =
             ModelRegistry::try_from_providers([provider.clone() as Arc<dyn LanguageModelProvider>])
                 .unwrap();
@@ -14000,11 +14000,14 @@ mod tests {
             state: ModelAvailabilityState::Available,
         }])
         .unwrap();
-        let tokenizer = ScriptedModelInputTokenizer::new(
-            descriptor.clone(),
-            [ScriptedTokenizationOutcome::TokenCount(1)],
-        )
-        .unwrap();
+        let tokenizer = SentinelTokenizer {
+            inner: ScriptedModelInputTokenizer::new(
+                descriptor.clone(),
+                [ScriptedTokenizationOutcome::TokenCount(1)],
+            )
+            .unwrap(),
+            private_diagnostic: "tokenizer-private-sentinel".into(),
+        };
         let requirements = remote_selection_requirements(vec![PrivacyClass::ApprovedRemote]);
         let call =
             |requirements: &crate::selection::ModelSelectionRequirements,
@@ -14063,37 +14066,36 @@ mod tests {
                 14 => invalid.evidence.source_compilation_replay_anchor = "b".repeat(64),
                 _ => invalid.evidence.filtered_compilation_replay_anchor = "c".repeat(64),
             }
+            let error = call(
+                &requirements,
+                &valid_availability,
+                &valid_authorization,
+                &invalid,
+            )
+            .unwrap_err();
             assert_eq!(
-                call(
-                    &requirements,
-                    &valid_availability,
-                    &valid_authorization,
-                    &invalid,
-                ),
-                Err(Outer::FilteredSelection(
+                error,
+                Outer::FilteredSelection(
                     crate::remote_prompt::FilteredRemoteSelectionError::FilterEvidence,
-                )),
+                ),
                 "filter mutation {mutation}",
-            );
-            let error = Outer::FilteredSelection(
-                crate::remote_prompt::FilteredRemoteSelectionError::FilterEvidence,
             );
             assert_content_free_diagnostics(
                 &error,
                 &[
                     "prompt-private-sentinel",
+                    "identity-private-sentinel",
                     "learner-private-sentinel",
                     "knowledge-private-sentinel",
-                    "authorization-private-sentinel",
+                    "conversation-private-sentinel",
+                    "tool-private-sentinel",
                     "tokenizer-private-sentinel",
                     "provider-private-sentinel",
                     "endpoint-private-sentinel",
                     "credential-private-sentinel",
-                    "response-private-sentinel",
-                    "usage-private-sentinel",
                 ],
             );
-            assert_eq!(tokenizer.remaining().unwrap(), 1);
+            assert_eq!(tokenizer.inner.remaining().unwrap(), 1);
             assert_eq!(provider.remaining(), 1);
         }
 
@@ -14270,7 +14272,8 @@ mod tests {
                 RemoteAuthorizationError::Selection(ModelSelectionError::NoEligibleModel),
             ),
         ] {
-            let error = if expected == RemoteAuthorizationError::InvalidRemoteRequirements {
+            let expected_outer = if expected == RemoteAuthorizationError::InvalidRemoteRequirements
+            {
                 Outer::FilteredSelection(
                     crate::remote_prompt::FilteredRemoteSelectionError::FilterPrivacyRequirements,
                 )
@@ -14281,23 +14284,25 @@ mod tests {
                     ),
                 )
             };
-            assert_eq!(call(r, a, auth, &filtered), Err(error));
-            let diagnostic = format!("{error:?} {error}");
-            for sentinel in [
+            let error = call(r, a, auth, &filtered).unwrap_err();
+            assert_eq!(error, expected_outer);
+            let mut sentinels = vec![
                 "prompt-private-sentinel",
+                "identity-private-sentinel",
                 "learner-private-sentinel",
                 "knowledge-private-sentinel",
-                "authorization-private-sentinel",
+                "conversation-private-sentinel",
+                "tool-private-sentinel",
                 "tokenizer-private-sentinel",
                 "provider-private-sentinel",
                 "endpoint-private-sentinel",
                 "credential-private-sentinel",
-                "response-private-sentinel",
-                "usage-private-sentinel",
-            ] {
-                assert!(!diagnostic.contains(sentinel), "leaked {sentinel}");
+            ];
+            if std::ptr::eq(auth, &malformed_authorization) {
+                sentinels.push("authorization-private-sentinel");
             }
-            assert_eq!(tokenizer.remaining().unwrap(), 1);
+            assert_content_free_diagnostics(&error, &sentinels);
+            assert_eq!(tokenizer.inner.remaining().unwrap(), 1);
             assert_eq!(provider.remaining(), 1);
         }
         let mut tampered_compilation = filtered.clone();
@@ -14313,7 +14318,7 @@ mod tests {
                 crate::remote_prompt::FilteredRemoteSelectionError::FilterEvidence,
             ))
         );
-        assert_eq!(tokenizer.remaining().unwrap(), 1);
+        assert_eq!(tokenizer.inner.remaining().unwrap(), 1);
         assert_eq!(provider.remaining(), 1);
     }
 
@@ -14563,7 +14568,10 @@ mod tests {
                 9 => {
                     // Restore valid admission syntax: excessive reported output usage is the
                     // only invalid response field in this case.
-                    f.response.output = admission_fixture().response.output;
+                    f.response.output = RawModelOutput::new(
+                        r#"{"response-private-sentinel":"usage-private-sentinel"}"#,
+                    )
+                    .unwrap();
                     f.response.reported_usage = Some(ModelUsage {
                         input_tokens: 7,
                         output_tokens: remote_selection_requirements(vec![
@@ -14576,6 +14584,10 @@ mod tests {
                     Inner::ReportedUsage(Usage::Response(ModelErrorKind::InvalidResponse))
                 }
                 10 => {
+                    f.response.output = RawModelOutput::new(
+                        "response-private-sentinel usage-private-sentinel not json",
+                    )
+                    .unwrap();
                     f.response.reported_usage = Some(ModelUsage {
                         input_tokens: 6,
                         output_tokens: 1,
@@ -14584,6 +14596,10 @@ mod tests {
                     Inner::ReportedUsage(Usage::InputTokenCountMismatch)
                 }
                 11 => {
+                    f.response.output = RawModelOutput::new(
+                        "response-private-sentinel usage-private-sentinel not json",
+                    )
+                    .unwrap();
                     f.response.reported_usage = Some(ModelUsage {
                         input_tokens: 8,
                         output_tokens: 1,
@@ -14592,8 +14608,10 @@ mod tests {
                     Inner::ReportedUsage(Usage::InputTokenCountMismatch)
                 }
                 _ => {
-                    f.response.output =
-                        RawModelOutput::new("response-private-sentinel not json").unwrap();
+                    f.response.output = RawModelOutput::new(
+                        "response-private-sentinel usage-private-sentinel not json",
+                    )
+                    .unwrap();
                     f.response.reported_usage = None;
                     provider_outcome = ScriptedOutcome::Response(f.response.clone());
                     Inner::Admission(AdmissionError::MalformedSyntax)
@@ -14733,24 +14751,24 @@ mod tests {
                     "mode {mode} touched a disjoint provider"
                 );
             }
-            assert_content_free_diagnostics(
-                &error,
-                &[
-                    "prompt-private-sentinel",
-                    "identity-private-sentinel",
-                    "learner-private-sentinel",
-                    "knowledge-private-sentinel",
-                    "conversation-private-sentinel",
-                    "tool-private-sentinel",
-                    "authorization-private-sentinel",
-                    "tokenizer-private-sentinel",
-                    "provider-private-sentinel",
-                    "endpoint-private-sentinel",
-                    "credential-private-sentinel",
-                    "response-private-sentinel",
-                    "usage-private-sentinel",
-                ],
-            );
+            let mut sentinels = vec![
+                "prompt-private-sentinel",
+                "identity-private-sentinel",
+                "learner-private-sentinel",
+                "knowledge-private-sentinel",
+                "conversation-private-sentinel",
+                "tool-private-sentinel",
+                "tokenizer-private-sentinel",
+                "provider-private-sentinel",
+                "endpoint-private-sentinel",
+                "credential-private-sentinel",
+            ];
+            // These values are carried by the actual provider response in the reported-usage
+            // and admission calls, rather than merely being asserted against a category value.
+            if mode >= 9 {
+                sentinels.extend(["response-private-sentinel", "usage-private-sentinel"]);
+            }
+            assert_content_free_diagnostics(&error, &sentinels);
         }
     }
 
