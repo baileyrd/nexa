@@ -212,6 +212,18 @@ pub enum FilteredAuthorizedAvailableRemoteTokenizedInvocationAdmissionError {
     TokenizedInvocationAdmission(TokenizedInvocationAdmissionError),
 }
 
+/// Closed failures for filtered authorized remote selection followed by
+/// usage-validated exact tokenization, invocation, and admission.
+#[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
+pub enum FilteredAuthorizedAvailableRemoteUsageValidatedTokenizedInvocationAdmissionError {
+    #[error("filtered authorized available remote model selection failed")]
+    FilteredSelection(FilteredRemoteSelectionError),
+    #[error(
+        "selected filtered authorized available remote model usage-validated tokenized invocation or admission failed"
+    )]
+    UsageValidatedTokenizedInvocationAdmission(UsageValidatedTokenizedInvocationAdmissionError),
+}
+
 fn validate_explicit_local_requirements(
     requirements: &ModelSelectionRequirements,
 ) -> Result<(), ()> {
@@ -911,5 +923,57 @@ pub fn select_filtered_authorized_available_remote_model_tokenize_invoke_and_adm
     )
     .map_err(
         FilteredAuthorizedAvailableRemoteTokenizedInvocationAdmissionError::TokenizedInvocationAdmission,
+    )
+}
+
+/// Selects through ADR-0034, then validates reported usage between exact tokenization/invocation
+/// of the exact filtered input and strict admission.
+#[allow(clippy::too_many_arguments)]
+pub fn select_filtered_authorized_available_remote_model_tokenize_invoke_validate_reported_usage_and_admit(
+    registry: &ModelRegistry,
+    invocation_id: ModelInvocationId,
+    requirements: &ModelSelectionRequirements,
+    availability: &ModelAvailabilitySnapshot,
+    authorization: &RemoteModelAuthorization,
+    tokenization_contract_version: ProtocolVersion,
+    tokenizer: &dyn ModelInputTokenizer,
+    filtered_result: &RemotePromptFilterResult,
+    authority: &TrustedPlanningAuthority,
+    context: &ContextPackage,
+    citations: &CitationResult,
+) -> Result<
+    TokenizedInvocationAdmissionResult,
+    FilteredAuthorizedAvailableRemoteUsageValidatedTokenizedInvocationAdmissionError,
+> {
+    let selected = select_filtered_authorized_available_remote_model(
+        registry,
+        requirements,
+        availability,
+        authorization,
+        filtered_result,
+    )
+    .map_err(
+        FilteredAuthorizedAvailableRemoteUsageValidatedTokenizedInvocationAdmissionError::FilteredSelection,
+    )?;
+    let compilation = &filtered_result.filtered_compilation;
+    let request = request_for_selected(
+        invocation_id,
+        &selected.descriptor,
+        requirements,
+        compilation,
+    );
+
+    tokenize_invoke_validate_reported_usage_and_admit_model_output_with_token_capacity(
+        tokenization_contract_version,
+        tokenizer,
+        selected.provider.as_ref(),
+        &request,
+        compilation,
+        authority,
+        context,
+        citations,
+    )
+    .map_err(
+        FilteredAuthorizedAvailableRemoteUsageValidatedTokenizedInvocationAdmissionError::UsageValidatedTokenizedInvocationAdmission,
     )
 }
