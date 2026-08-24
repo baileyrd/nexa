@@ -79,6 +79,8 @@ pub enum WorkflowLifecycleError {
     UnsupportedVersion,
     #[error("illegal workflow lifecycle transition")]
     IllegalTransition,
+    #[error("workflow lifecycle identity association mismatch")]
+    AssociationMismatch,
 }
 
 /// Reference-only identity and current state for one interaction workflow.
@@ -120,6 +122,26 @@ impl InteractionWorkflow {
     }
     pub const fn state(&self) -> WorkflowState {
         self.state
+    }
+
+    /// Validates the aggregate's complete identity association against trusted references.
+    pub fn validate_association(
+        &self,
+        workflow_id: WorkflowId,
+        session_id: SessionId,
+        correlation_id: CorrelationId,
+        trace_id: TraceId,
+    ) -> Result<(), WorkflowLifecycleError> {
+        if (
+            self.workflow_id,
+            self.session_id,
+            self.correlation_id,
+            self.trace_id,
+        ) != (workflow_id, session_id, correlation_id, trace_id)
+        {
+            return Err(WorkflowLifecycleError::AssociationMismatch);
+        }
+        Ok(())
     }
 
     /// Advances through one transition selected by ADR-0051.

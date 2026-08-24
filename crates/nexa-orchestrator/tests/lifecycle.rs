@@ -31,6 +31,32 @@ const W_STATES: [W; 13] = [
     W::Cancelled,
     W::Failed,
 ];
+const S_WIRE: [(S, &str); 9] = [
+    (S::Created, "created"),
+    (S::Initializing, "initializing"),
+    (S::Ready, "ready"),
+    (S::Active, "active"),
+    (S::Paused, "paused"),
+    (S::Degraded, "degraded"),
+    (S::Ending, "ending"),
+    (S::Completed, "completed"),
+    (S::Failed, "failed"),
+];
+const W_WIRE: [(W, &str); 13] = [
+    (W::Created, "created"),
+    (W::NormalizingInput, "normalizing_input"),
+    (W::PreparingContext, "preparing_context"),
+    (W::SelectingPedagogy, "selecting_pedagogy"),
+    (W::RetrievingKnowledge, "retrieving_knowledge"),
+    (W::GeneratingTutorResponse, "generating_tutor_response"),
+    (W::ExecutingTools, "executing_tools"),
+    (W::PlanningResponse, "planning_response"),
+    (W::Speaking, "speaking"),
+    (W::WaitingForStudent, "waiting_for_student"),
+    (W::Completed, "completed"),
+    (W::Cancelled, "cancelled"),
+    (W::Failed, "failed"),
+];
 const SESSION_LEGAL: [(S, S); 11] = [
     (S::Created, S::Initializing),
     (S::Initializing, S::Ready),
@@ -68,6 +94,14 @@ fn workflow() -> InteractionWorkflow {
         id(2, SessionId::new),
         id(3, CorrelationId::new),
         id(4, TraceId::new),
+    )
+}
+fn identities(w: InteractionWorkflow) -> (WorkflowId, SessionId, CorrelationId, TraceId) {
+    (
+        w.workflow_id(),
+        w.session_id(),
+        w.correlation_id(),
+        w.trace_id(),
     )
 }
 fn at(target: W) -> InteractionWorkflow {
@@ -173,7 +207,10 @@ fn cancellation_covers_every_nonterminal_and_is_idempotent() {
             _ => {
                 let cancelled = w.cancel().unwrap();
                 assert_eq!(cancelled.state(), W::Cancelled);
-                assert_eq!(cancelled.cancel(), Ok(cancelled));
+                assert_eq!(identities(cancelled), identities(w));
+                let repeated = cancelled.cancel().unwrap();
+                assert_eq!(repeated, cancelled);
+                assert_eq!(identities(repeated), identities(w));
             }
         }
     }
@@ -185,7 +222,9 @@ fn failure_covers_every_live_workflow_and_terminals_reject_operations() {
         if matches!(state, W::Completed | W::Cancelled | W::Failed) {
             assert_eq!(w.fail(), Err(WorkflowLifecycleError::IllegalTransition));
         } else {
-            assert_eq!(w.fail().unwrap().state(), W::Failed);
+            let failed = w.fail().unwrap();
+            assert_eq!(failed.state(), W::Failed);
+            assert_eq!(identities(failed), identities(w));
         }
     }
     for terminal in [W::Completed, W::Failed] {
@@ -199,13 +238,28 @@ fn failure_covers_every_live_workflow_and_terminals_reject_operations() {
     }
 }
 #[test]
+fn state_vocabularies_have_exact_closed_wire_round_trips() {
+    for (state, name) in S_WIRE {
+        let json = format!("\"{name}\"");
+        assert_eq!(serde_json::to_string(&state).unwrap(), json);
+        assert_eq!(serde_json::from_str::<S>(&json).unwrap(), state);
+    }
+    for (state, name) in W_WIRE {
+        let json = format!("\"{name}\"");
+        assert_eq!(serde_json::to_string(&state).unwrap(), json);
+        assert_eq!(serde_json::from_str::<W>(&json).unwrap(), state);
+    }
+    assert!(serde_json::from_str::<S>("\"future\"").is_err());
+    assert!(serde_json::from_str::<W>("\"future\"").is_err());
+}
+
+#[test]
 fn wire_is_stable_strict_validating_and_preserves_associations() {
     let w = at(W::Speaking);
     let json = serde_json::to_string(&w).unwrap();
-    assert_eq!(
-        serde_json::from_str::<InteractionWorkflow>(&json).unwrap(),
-        w
-    );
+    let decoded = serde_json::from_str::<InteractionWorkflow>(&json).unwrap();
+    assert_eq!(decoded, w);
+    assert_eq!(identities(decoded), identities(w));
     assert!(
         serde_json::from_str::<InteractionWorkflow>(&json.replace("\"1.0\"", "\"2.0\"")).is_err()
     );
@@ -217,26 +271,76 @@ fn wire_is_stable_strict_validating_and_preserves_associations() {
         serde_json::from_str::<InteractionWorkflow>(&json.replace("{", "{\"extra\":true,"))
             .is_err()
     );
-    assert!(serde_json::from_str::<InteractionWorkflow>(&json.replace(
-        "00000000-0000-0000-0000-000000000001",
-        "00000000-0000-0000-0000-000000000000"
-    ))
-    .is_err());
+    let mut value = serde_json::to_value(w).unwrap();
+    for field in ["workflow_id", "session_id", "correlation_id", "trace_id"] {
+        let original = value[field].clone();
+        value[field] = serde_json::Value::String(Uuid::nil().to_string());
+        assert!(
+            serde_json::from_value::<InteractionWorkflow>(value.clone()).is_err(),
+            "{field}"
+        );
+        value[field] = original;
+    }
+}
+
+#[test]
+fn trusted_association_validation_rejects_each_reassociated_identity() {
+    let w = workflow();
+    let (workflow_id, session_id, correlation_id, trace_id) = identities(w);
+    assert_eq!(
+        w.validate_association(workflow_id, session_id, correlation_id, trace_id),
+        Ok(())
+    );
+    assert_eq!(
+        w.validate_association(id(5, WorkflowId::new), session_id, correlation_id, trace_id),
+        Err(WorkflowLifecycleError::AssociationMismatch)
+    );
+    assert_eq!(
+        w.validate_association(workflow_id, id(6, SessionId::new), correlation_id, trace_id),
+        Err(WorkflowLifecycleError::AssociationMismatch)
+    );
+    assert_eq!(
+        w.validate_association(workflow_id, session_id, id(7, CorrelationId::new), trace_id),
+        Err(WorkflowLifecycleError::AssociationMismatch)
+    );
+    assert_eq!(
+        w.validate_association(workflow_id, session_id, correlation_id, id(8, TraceId::new)),
+        Err(WorkflowLifecycleError::AssociationMismatch)
+    );
 }
 #[test]
 fn errors_have_content_free_stable_diagnostics() {
+    let session_error = S::Created.transition_to(S::Ready).unwrap_err();
+    assert_eq!(format!("{session_error:?}"), "SessionTransitionError");
     assert_eq!(
-        format!("{SessionTransitionError:?}"),
-        "SessionTransitionError"
-    );
-    assert_eq!(
-        SessionTransitionError.to_string(),
+        session_error.to_string(),
         "illegal runtime session state transition"
     );
-    for e in [
-        WorkflowLifecycleError::UnsupportedVersion,
-        WorkflowLifecycleError::IllegalTransition,
-    ] {
-        assert!(!format!("{e:?} {e}").contains("00000000"));
-    }
+    let illegal = workflow().advance(W::Completed).unwrap_err();
+    assert_eq!(format!("{illegal:?}"), "IllegalTransition");
+    assert_eq!(illegal.to_string(), "illegal workflow lifecycle transition");
+
+    let w = workflow();
+    let (_, session_id, correlation_id, trace_id) = identities(w);
+    let mismatch = w
+        .validate_association(id(9, WorkflowId::new), session_id, correlation_id, trace_id)
+        .unwrap_err();
+    assert_eq!(format!("{mismatch:?}"), "AssociationMismatch");
+    assert_eq!(
+        mismatch.to_string(),
+        "workflow lifecycle identity association mismatch"
+    );
+
+    let json = serde_json::to_string(&w)
+        .unwrap()
+        .replace("\"1.0\"", "\"2.0\"");
+    let unsupported = serde_json::from_str::<InteractionWorkflow>(&json).unwrap_err();
+    assert_eq!(
+        unsupported.to_string(),
+        "unsupported workflow lifecycle version"
+    );
+    assert_eq!(
+        format!("{unsupported:?}"),
+        "Error(\"unsupported workflow lifecycle version\", line: 0, column: 0)"
+    );
 }
