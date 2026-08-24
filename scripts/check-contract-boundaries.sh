@@ -17,6 +17,7 @@ expected={
  "nexa-learning-core": {"nexa-domain", "nexa-events", "nexa-student", "nexa-pedagogy", "nexa-lessons", "nexa-assessment", "serde", "thiserror"},
  "nexa-knowledge": {"nexa-domain", "serde", "sha2", "thiserror"},
  "nexa-tutor": {"nexa-domain", "nexa-knowledge", "serde", "serde_json", "sha2", "thiserror"},
+ "nexa-orchestrator": {"nexa-domain", "serde", "thiserror"},
 }
 # Ignore dev-only dependencies while enforcing all normal dependency edges.
 for package, allowed in expected.items():
@@ -28,7 +29,7 @@ print("contract dependency DAG passed")
 ' <<<"$metadata"
 
 # Renderer, platform, provider, executor, networking, and persistence crates must never enter contract crates.
-if rg -n --glob 'Cargo.toml' --glob '*.rs' '\b(wgpu|winit|gltf|tokio|async-std|rodio|cpal|reqwest|hyper|sqlx|rusqlite)\b' crates/nexa-{domain,events,nbp,avatar,student,pedagogy,lessons,assessment,learning-core,knowledge,tutor}; then
+if rg -n --glob 'Cargo.toml' --glob '*.rs' '\b(wgpu|winit|gltf|tokio|async-std|rodio|cpal|reqwest|hyper|sqlx|rusqlite)\b' crates/nexa-{domain,events,nbp,avatar,student,pedagogy,lessons,assessment,learning-core,knowledge,tutor,orchestrator}; then
   echo "contract crate references a forbidden implementation dependency" >&2
   exit 1
 fi
@@ -50,7 +51,7 @@ if cargo tree -p nexa-3d-validate --edges normal | rg -q '\b(wgpu|winit|pollster
   exit 1
 fi
 
-for crate in nexa-domain nexa-events nexa-nbp nexa-avatar nexa-student nexa-pedagogy nexa-lessons nexa-assessment nexa-learning-core nexa-knowledge nexa-tutor; do
+for crate in nexa-domain nexa-events nexa-nbp nexa-avatar nexa-student nexa-pedagogy nexa-lessons nexa-assessment nexa-learning-core nexa-knowledge nexa-tutor nexa-orchestrator; do
   if cargo tree -p "$crate" --edges normal | rg -q '\b(wgpu|winit|gltf|pollster)\b'; then
     echo "$crate dependency graph contains a renderer dependency" >&2
     exit 1

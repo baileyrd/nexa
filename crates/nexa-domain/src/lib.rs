@@ -97,7 +97,8 @@ uuid_id!(
     InteractionId,
     ModelProviderId,
     ModelId,
-    ModelInvocationId
+    ModelInvocationId,
+    WorkflowId
 );
 
 /// A finite mastery estimate in the inclusive range `[0, 1]`.
@@ -290,6 +291,11 @@ mod tests {
         assert!(SessionId::new(Uuid::nil()).is_err());
         assert!(
             serde_json::from_str::<SessionId>(r#""00000000-0000-0000-0000-000000000000""#).is_err()
+        );
+        assert!(WorkflowId::new(Uuid::nil()).is_err());
+        assert!(
+            serde_json::from_str::<WorkflowId>(r#""00000000-0000-0000-0000-000000000000""#)
+                .is_err()
         );
     }
     #[test]

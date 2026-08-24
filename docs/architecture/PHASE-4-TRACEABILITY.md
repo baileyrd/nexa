@@ -129,7 +129,7 @@ NEXA-TUTOR-001 remains Baseline Draft. The documented inconsistency between impl
 | Non-invoking original shared handle | `Arc::ptr_eq`, scripted FIFO preservation, descriptor-inconsistency tests | Implemented slice |
 | Freshness/authenticity, probing/monitoring, recovery, general routing, fallback/retry, and remote authorization | Explicitly deferred by ADR-0029; ADR-0028 remains unchanged | Not implemented |
 
-NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context roadmap inconsistency remains intentionally preserved.
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment. The then-known ingestion/context roadmap inconsistency was preserved at that increment.
 
 ## Available explicit local-only selection-to-admission composition
 
@@ -143,7 +143,7 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Existing API boundaries | ADR-0028 remains availability-free; ADR-0029 remains non-invoking; ADR-0025 remains explicitly supplied | Preserved |
 | Probing/monitoring, remote authorization, automatic/general routing, recovery/retry/repair, inference, semantic validation, persistence, partial truncation | Explicitly deferred by ADR-0030 | Not implemented |
 
-NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context roadmap inconsistency remains intentionally preserved.
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment. The then-known ingestion/context roadmap inconsistency was preserved at that increment.
 
 ## Caller-authorized available remote-model selection
 
@@ -156,7 +156,7 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Non-invoking original shared handle | `Arc::ptr_eq` and scripted FIFO preservation tests | Implemented slice |
 | Filtering/minimization, authenticity/freshness, remote execution, routing/fallback/recovery, partial truncation | Explicitly deferred by ADR-0031 | Not implemented |
 
-NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context roadmap inconsistency remains intentionally preserved.
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment. The then-known ingestion/context roadmap inconsistency was preserved at that increment.
 
 ## Authorized available remote selection, invocation, and admission
 
@@ -168,7 +168,7 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Content-free diagnostics | Closed nested error and supplied prompt/response sentinel assertions | Implemented slice |
 | Filtering/minimization/sensitivity inference, authenticity/freshness, automatic/general routing, fallback/recovery, concrete providers/inference/networking, partial truncation | Explicitly deferred by ADR-0032 | Not implemented |
 
-NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context roadmap inconsistency remains intentionally preserved.
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment. The then-known ingestion/context roadmap inconsistency was preserved at that increment.
 
 ## Deterministic remote prompt whole-layer disclosure filtering
 
@@ -191,7 +191,7 @@ NEXA-TUTOR-001 remains Baseline Draft; the reserved privacy specification namesp
 | Non-invoking original registered shared handle | `Arc::ptr_eq` and scripted FIFO preservation | Implemented slice |
 | ADR-0032 invocation, general privacy policy/correctness, semantic filtering/redaction, partial truncation, and existing provider/routing/networking/persistence scope | Explicitly deferred by ADR-0034 | Not implemented |
 
-NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy namespace remains reserved. The known ingestion/context roadmap inconsistency is preserved.
+NEXA-TUTOR-001 remains Baseline Draft; Phase 4 was still in progress at that increment; the privacy namespace remains reserved. The known ingestion/context roadmap inconsistency is preserved.
 
 ## Filtered authorized available remote invocation and admission
 
@@ -204,7 +204,7 @@ NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy 
 | Existing API boundaries | ADR-0034 remains non-invoking; ADR-0032 remains callable without ADR-0033 evidence | Preserved |
 | General privacy correctness, semantic minimization/redaction/anonymization, authorization authenticity/freshness, partial truncation, routing/fallback/retry/repair/recovery, concrete providers/inference/networking, tools, async/streaming, telemetry, persistence | Explicitly deferred by ADR-0035 | Not implemented |
 
-NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy namespace remains reserved and unimplemented. The known ingestion/context roadmap inconsistency is preserved.
+NEXA-TUTOR-001 remains Baseline Draft; Phase 4 was still in progress at that increment; the privacy namespace remains reserved and unimplemented. The known ingestion/context roadmap inconsistency is preserved.
 
 ## ADR-0036 provider-neutral model-input tokenization boundary
 
@@ -216,7 +216,7 @@ NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy 
 | Conservative capacity behavior preserved | ADR-0036 introduced no API that consumes tokenization evidence, and ADR-0022 validation and ADR-0027 selection remain unchanged and do not consume it; ADR-0037 later added the separate existing-request capacity gate and ADR-0038 opt-in composes it with one invocation and strict admission | Preserved |
 | Concrete tokenizers and token-count integration | ADR-0036 itself deferred integration; ADR-0037 later implements the separate existing-request capacity gate and ADR-0038 opt-in composes that gate with one invocation and strict admission. Concrete/provider tokenizer algorithms and integration into selection, authorization, availability, routing, or provider execution, or invocation/admission beyond the opt-in ADR-0038, ADR-0040, ADR-0041, ADR-0042, ADR-0043, and ADR-0044 compositions remain deferred. | Partially implemented |
 
-NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy namespace remains reserved. Partial truncation and the known ingestion/context roadmap inconsistency remain preserved, along with all existing privacy, provider, inference, routing, networking, semantic-validation, async/streaming, telemetry, and persistence deferrals.
+NEXA-TUTOR-001 remains Baseline Draft; Phase 4 was still in progress at that increment; the privacy namespace remains reserved. Partial truncation and the known ingestion/context roadmap inconsistency remain preserved, along with all existing privacy, provider, inference, routing, networking, semantic-validation, async/streaming, telemetry, and persistence deferrals.
 
 ## ADR-0037 exact model-request token-capacity validation
 
@@ -228,7 +228,7 @@ NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy 
 | Closed content-free failures without duplicate evidence | `ModelRequestTokenCapacityError`; sentinel diagnostics tests; success is `()` | Implemented slice |
 | Existing API behavior | ADR-0027 selection, ADR-0025 invocation/admission, and ADR-0037 capacity validation remain unchanged and independently callable; only the new opt-in ADR-0038 composition requires evidence | Preserved |
 
-NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy namespace remains reserved and unimplemented. Partial truncation, the known ingestion/context roadmap inconsistency, and all existing provider, inference, selection/invocation token integration, routing, privacy, networking, semantic-validation, async/streaming, telemetry, and persistence deferrals remain preserved.
+NEXA-TUTOR-001 remains Baseline Draft; Phase 4 was still in progress at that increment; the privacy namespace remains reserved and unimplemented. Partial truncation, the known ingestion/context roadmap inconsistency, and all existing provider, inference, selection/invocation token integration, routing, privacy, networking, semantic-validation, async/streaming, telemetry, and persistence deferrals remain preserved.
 
 ## ADR-0038 token-capacity-gated invocation and admission
 
@@ -240,7 +240,7 @@ NEXA-TUTOR-001 remains Baseline Draft; Phase 4 remains in progress; the privacy 
 | Closed content-free failure separation | `TokenCapacityInvocationAdmissionError::{Preflight, TokenCapacity, Invocation, Admission}` and focused prompt, model-output, and private-provider-diagnostic sentinel assertions for both `Debug` and `Display` | Implemented slice |
 | Existing APIs and tokenizer boundary | ADR-0025 and ADR-0037 APIs remain unchanged; the composition accepts no tokenizer and produces no evidence | Preserved |
 
-NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. All concrete tokenizer/provider, selection/routing/fallback, inference, networking, semantic-validation, privacy-policy, async/streaming, telemetry, and persistence deferrals remain preserved.
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment. All concrete tokenizer/provider, selection/routing/fallback, inference, networking, semantic-validation, privacy-policy, async/streaming, telemetry, and persistence deferrals remain preserved.
 
 ## ADR-0039 exact tokenization and request-capacity composition
 
@@ -252,7 +252,7 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. All concr
 | Exact content-free replay evidence returned | Association, serialization/replay, and redacted `Debug`/`Display` tests | Implemented slice |
 | Non-invoking and existing APIs preserved | Provider FIFO preservation; ADR-0036, ADR-0037, and ADR-0038 signatures unchanged | Preserved |
 
-NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all concrete tokenizer/provider, routing, inference, networking, semantic-validation, privacy-policy, recovery, async/streaming, telemetry, and persistence deferrals remain preserved.
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment. The known ingestion/context checklist inconsistency and all concrete tokenizer/provider, routing, inference, networking, semantic-validation, privacy-policy, recovery, async/streaming, telemetry, and persistence deferrals remain preserved.
 
 ## ADR-0040 exact tokenization, single-attempt invocation, and admission composition
 
@@ -265,7 +265,7 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Closed content-free failure separation | `TokenizedInvocationAdmissionError::{Preflight, TokenizationCapacity, Invocation, Admission}` and sentinel diagnostics tests | Implemented slice |
 | Existing APIs and explicit deferrals | ADR-0025 and ADR-0036 through ADR-0039 signatures unchanged; no selection, routing, concrete dependency, retry, or networking | Preserved |
 
-NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all concrete tokenizer/provider, routing, inference, networking, semantic-validation, privacy-policy, recovery, async/streaming, telemetry, and persistence deferrals remain preserved.
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment. The known ingestion/context checklist inconsistency and all concrete tokenizer/provider, routing, inference, networking, semantic-validation, privacy-policy, recovery, async/streaming, telemetry, and persistence deferrals remain preserved.
 
 ## ADR-0041 explicit local-only selection and exact-tokenization composition
 
@@ -278,7 +278,7 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Closed, content-free failure separation | `SelectedTokenizedInvocationAdmissionError::{InvalidLocalOnlyRequirements, Selection, TokenizedInvocationAdmission}` and sentinel diagnostics | Implemented slice |
 | Existing APIs and deferrals | ADR-0028 and ADR-0040 signatures unchanged; no token-aware selection, fallback, retry, concrete dependency, routing, or networking | Preserved |
 
-NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment. The former ingestion/context checklist inconsistency is now reconciled; all capability deferrals remain preserved.
 
 ## ADR-0042 availability-gated local selection and exact-tokenization composition
 
@@ -291,7 +291,7 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Closed content-free failures | `AvailableLocalTokenizedInvocationAdmissionError` and sentinel diagnostics | Implemented slice |
 | Existing APIs and deferrals | ADRs 0029, 0030, 0040, and 0041 unchanged; no probing, token-aware selection, fallback, retry, or concrete dependency | Preserved |
 
-NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment. The former ingestion/context checklist inconsistency is now reconciled; all capability deferrals remain preserved.
 
 ## ADR-0043 authorized available remote selection and exact-tokenization composition
 
@@ -303,7 +303,7 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Closed content-free failures | Both direct focused tests format the closed errors and cover content-free selection, tokenizer, provider, and admission failure categories | Implemented slice |
 | Permission and deferrals preserved | No authentication, authorization-policy change, secrets, filtering/minimization proof, concrete remote execution, networking, retry, fallback, or token-aware selection | Preserved |
 
-NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment. The former ingestion/context checklist inconsistency is now reconciled; all capability deferrals remain preserved.
 
 ## ADR-0044 filtered authorized remote selection and exact-tokenization composition
 
@@ -315,7 +315,7 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Closed content-free failures | Direct `filtered_remote_tokenized_composition_denials_preserve_exact_categories_and_dependencies` and `filtered_remote_tokenized_composition_is_exact_single_attempt_and_content_free` sentinel tests format `Debug` and `Display` across the nested ADR-0034 and ADR-0040 categories | Implemented slice |
 | Privacy, permission, and deferrals preserved | Existing structural whole-layer filtering and caller authorization are reused; no general privacy correctness, semantic minimization, authentication, authorization-policy change, secrets, concrete remote execution, or networking | Preserved |
 
-NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment. The former ingestion/context checklist inconsistency is now reconciled; all capability deferrals remain preserved.
 
 ## ADR-0045 model-response reported-usage reconciliation
 
@@ -335,7 +335,7 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Optional usage equality before unchanged admission | Direct absent/equal/lower/higher, structural-response, and admission-failure tests | Implemented slice |
 | Closed content-free failures and limited authority | Five-category error; diagnostics tests and ADR-0046 exclusions preserve no truth, billing/cost, output-token, authenticity/freshness, or telemetry claims | Preserved |
 
-NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment. The former ingestion/context checklist inconsistency is now reconciled; all capability deferrals remain preserved.
 
 ## ADR-0047 local-only selection with reported-usage-validated exact-tokenization invocation and admission
 
@@ -347,7 +347,7 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Closed content-free failures and limited authority | Direct `selected_usage_validated_tokenized_composition_diagnostics_are_content_free` calls the ADR-0047 wrapper with sentinel-bearing inputs and dependencies and formats both `Debug` and `Display` for every reachable outer and nested category | Preserved |
 | Existing APIs and explicit deferrals | ADRs 0022 through 0046 unchanged; no availability, authorization, routing, retry, concrete dependency, networking, telemetry, or semantic authority | Preserved |
 
-NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known ingestion/context checklist inconsistency and all existing deferrals remain preserved.
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment. The former ingestion/context checklist inconsistency is now reconciled; all capability deferrals remain preserved.
 
 ## ADR-0048 available-local usage-validated tokenized composition
 
@@ -359,7 +359,7 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. The known
 | Exact success and limited authority | Exact generated evidence and direct ADR-0046 admission equality; absent/equal usage succeeds and mismatches fail | Implemented slice |
 | Existing APIs and exclusions | ADRs 0022–0047 unchanged; no acquisition, authorization, routing, retry, fallback, concrete dependency, networking, telemetry, persistence, or semantic authority | Preserved |
 
-NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. Availability is caller-supplied eligibility evidence only and grants no freshness/authenticity, monitoring, recovery, or authorization authority. Optional usage equality grants no tokenizer/provider truth, billing/cost, output-token, telemetry, or semantic authority. The known ingestion/context checklist inconsistency is preserved.
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment. Availability is caller-supplied eligibility evidence only and grants no freshness/authenticity, monitoring, recovery, or authorization authority. Optional usage equality grants no tokenizer/provider truth, billing/cost, output-token, telemetry, or semantic authority. The known ingestion/context checklist inconsistency is preserved.
 
 
 ## ADR-0049 authorized-available-remote usage-validated tokenized composition
@@ -371,7 +371,7 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. Availabil
 | Optional reported usage and single-attempt behavior | Direct `authorized_remote_usage_validated_tokenized_composition_preserves_selection_and_usage` absent/equal/lower/higher evidence plus `authorized_remote_usage_validated_tokenized_composition_proves_nested_order_and_counts` wrapper-only stage, precedence, exact-error, and FIFO accounting evidence | Implemented slice |
 | Limited authority and existing APIs | ADR-0031 remains the sole permission boundary; authorization and availability remain caller evidence; no authentication or authorization-policy change; ADRs 0022–0048 remain unchanged | Preserved |
 
-NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. Authorization and availability grant no authenticity/freshness or monitoring/recovery authority. Optional reported input usage establishes structural association and equality only, granting no tokenizer/provider truth, billing/cost, output-token, telemetry, or semantic authority. The known ingestion/context checklist inconsistency is preserved.
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment. Authorization and availability grant no authenticity/freshness or monitoring/recovery authority. Optional reported input usage establishes structural association and equality only, granting no tokenizer/provider truth, billing/cost, output-token, telemetry, or semantic authority. The known ingestion/context checklist inconsistency is preserved.
 
 ## ADR-0050 filtered-authorized-available-remote usage-validated tokenized composition
 
@@ -382,4 +382,10 @@ NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. Authoriza
 | Optional usage, ordering, and single attempt | `filtered_remote_usage_validated_tokenized_composition_proves_complete_stage_precedence_and_counts` directly covers preflight, invalid token evidence/version/descriptor/tokenizer/capacity, invocation, response identity/version, malformed response, valid-response output-usage overflow, lower/higher input usage, and unchanged admission as distinct modes with exact nested errors, precedence, FIFO counts, the complete untouched-provider matrix on every failure, and sentinel-bearing content-free `Debug`/`Display` diagnostics; `filtered_remote_usage_validated_tokenized_composition_denials_preserve_exact_categories_and_dependencies` checks content-free outer filter-evidence, filter-privacy, and nested authorized-selection diagnostics; `filtered_remote_usage_validated_tokenized_composition_is_exact_single_attempt_and_content_free` checks selected-dependency single attempts | Implemented slice |
 | Limited authority and existing APIs | ADR-0034 remains the filtered-selection boundary; ADR-0031 remains the sole permission boundary; ADR-0033 and optional usage retain only structural authority; ADRs 0022–0049 remain unchanged | Preserved |
 
-NEXA-TUTOR-001 remains Baseline Draft and Phase 4 remains in progress. Authorization and availability grant no authenticity/freshness or monitoring/recovery authority. Optional reported input usage establishes structural association and equality only, granting no tokenizer/provider truth, billing/cost, output-token, telemetry, or semantic authority. ADR-0033 grants no general privacy-policy correctness or semantic/content-level minimization. The known ingestion/context checklist inconsistency is preserved.
+NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment. Authorization and availability grant no authenticity/freshness or monitoring/recovery authority. Optional reported input usage establishes structural association and equality only, granting no tokenizer/provider truth, billing/cost, output-token, telemetry, or semantic authority. ADR-0033 grants no general privacy-policy correctness or semantic/content-level minimization. The known ingestion/context checklist inconsistency is preserved.
+
+## Phase 4 deterministic headless exit-gate decision
+
+**Status: Complete for the deterministic headless contract gate.** ADRs 0015–0020 demonstrate governed ingestion/provenance, lexical/vector retrieval, hybrid fusion, whole-chunk context assembly, and deterministic citation resolution. Canonical confidence contracts and ADR-0021 provide confidence-bearing structured tutor output with citation binding and semantic behavior intent; ADR-0024 provides strict machine validation/admission. ADRs 0022–0050 provide the provider-neutral deterministic invocation, compilation, selection, filtering, exact-tokenization, and reported-usage-validation evidence.
+
+This qualified closure preserves all deferrals: semantic truth/entailment and hallucination control; concrete inference/providers/tokenizers; dynamic routing and automatic local-first policy; privacy-policy correctness and semantic minimization; retries/repair; networking; persistence/durable adapters; tools; async/streaming; telemetry; and vector-database integration. NEXA-KNOW-001 and NEXA-TUTOR-001 remain Baseline Draft and are not promoted by this decision. The roadmap's former unchecked ingestion/provenance and context-assembly bullets are factually reconciled to ADR-0015 and ADR-0019 evidence without implementation changes.
