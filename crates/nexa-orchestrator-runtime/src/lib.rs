@@ -1,7 +1,7 @@
 //! Tokio-backed ownership and cancellation for one interaction workflow.
 #![forbid(unsafe_code)]
 
-use nexa_orchestrator::InteractionWorkflow;
+use nexa_orchestrator::{CancellationTarget, InteractionWorkflow};
 use std::future::Future;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
@@ -66,17 +66,22 @@ impl std::error::Error for WorkflowTaskGroupError {}
 pub struct WorkflowTaskGroup {
     workflow: InteractionWorkflow,
     cancellation: CancellationToken,
-    tasks: JoinSet<()>,
+    target_cancellations: [CancellationToken; 5],
+    tasks: JoinSet<Option<CancellationTarget>>,
+    target_task_counts: [usize; 5],
     state: WorkflowTaskGroupState,
     terminal: Option<Result<WorkflowTaskCompletion, WorkflowTaskGroupError>>,
 }
 
 impl WorkflowTaskGroup {
     pub fn new(workflow: InteractionWorkflow) -> Self {
+        let cancellation = CancellationToken::new();
         Self {
             workflow,
-            cancellation: CancellationToken::new(),
+            target_cancellations: std::array::from_fn(|_| cancellation.child_token()),
+            cancellation,
             tasks: JoinSet::new(),
+            target_task_counts: [0; 5],
             state: WorkflowTaskGroupState::Accepting,
             terminal: None,
         }
@@ -94,6 +99,11 @@ impl WorkflowTaskGroup {
         self.tasks.len()
     }
 
+    /// Returns the number of tasks currently owned for one closed subsystem target.
+    pub const fn target_task_count(&self, target: CancellationTarget) -> usize {
+        self.target_task_counts[target_index(target)]
+    }
+
     pub fn is_cancellation_requested(&self) -> bool {
         self.cancellation.is_cancelled()
     }
@@ -108,7 +118,33 @@ impl WorkflowTaskGroup {
             return Err(WorkflowTaskGroupError::NotAcceptingTasks);
         }
         let token = self.cancellation.child_token();
-        self.tasks.spawn(task(token));
+        self.tasks.spawn(async move {
+            task(token).await;
+            None
+        });
+        Ok(())
+    }
+
+    /// Spawns work associated with exactly one target and supplies a private task token.
+    pub fn spawn_for_target<F, Fut>(
+        &mut self,
+        target: CancellationTarget,
+        task: F,
+    ) -> Result<(), WorkflowTaskGroupError>
+    where
+        F: FnOnce(CancellationToken) -> Fut + Send + 'static,
+        Fut: Future<Output = ()> + Send + 'static,
+    {
+        if self.state != WorkflowTaskGroupState::Accepting {
+            return Err(WorkflowTaskGroupError::NotAcceptingTasks);
+        }
+        let index = target_index(target);
+        let token = self.target_cancellations[index].child_token();
+        self.tasks.spawn(async move {
+            task(token).await;
+            Some(target)
+        });
+        self.target_task_counts[index] += 1;
         Ok(())
     }
 
@@ -157,10 +193,14 @@ impl WorkflowTaskGroup {
     ) -> Result<WorkflowTaskCompletion, WorkflowTaskGroupError> {
         let mut failed = false;
         while let Some(result) = self.tasks.join_next().await {
-            if result.is_err() {
-                failed = true;
+            match result {
+                Ok(Some(target)) => self.target_task_counts[target_index(target)] -= 1,
+                Ok(None) => {}
+                Err(_) => failed = true,
             }
         }
+        // A failed join cannot return its private association, but no tasks remain owned.
+        self.target_task_counts = [0; 5];
         self.state = match kind {
             WorkflowTaskCompletionKind::Cancelled => WorkflowTaskGroupState::Cancelled,
             WorkflowTaskCompletionKind::Drained => WorkflowTaskGroupState::Drained,
@@ -175,6 +215,16 @@ impl WorkflowTaskGroup {
         };
         self.terminal = Some(result);
         result
+    }
+}
+
+const fn target_index(target: CancellationTarget) -> usize {
+    match target {
+        CancellationTarget::Retrieval => 0,
+        CancellationTarget::TutorGeneration => 1,
+        CancellationTarget::Speech => 2,
+        CancellationTarget::Behavior => 3,
+        CancellationTarget::ToolExecution => 4,
     }
 }
 
