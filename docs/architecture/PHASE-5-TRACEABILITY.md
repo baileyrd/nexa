@@ -1,6 +1,6 @@
 # Phase 5 traceability
 
-Phase 5 is **in progress**. This matrix records only the ADR-0051 foundation; it does not claim a complete session runtime.
+Phase 5 is **in progress**. This matrix records the ADR-0051 lifecycle foundation and ADR-0052 propagation-planning foundation; it does not claim a complete session runtime.
 
 | Requirement | Evidence | Status |
 |---|---|---|
@@ -12,6 +12,7 @@ Phase 5 is **in progress**. This matrix records only the ADR-0051 foundation; it
 | V1 deterministic strict wire | validating round trips and unknown version/field/variant/nil rejection | Implemented foundation |
 | Content-free diagnostics | closed errors and direct `Debug`/`Display` tests | Implemented foundation |
 | Dependency-light synchronous boundary | workspace metadata boundary script and forbidden-capability scans | Implemented foundation |
-| Runtime cancellation, propagation, composition, and integrations | Explicitly deferred by ADR-0051 | Not implemented |
+| Deterministic propagation planning | `plan_workflow_cancellation`; direct all-target/semantics, permutation, duplicate, empty, lifecycle, association, wire, and diagnostic tests | Implemented foundation |
+| Runtime cancellation, execution propagation, composition, and integrations | Explicitly deferred by ADR-0051 and ADR-0052 | Not implemented |
 
 NEXA-ORCH-001 remains Baseline Draft. No async runtime, I/O, provider, speech, renderer, tool, persistence, networking, clock, health, recovery, or side-effect capability is implied.
