@@ -10,6 +10,7 @@ members = [
     "crates/nexa-learning-core",
     "crates/nexa-knowledge",
     "crates/nexa-nbp",
+    "crates/nexa-orchestrator",
     "crates/nexa-pedagogy",
     "crates/nexa-student",
     "crates/nexa-tutor",
