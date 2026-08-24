@@ -1,0 +1,16 @@
+[package]
+name = "nexa-headless"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+nexa-avatar = { path = "../../crates/nexa-avatar" }
+nexa-domain = { path = "../../crates/nexa-domain" }
+nexa-nbp = { path = "../../crates/nexa-nbp" }
+nexa-orchestrator = { path = "../../crates/nexa-orchestrator" }
+nexa-orchestrator-runtime = { path = "../../crates/nexa-orchestrator-runtime" }
+tokio = { workspace = true }
+
+[dev-dependencies]
+uuid.workspace = true
