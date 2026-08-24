@@ -75,12 +75,12 @@ Exit: grounded responses carry citations, confidence, and machine-validated tuto
 
 ## Phase 5 — Orchestrate a complete session
 
-**Status:** In progress. ADR-0051 activates `nexa-orchestrator` with synchronous lifecycle cancellation; ADR-0052 adds deterministic propagation planning; ADR-0053 adds a synchronous provider-neutral exact-plan propagation port; ADR-0054 adds the separate Tokio owned-task runtime; ADR-0055 adds closed-target task association and hierarchical private tokens.
+**Status:** In progress. ADR-0051 activates `nexa-orchestrator` with synchronous lifecycle cancellation; ADR-0052 adds deterministic propagation planning; ADR-0053 adds a synchronous provider-neutral exact-plan propagation port; ADR-0054 adds the separate Tokio owned-task runtime; ADR-0055 adds closed-target task association; ADR-0056 adds atomic exact-plan execution with selective cancellation, joining, and generic non-cancellable evidence.
 
 - [x] deterministic session/workflow lifecycle and lifecycle cancellation foundation (ADR-0051)
 - [ ] cancellation-safe execution and propagation
 
-ADR-0052 plans canonical request-cancellation/report-non-cancellable directives without executing them. ADR-0053 can hand one exact plan to a caller-supplied port and validate its acceptance acknowledgement, but acceptance is not proof that work stopped. ADR-0054 proves direct task ownership and workflow-wide completion. ADR-0055 associates owned tasks with the closed five-target vocabulary while preserving one root token and join set; it neither selectively cancels a target nor binds ADR-0052/0053. Binding directives, non-cancellable reporting, and all five concrete subsystem adapters remain deferred, so the broader checklist item stays incomplete.
+ADR-0056 binds one canonical plan to the exact live task group only after side-effect-free coverage preflight, selectively cancels and joins requested targets and unclassified work, and preserves explicit non-cancellable target/count evidence while retaining ownership. All five concrete subsystem adapters, composition wiring, and provider/network propagation remain deferred, so the broader checklist item stays incomplete.
 - [ ] speech input/output ports
 - [ ] behavior synchronization
 - [ ] tool/lab execution

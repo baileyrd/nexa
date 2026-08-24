@@ -1,6 +1,6 @@
 # Phase 5 traceability
 
-Phase 5 is **in progress**. This matrix records the ADR-0051 lifecycle, ADR-0052 propagation-planning, ADR-0053 propagation-port, ADR-0054 Tokio owned-task, and ADR-0055 target-aware ownership foundations; it does not claim a complete session runtime.
+Phase 5 is **in progress**. This matrix records the ADR-0051 through ADR-0056 lifecycle, planning, port, owned-task, target-association, and atomic exact-plan execution foundations; it does not claim a complete session runtime.
 
 | Requirement | Evidence | Status |
 |---|---|---|
@@ -18,6 +18,7 @@ Phase 5 is **in progress**. This matrix records the ADR-0051 lifecycle, ADR-0052
 | Tokio owned-task structured concurrency | `nexa-orchestrator-runtime::WorkflowTaskGroup`; private root token and `JoinSet`, child token per spawn, no handle escape, closed inspection, spawn rejection, and exact four-identity completion evidence | Implemented foundation |
 | Directly owned task cancellation and completion | Deterministic cooperative single/multiple-task, idempotency, natural-drain, normalized panic, empty-after-return, and abort-on-drop tests | Implemented foundation |
 | Closed-target owned-task association | `WorkflowTaskGroup::spawn_for_target` and bounded per-target counts; direct all-five, multiple/simultaneous, exact return, rejection, root cancellation, natural drain, identity, panic, and abort-on-drop tests | Implemented foundation |
-| Five-subsystem cancellation binding and non-cancellable reporting | Explicitly deferred by ADR-0055; association does not execute ADR-0052 directives, bind ADR-0053, selectively cancel targets, or supply concrete adapters | Not implemented |
+| Atomic exact-plan runtime execution | Side-effect-free exact coverage preflight; global spawn closure; selective target and unclassified cancellation/joining; canonical stopped or target/count non-cancellable evidence; repeat/conflict and abort-on-drop tests | Implemented foundation (ADR-0056) |
+| Five-subsystem cancellation binding and subsystem-specific non-cancellable reporting | ADR-0056 supplies generic runtime execution/evidence only; concrete retrieval, tutor, speech, behavior, and tool adapters and composition wiring remain absent | Not implemented |
 
-NEXA-ORCH-001 remains Baseline Draft. Tokio task ownership and private target association are the only async runtime capabilities implied; no subsystem I/O, provider, speech, renderer, tool, persistence, networking, clock, health, recovery, selective cancellation, or propagation binding is implied.
+NEXA-ORCH-001 remains Baseline Draft. Tokio ownership and generic exact-plan execution are the only async runtime capabilities implied; no concrete subsystem I/O, provider, speech, renderer, tool, persistence, networking, clock, health, or recovery integration is implied.
