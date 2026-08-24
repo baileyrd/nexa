@@ -3,10 +3,12 @@ use nexa_orchestrator::InteractionWorkflow;
 use nexa_orchestrator_runtime::{
     WorkflowTaskCompletionKind, WorkflowTaskGroup, WorkflowTaskGroupError, WorkflowTaskGroupState,
 };
+use std::future::Future;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
 };
+use std::task::{Context, Poll, Waker};
 use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
 
@@ -21,18 +23,33 @@ fn workflow() -> InteractionWorkflow {
 
 #[tokio::test]
 async fn cancellation_preserves_all_identities_and_waits_for_cooperative_task() {
-    let expected = workflow();
+    let expected_workflow_id = WorkflowId::new(Uuid::from_u128(1)).unwrap();
+    let expected_session_id = SessionId::new(Uuid::from_u128(2)).unwrap();
+    let expected_correlation_id = CorrelationId::new(Uuid::from_u128(3)).unwrap();
+    let expected_trace_id = TraceId::new(Uuid::from_u128(4)).unwrap();
+    let expected = InteractionWorkflow::new(
+        expected_workflow_id,
+        expected_session_id,
+        expected_correlation_id,
+        expected_trace_id,
+    );
     let mut group = WorkflowTaskGroup::new(expected);
     let (stopped_tx, stopped_rx) = oneshot::channel();
-    group
-        .spawn(|token| async move {
-            token.cancelled().await;
-            stopped_tx.send(()).unwrap();
-        })
-        .unwrap();
+    let spawn_result: Result<(), WorkflowTaskGroupError> = group.spawn(|token| async move {
+        token.cancelled().await;
+        stopped_tx.send(()).unwrap();
+    });
+    spawn_result.unwrap();
 
     let evidence = group.cancel_and_wait().await.unwrap();
     assert_eq!(stopped_rx.await, Ok(()));
+    assert_eq!(evidence.workflow().workflow_id(), expected_workflow_id);
+    assert_eq!(evidence.workflow().session_id(), expected_session_id);
+    assert_eq!(
+        evidence.workflow().correlation_id(),
+        expected_correlation_id
+    );
+    assert_eq!(evidence.workflow().trace_id(), expected_trace_id);
     assert_eq!(evidence.workflow(), expected);
     assert_eq!(evidence.kind(), WorkflowTaskCompletionKind::Cancelled);
     assert_eq!(group.task_count(), 0);
@@ -61,6 +78,30 @@ async fn every_owned_task_stops_and_repeat_cancellation_is_idempotent() {
 
 #[tokio::test]
 async fn rejects_spawning_after_cancellation_or_drain_begins() {
+    let mut cancelling = WorkflowTaskGroup::new(workflow());
+    cancelling.spawn(|_| std::future::pending::<()>()).unwrap();
+    let mut cancellation = Box::pin(cancelling.cancel_and_wait());
+    let mut context = Context::from_waker(Waker::noop());
+    assert_eq!(cancellation.as_mut().poll(&mut context), Poll::Pending);
+    drop(cancellation);
+    assert_eq!(cancelling.state(), WorkflowTaskGroupState::Cancelling);
+    assert_eq!(
+        cancelling.spawn(|_| async {}),
+        Err(WorkflowTaskGroupError::NotAcceptingTasks)
+    );
+
+    let mut draining = WorkflowTaskGroup::new(workflow());
+    draining.spawn(|_| std::future::pending::<()>()).unwrap();
+    let mut drain = Box::pin(draining.drain());
+    let mut context = Context::from_waker(Waker::noop());
+    assert_eq!(drain.as_mut().poll(&mut context), Poll::Pending);
+    drop(drain);
+    assert_eq!(draining.state(), WorkflowTaskGroupState::Draining);
+    assert_eq!(
+        draining.spawn(|_| async {}),
+        Err(WorkflowTaskGroupError::NotAcceptingTasks)
+    );
+
     let mut cancelled = WorkflowTaskGroup::new(workflow());
     cancelled.cancel_and_wait().await.unwrap();
     assert_eq!(
