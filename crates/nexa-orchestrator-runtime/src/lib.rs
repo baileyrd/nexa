@@ -6,7 +6,7 @@ use nexa_orchestrator::{
     CANCELLATION_PROPAGATION_V1,
 };
 use std::{collections::HashMap, future::Future};
-use tokio::task::{Id, JoinSet};
+use tokio::task::{AbortHandle, Id, JoinSet};
 use tokio_util::sync::CancellationToken;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -115,13 +115,18 @@ enum TaskAssociation {
     Target(CancellationTarget),
 }
 
+struct OwnedTask {
+    association: TaskAssociation,
+    abort_handle: AbortHandle,
+}
+
 pub struct WorkflowTaskGroup {
     workflow: InteractionWorkflow,
     cancellation: CancellationToken,
     unclassified_cancellation: CancellationToken,
     target_cancellations: [CancellationToken; 5],
     tasks: JoinSet<()>,
-    associations: HashMap<Id, TaskAssociation>,
+    associations: HashMap<Id, OwnedTask>,
     target_task_counts: [usize; 5],
     unclassified_task_count: usize,
     state: WorkflowTaskGroupState,
@@ -183,8 +188,13 @@ impl WorkflowTaskGroup {
         }
         let token = self.unclassified_cancellation.child_token();
         let handle = self.tasks.spawn(async move { task(token).await });
-        self.associations
-            .insert(handle.id(), TaskAssociation::Unclassified);
+        self.associations.insert(
+            handle.id(),
+            OwnedTask {
+                association: TaskAssociation::Unclassified,
+                abort_handle: handle,
+            },
+        );
         self.unclassified_task_count += 1;
         Ok(())
     }
@@ -204,8 +214,13 @@ impl WorkflowTaskGroup {
         let index = target_index(target);
         let token = self.target_cancellations[index].child_token();
         let handle = self.tasks.spawn(async move { task(token).await });
-        self.associations
-            .insert(handle.id(), TaskAssociation::Target(target));
+        self.associations.insert(
+            handle.id(),
+            OwnedTask {
+                association: TaskAssociation::Target(target),
+                abort_handle: handle,
+            },
+        );
         self.target_task_counts[index] += 1;
         Ok(())
     }
@@ -266,15 +281,14 @@ impl WorkflowTaskGroup {
                     let failure_is_required = self
                         .associations
                         .get(&error.id())
-                        .copied()
-                        .is_some_and(|association| self.association_is_required(association));
+                        .is_some_and(|task| self.association_is_required(task.association));
                     self.remove_association(error.id());
                     self.plan_join_failed |= failure_is_required;
                     if failure_is_required {
-                        // A required target can no longer satisfy the accepted plan. Abort the
-                        // remaining owned work before continuing to drain so a failed execution
-                        // cannot wait forever or leave another target running.
-                        self.tasks.abort_all();
+                        // A required target can no longer satisfy the accepted plan. Abort only
+                        // the remaining work required by this plan, then drain it. Reported
+                        // non-cancellable work remains privately owned and unaffected.
+                        self.abort_required_plan_tasks();
                     }
                 }
             }
@@ -367,8 +381,16 @@ impl WorkflowTaskGroup {
         }
     }
 
+    fn abort_required_plan_tasks(&self) {
+        for task in self.associations.values() {
+            if self.association_is_required(task.association) {
+                task.abort_handle.abort();
+            }
+        }
+    }
+
     fn remove_association(&mut self, id: Id) {
-        match self.associations.remove(&id) {
+        match self.associations.remove(&id).map(|task| task.association) {
             Some(TaskAssociation::Unclassified) => self.unclassified_task_count -= 1,
             Some(TaskAssociation::Target(target)) => {
                 self.target_task_counts[target_index(target)] -= 1
