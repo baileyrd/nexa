@@ -78,7 +78,8 @@ This registry is the navigation and governance authority for Nexa system specifi
 | ADR-0060 | [Asynchronous cooperative Retrieval service foundation](adr/0060-async-cooperative-retrieval-service-foundation.md) | Accepted | Runtime-owned async Retrieval boundary, cooperative cancellation, and deterministic scripted adapter |
 | ADR-0061 | [Headless cooperative Retrieval cancellation binding](adr/0061-headless-cooperative-retrieval-cancellation-binding.md) | Accepted | Separate exact-plan Retrieval service cancellation binding; external dependency stop is not proven |
 | ADR-0062 | [Asynchronous provider-neutral Speech cancellation control](adr/0062-asynchronous-provider-neutral-speech-cancellation-control.md) | Accepted | Dependency-light asynchronous Speech cancellation-control foundation; no headless binding or subsystem-stop proof |
-| ADR-0063 | [Provider-neutral composite Speech cancellation coordinator](adr/0063-provider-neutral-composite-speech-cancellation-coordinator.md) | Accepted | Four-surface Speech-owned cancellation coordination and bounded evidence; no headless binding |
+| ADR-0063 | [Provider-neutral composite Speech cancellation coordinator](adr/0063-provider-neutral-composite-speech-cancellation-coordinator.md) | Accepted | Four-surface Speech-owned cancellation coordination and bounded evidence |
+| ADR-0064 | [Headless Speech-interaction cancellation binding](adr/0064-headless-speech-interaction-cancellation-binding.md) | Accepted | Exact joined Speech plus Behavior application-control cancellation evidence; no external-stop proof |
 | ADR-0014 | [Learning-core composition and atomicity](adr/0014-learning-core-composition-and-atomicity.md) | Accepted | Phase 3 policy composition, unit of work, idempotency, and deferred durable adapters |
 | ADR-0008 | [Controlled 3D workspace migration and ownership](adr/0008-controlled-3d-workspace-migration.md) | Accepted | 3D library, viewer, and validator ownership after migration |
 
@@ -96,13 +97,13 @@ This registry is the navigation and governance authority for Nexa system specifi
 | 06 | NEXA-LESSON-001 | Curriculum and lessons | Implemented Phase 3 slice | `nexa-lessons` |
 | 07 | NEXA-ASMT-001 | Assessment | Implemented Phase 3 slice | `nexa-assessment` |
 | 08 | NEXA-LAB-001 | Labs and sandboxes | Baseline Draft | `nexa-labs` |
-| 09 | NEXA-SPCH-001 | Speech interaction | Baseline Draft; ADR-0062 control and ADR-0063 composite coordinator foundations implemented | `nexa-speech` |
+| 09 | NEXA-SPCH-001 | Speech interaction | Baseline Draft; ADR-0062/0063 foundations and ADR-0064 bounded application-control binding implemented | `nexa-speech` |
 | 10 | NEXA-AVTR-001 | Renderer-neutral avatar | Implemented Phase 2 slice | `nexa-avatar` |
 | 11 | NEXA-3D-001 | 3D character architecture | Implemented Phase 2 slice | `nexa-3d` |
 | 11 | NEXA-3D-ART-001 | 3D production pipeline | Baseline Draft | Assets/tooling |
 | 11 | NEXA-3D-REF-001 | Canonical 3D reference | Baseline Draft | Assets |
 | 11 | NEXA-3D-RUNTIME-001 | 3D validation runtime | Implemented slice | `crates/nexa-3d`; `apps/nexa-3d-viewer`; `tools/nexa-3d-validate` |
-| 12 | NEXA-ORCH-001 | Session orchestration | Baseline Draft; ADR-0051 through ADR-0063 foundations and Behavior, Tutor Generation control, plus Retrieval bindings implemented; Speech remains unbound | `nexa-orchestrator`; `nexa-orchestrator-runtime`; `apps/nexa-headless` |
+| 12 | NEXA-ORCH-001 | Session orchestration | Baseline Draft; ADR-0051 through ADR-0064 foundations and Behavior, Tutor Generation control, Retrieval, plus bounded Speech-interaction bindings implemented; Tool Execution remains unbound | `nexa-orchestrator`; `nexa-orchestrator-runtime`; `apps/nexa-headless` |
 
 Directories 13 through 27 reserve future specification namespaces. A reserved directory is not an approved subsystem contract.
 

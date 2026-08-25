@@ -2,10 +2,15 @@
 #![forbid(unsafe_code)]
 
 mod retrieval_cancellation;
+mod speech_cancellation;
 mod tutor_cancellation;
 pub use retrieval_cancellation::{
     RetrievalCancellationComposition, RetrievalCancellationCompositionError,
     RetrievalCancellationEvidence,
+};
+pub use speech_cancellation::{
+    SpeechInteractionCancellationComposition, SpeechInteractionCancellationError,
+    SpeechInteractionCancellationEvidence,
 };
 pub use tutor_cancellation::{
     TutorGenerationCancellationComposition, TutorGenerationCancellationCompositionError,
@@ -52,8 +57,8 @@ impl std::error::Error for BehaviorCancellationError {}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct AvatarCancellationEvidence {
-    requests: Vec<AvatarRequest>,
-    report: AvatarReport,
+    pub(crate) requests: Vec<AvatarRequest>,
+    pub(crate) report: AvatarReport,
 }
 
 impl AvatarCancellationEvidence {
