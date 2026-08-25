@@ -15,6 +15,7 @@ members = [
     "crates/nexa-orchestrator",
     "crates/nexa-orchestrator-runtime",
     "crates/nexa-pedagogy",
+    "crates/nexa-speech",
     "crates/nexa-student",
     "crates/nexa-tutor",
     "tools/nexa-3d-validate",

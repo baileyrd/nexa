@@ -98,6 +98,7 @@ uuid_id!(
     ModelProviderId,
     ModelId,
     ModelInvocationId,
+    SpeechId,
     WorkflowId
 );
 
@@ -296,6 +297,16 @@ mod tests {
         assert!(
             serde_json::from_str::<WorkflowId>(r#""00000000-0000-0000-0000-000000000000""#)
                 .is_err()
+        );
+        assert!(SpeechId::new(Uuid::nil()).is_err());
+        assert!(
+            serde_json::from_str::<SpeechId>(r#""00000000-0000-0000-0000-000000000000""#).is_err()
+        );
+        let speech = SpeechId::new(Uuid::from_u128(42)).unwrap();
+        assert_eq!(speech.to_string(), "00000000-0000-0000-0000-00000000002a");
+        assert_eq!(
+            serde_json::from_str::<SpeechId>(&serde_json::to_string(&speech).unwrap()).unwrap(),
+            speech
         );
     }
     #[test]
