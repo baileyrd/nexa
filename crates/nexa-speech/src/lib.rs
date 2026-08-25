@@ -78,7 +78,14 @@ impl<'de> Deserialize<'de> for SpeechCancellationCapability {
             surface: wire.surface,
             cancellable: wire.cancellable,
         };
-        value.validate().map_err(serde::de::Error::custom)?;
+        // Capability evidence describes what a participant supports. A
+        // non-cancellable declaration is valid evidence, even though the
+        // coordinator cannot use it for a required surface.
+        if value.contract_version != SPEECH_CANCELLATION_V1 {
+            return Err(serde::de::Error::custom(
+                "unsupported speech cancellation capability version",
+            ));
+        }
         Ok(value)
     }
 }
@@ -545,6 +552,17 @@ pub struct ScriptedSpeechCancellationService {
     state: Arc<Mutex<ScriptState>>,
 }
 
+impl fmt::Debug for ScriptedSpeechCancellationService {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ScriptedSpeechCancellationService")
+            .field("received_request_count", &self.received_requests().len())
+            .field("consumed_outcome_count", &self.consumed_outcome_count())
+            .field("remaining_outcome_count", &self.remaining_outcome_count())
+            .field("active_future_count", &self.active_future_count())
+            .finish()
+    }
+}
+
 impl ScriptedSpeechCancellationService {
     pub fn new(outcomes: impl IntoIterator<Item = ScriptedSpeechCancellationOutcome>) -> Self {
         Self {
@@ -624,6 +642,15 @@ impl SpeechCancellationService for ScriptedSpeechCancellationService {
 pub struct ScriptedSpeechCancellationParticipant {
     capability: SpeechCancellationCapability,
     service: ScriptedSpeechCancellationService,
+}
+
+impl fmt::Debug for ScriptedSpeechCancellationParticipant {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ScriptedSpeechCancellationParticipant")
+            .field("capability", &self.capability)
+            .field("service", &self.service)
+            .finish()
+    }
 }
 
 impl ScriptedSpeechCancellationParticipant {
