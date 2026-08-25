@@ -13,6 +13,13 @@ use std::{
 };
 use uuid::Uuid;
 
+use nexa_speech::{
+    ScriptedSpeechCancellationParticipant as Participant,
+    SpeechCancellationCapability as Capability, SpeechCancellationCoordinator as Coordinator,
+    SpeechCancellationCoordinatorError as CoordinatorError, SpeechCancellationParticipant,
+    SpeechCancellationSurface as Surface,
+};
+
 fn speech_id(value: u128) -> SpeechId {
     SpeechId::new(Uuid::from_u128(value)).unwrap()
 }
@@ -255,4 +262,141 @@ fn every_public_diagnostic_is_content_free() {
             assert!(!surface.contains(secret));
         }
     }
+}
+
+fn participant(id: SpeechId, surface: Surface, outcome: ScriptedOutcome) -> Participant {
+    Participant::new(Capability::cancellable(id, surface), [outcome])
+}
+
+#[test]
+fn composite_capability_wire_is_strict() {
+    let value = Capability::cancellable(speech_id(1), Surface::QueuedAudio);
+    assert_eq!(
+        serde_json::to_value(value).unwrap(),
+        json!({
+            "contract_version":"1.0", "speech_id":speech_id(1),
+            "surface":"queued_audio", "cancellable":true
+        })
+    );
+    for invalid in [
+        json!({"contract_version":"2.0","speech_id":speech_id(1),"surface":"queued_audio","cancellable":true}),
+        json!({"contract_version":"1.0","speech_id":Uuid::nil(),"surface":"queued_audio","cancellable":true}),
+        json!({"contract_version":"1.0","speech_id":speech_id(1),"surface":"unknown","cancellable":true}),
+        json!({"contract_version":"1.0","speech_id":speech_id(1),"surface":"queued_audio","cancellable":false}),
+        json!({"contract_version":"1.0","speech_id":speech_id(1),"surface":"queued_audio","cancellable":true,"secret":"x"}),
+    ] {
+        assert!(serde_json::from_value::<Capability>(invalid).is_err());
+    }
+}
+
+#[test]
+fn composite_is_canonical_and_invokes_every_surface_exactly_once() {
+    let id = speech_id(10);
+    let request = Request::new(id);
+    let ack = Ack::for_request(&request);
+    let participants = [
+        participant(id, Surface::Playback, ScriptedOutcome::Acknowledged(ack)),
+        participant(id, Surface::Synthesis, ScriptedOutcome::Acknowledged(ack)),
+        participant(
+            id,
+            Surface::VisemeTimeline,
+            ScriptedOutcome::Acknowledged(ack),
+        ),
+        participant(id, Surface::QueuedAudio, ScriptedOutcome::Acknowledged(ack)),
+    ];
+    let refs: Vec<&dyn SpeechCancellationParticipant> =
+        participants.iter().map(|p| p as _).collect();
+    let coordinator = Coordinator::new(id, refs).unwrap();
+    let evidence = complete(Box::pin(coordinator.cancel(request)).as_mut()).unwrap();
+    assert_eq!(
+        evidence
+            .surfaces
+            .iter()
+            .map(|e| e.surface)
+            .collect::<Vec<_>>(),
+        Surface::ALL
+    );
+    assert!(participants
+        .iter()
+        .all(|p| p.received_requests() == [request]));
+    assert!(participants
+        .iter()
+        .all(|p| p.consumed_outcome_count() == 1 && p.active_future_count() == 0));
+    let second = complete(Box::pin(coordinator.cancel(request)).as_mut());
+    assert_eq!(second, Err(CoordinatorError::DependencyFailure));
+}
+
+#[test]
+fn invalid_composite_sets_fail_before_activation() {
+    let id = speech_id(11);
+    let ack = Ack::for_request(&Request::new(id));
+    let duplicate = [
+        participant(id, Surface::Synthesis, ScriptedOutcome::Acknowledged(ack)),
+        participant(id, Surface::Synthesis, ScriptedOutcome::Acknowledged(ack)),
+        participant(id, Surface::Playback, ScriptedOutcome::Acknowledged(ack)),
+        participant(
+            id,
+            Surface::VisemeTimeline,
+            ScriptedOutcome::Acknowledged(ack),
+        ),
+    ];
+    let refs: Vec<&dyn SpeechCancellationParticipant> = duplicate.iter().map(|p| p as _).collect();
+    assert!(matches!(
+        Coordinator::new(id, refs),
+        Err(CoordinatorError::DuplicateSurface)
+    ));
+    assert!(duplicate
+        .iter()
+        .all(|p| p.received_requests().is_empty() && p.consumed_outcome_count() == 0));
+
+    let non_cancellable = Participant::new(
+        Capability {
+            cancellable: false,
+            ..Capability::cancellable(id, Surface::QueuedAudio)
+        },
+        [ScriptedOutcome::Acknowledged(ack)],
+    );
+    let refs: Vec<&dyn SpeechCancellationParticipant> = vec![
+        &duplicate[0],
+        &non_cancellable,
+        &duplicate[2],
+        &duplicate[3],
+    ];
+    assert!(matches!(
+        Coordinator::new(id, refs),
+        Err(CoordinatorError::NonCancellableSurface)
+    ));
+}
+
+#[test]
+fn composite_failure_and_drop_leave_no_active_work() {
+    let id = speech_id(12);
+    let participants = [
+        participant(id, Surface::Synthesis, ScriptedOutcome::Pending),
+        participant(id, Surface::QueuedAudio, ScriptedOutcome::Pending),
+        participant(id, Surface::Playback, ScriptedOutcome::DependencyFailure),
+        participant(id, Surface::VisemeTimeline, ScriptedOutcome::Pending),
+    ];
+    let refs: Vec<&dyn SpeechCancellationParticipant> =
+        participants.iter().map(|p| p as _).collect();
+    let coordinator = Coordinator::new(id, refs).unwrap();
+    assert_eq!(
+        complete(Box::pin(coordinator.cancel(Request::new(id))).as_mut()),
+        Err(CoordinatorError::DependencyFailure)
+    );
+    assert!(participants.iter().all(|p| p.active_future_count() == 0));
+
+    let pending = [
+        participant(id, Surface::Synthesis, ScriptedOutcome::Pending),
+        participant(id, Surface::QueuedAudio, ScriptedOutcome::Pending),
+        participant(id, Surface::Playback, ScriptedOutcome::Pending),
+        participant(id, Surface::VisemeTimeline, ScriptedOutcome::Pending),
+    ];
+    let refs: Vec<&dyn SpeechCancellationParticipant> = pending.iter().map(|p| p as _).collect();
+    let coordinator = Coordinator::new(id, refs).unwrap();
+    let mut future = Box::pin(coordinator.cancel(Request::new(id)));
+    assert!(poll_once(future.as_mut()).is_pending());
+    assert!(pending.iter().all(|p| p.active_future_count() == 1));
+    drop(future);
+    assert!(pending.iter().all(|p| p.active_future_count() == 0));
 }
