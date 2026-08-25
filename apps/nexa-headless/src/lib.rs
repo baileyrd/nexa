@@ -55,10 +55,16 @@ impl std::fmt::Display for BehaviorCancellationError {
 
 impl std::error::Error for BehaviorCancellationError {}
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct AvatarCancellationEvidence {
     pub(crate) requests: Vec<AvatarRequest>,
     pub(crate) report: AvatarReport,
+}
+
+impl std::fmt::Debug for AvatarCancellationEvidence {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("AvatarCancellationEvidence { redacted }")
+    }
 }
 
 impl AvatarCancellationEvidence {
@@ -85,10 +91,16 @@ impl AvatarCancellationEvidence {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct BehaviorCancellationEvidence {
     runtime: WorkflowCancellationExecution,
     avatar: AvatarCancellationEvidence,
+}
+
+impl std::fmt::Debug for BehaviorCancellationEvidence {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("BehaviorCancellationEvidence { redacted }")
+    }
 }
 
 impl BehaviorCancellationEvidence {

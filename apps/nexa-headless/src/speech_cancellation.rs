@@ -48,11 +48,17 @@ impl std::error::Error for SpeechInteractionCancellationError {}
 /// This proves only terminalization of the four Speech control futures and the
 /// Behavior adapter cancellation task. It does not prove that external provider,
 /// audio, device, process, renderer, or other real-world work stopped.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct SpeechInteractionCancellationEvidence {
     runtime: WorkflowCancellationExecution,
     speech: SpeechCancellationAggregateEvidence,
     behavior: AvatarCancellationEvidence,
+}
+
+impl std::fmt::Debug for SpeechInteractionCancellationEvidence {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SpeechInteractionCancellationEvidence { redacted }")
+    }
 }
 
 impl SpeechInteractionCancellationEvidence {
@@ -367,6 +373,29 @@ mod tests {
             })
             .collect()
     }
+    fn tracked_participants(
+        capabilities: impl IntoIterator<Item = SpeechCancellationCapability>,
+        outcomes: impl IntoIterator<Item = ScriptedSpeechCancellationOutcome> + Clone,
+    ) -> (
+        Vec<Arc<ScriptedSpeechCancellationParticipant>>,
+        Vec<Arc<dyn SpeechCancellationParticipant>>,
+    ) {
+        let tracked = capabilities
+            .into_iter()
+            .map(|capability| {
+                Arc::new(ScriptedSpeechCancellationParticipant::new(
+                    capability,
+                    outcomes.clone(),
+                ))
+            })
+            .collect::<Vec<_>>();
+        let erased = tracked
+            .iter()
+            .cloned()
+            .map(|value| value as Arc<dyn SpeechCancellationParticipant>)
+            .collect();
+        (tracked, erased)
+    }
     fn composition() -> SpeechInteractionCancellationComposition<FakeAvatarAdapter> {
         let (w, s, c, t) = ids();
         let request = SpeechCancellationRequest::new(speech_id());
@@ -428,12 +457,38 @@ mod tests {
                     SpeechCancellationSurface::ALL
                 );
                 assert_eq!(evidence.runtime().target_outcomes().len(), 2);
+                assert_eq!(evidence.runtime().workflow(), workflow(true));
+                assert_eq!(evidence.speech().speech_id, speech_id());
+                assert!(evidence.speech().surfaces.iter().all(|surface| {
+                    surface.acknowledgement
+                        == SpeechCancellationAcknowledgement::for_request(&request)
+                }));
                 assert!(evidence
                     .runtime()
                     .target_outcomes()
                     .iter()
                     .all(|e| e.outcome() == CancellationTargetExecutionOutcome::Stopped));
                 assert_eq!(evidence.behavior().cancellation_request_count(), 1);
+                assert_eq!(
+                    evidence.behavior().request(),
+                    &AvatarRequest::Cancel {
+                        message_id: message_id(),
+                        cancellation: cancellation()
+                    }
+                );
+                assert_eq!(
+                    evidence.behavior().report(),
+                    &adapter(true).preview(&AvatarRequest::Cancel {
+                        message_id: message_id(),
+                        cancellation: cancellation()
+                    })
+                );
+                let diagnostic = format!("{evidence:?}");
+                assert_eq!(
+                    diagnostic,
+                    "SpeechInteractionCancellationEvidence { redacted }"
+                );
+                assert!(!diagnostic.contains("private-behavior-reason"));
                 assert_eq!(
                     value
                         .execute(request, message_id(), cancellation())
@@ -511,6 +566,222 @@ mod tests {
             cases[2],
             Err(SpeechInteractionCancellationError::BehaviorCapabilityUnavailable)
         );
+    }
+
+    #[test]
+    fn every_participant_preflight_rejection_is_non_consuming() {
+        let (w, s, c, t) = ids();
+        let request = SpeechCancellationRequest::new(speech_id());
+        let other_speech = SpeechId::new(Uuid::from_u128(99)).unwrap();
+        let unsupported = nexa_domain::ProtocolVersion::new(9, 9);
+        let capability_cases = vec![
+            SpeechCancellationSurface::ALL[..3]
+                .iter()
+                .map(|&surface| SpeechCancellationCapability::cancellable(speech_id(), surface))
+                .collect(),
+            vec![
+                SpeechCancellationCapability::cancellable(
+                    speech_id(),
+                    SpeechCancellationSurface::Synthesis
+                );
+                4
+            ],
+            SpeechCancellationSurface::ALL
+                .into_iter()
+                .map(|surface| SpeechCancellationCapability {
+                    contract_version: unsupported,
+                    speech_id: speech_id(),
+                    surface,
+                    cancellable: true,
+                })
+                .collect(),
+            SpeechCancellationSurface::ALL
+                .into_iter()
+                .map(|surface| SpeechCancellationCapability {
+                    contract_version: SPEECH_CANCELLATION_V1,
+                    speech_id: speech_id(),
+                    surface,
+                    cancellable: surface != SpeechCancellationSurface::Playback,
+                })
+                .collect(),
+            SpeechCancellationSurface::ALL
+                .into_iter()
+                .map(|surface| SpeechCancellationCapability::cancellable(other_speech, surface))
+                .collect(),
+        ];
+        for capabilities in capability_cases {
+            let (tracked, erased) =
+                tracked_participants(capabilities, [ScriptedSpeechCancellationOutcome::Pending]);
+            assert_eq!(
+                SpeechInteractionCancellationComposition::new(
+                    workflow(true),
+                    w,
+                    s,
+                    c,
+                    t,
+                    speech_id(),
+                    request,
+                    erased,
+                    message_id(),
+                    cancellation(),
+                    adapter(true)
+                )
+                .map(|_| ()),
+                Err(SpeechInteractionCancellationError::InvalidSpeechParticipants)
+            );
+            for participant in tracked {
+                assert!(participant.received_requests().is_empty());
+                assert_eq!(participant.consumed_outcome_count(), 0);
+                assert_eq!(participant.active_future_count(), 0);
+            }
+        }
+
+        let (tracked, erased) = tracked_participants(
+            SpeechCancellationSurface::ALL
+                .into_iter()
+                .map(|surface| SpeechCancellationCapability::cancellable(speech_id(), surface)),
+            [ScriptedSpeechCancellationOutcome::Pending],
+        );
+        let mut wrong_version = request;
+        wrong_version.contract_version = unsupported;
+        for (workflow_id, supplied_request) in [
+            (WorkflowId::new(Uuid::from_u128(88)).unwrap(), request),
+            (w, wrong_version),
+            (w, SpeechCancellationRequest::new(other_speech)),
+        ] {
+            assert!(SpeechInteractionCancellationComposition::new(
+                workflow(true),
+                workflow_id,
+                s,
+                c,
+                t,
+                speech_id(),
+                supplied_request,
+                erased.clone(),
+                message_id(),
+                cancellation(),
+                adapter(true)
+            )
+            .is_err());
+        }
+        for participant in tracked {
+            assert!(participant.received_requests().is_empty());
+            assert_eq!(participant.consumed_outcome_count(), 0);
+            assert_eq!(participant.active_future_count(), 0);
+        }
+    }
+
+    #[test]
+    fn acknowledgement_mismatch_and_exhaustion_are_terminal_with_exact_accounting() {
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap()
+            .block_on(async {
+                for outcome in [
+                    ScriptedSpeechCancellationOutcome::Acknowledged(
+                        SpeechCancellationAcknowledgement::for_request(
+                            &SpeechCancellationRequest::new(
+                                SpeechId::new(Uuid::from_u128(99)).unwrap(),
+                            ),
+                        ),
+                    ),
+                    ScriptedSpeechCancellationOutcome::DependencyFailure,
+                ] {
+                    let (tracked, erased) = tracked_participants(
+                        SpeechCancellationSurface::ALL.into_iter().map(|surface| {
+                            SpeechCancellationCapability::cancellable(speech_id(), surface)
+                        }),
+                        [outcome],
+                    );
+                    let (w, s, c, t) = ids();
+                    let request = SpeechCancellationRequest::new(speech_id());
+                    let mut value = SpeechInteractionCancellationComposition::new(
+                        workflow(true),
+                        w,
+                        s,
+                        c,
+                        t,
+                        speech_id(),
+                        request,
+                        erased,
+                        message_id(),
+                        cancellation(),
+                        adapter(true),
+                    )
+                    .unwrap();
+                    assert_eq!(
+                        value.execute(request, message_id(), cancellation()).await,
+                        Err(SpeechInteractionCancellationError::RuntimeFailure)
+                    );
+                    assert_eq!(
+                        value.execute(request, message_id(), cancellation()).await,
+                        Err(SpeechInteractionCancellationError::RuntimeFailure)
+                    );
+                    assert_eq!(value.inspect_adapter(|a| a.requests().len()).unwrap(), 1);
+                    for participant in tracked {
+                        assert_eq!(participant.received_requests(), vec![request]);
+                        assert_eq!(participant.consumed_outcome_count(), 1);
+                        assert_eq!(participant.remaining_outcome_count(), 0);
+                        assert_eq!(participant.active_future_count(), 0);
+                    }
+                }
+            });
+    }
+
+    #[test]
+    fn caller_drop_aborts_pending_speech_and_prevents_retry() {
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let (tracked, erased) = tracked_participants(
+                    SpeechCancellationSurface::ALL.into_iter().map(|surface| {
+                        SpeechCancellationCapability::cancellable(speech_id(), surface)
+                    }),
+                    [ScriptedSpeechCancellationOutcome::Pending],
+                );
+                let (w, s, c, t) = ids();
+                let request = SpeechCancellationRequest::new(speech_id());
+                let mut value = SpeechInteractionCancellationComposition::new(
+                    workflow(true),
+                    w,
+                    s,
+                    c,
+                    t,
+                    speech_id(),
+                    request,
+                    erased,
+                    message_id(),
+                    cancellation(),
+                    adapter(true),
+                )
+                .unwrap();
+                let mut execution = Box::pin(value.execute(request, message_id(), cancellation()));
+                loop {
+                    tokio::select! {
+                        _ = &mut execution => panic!("pending script unexpectedly completed"),
+                        _ = tokio::task::yield_now() => {}
+                    }
+                    if tracked
+                        .iter()
+                        .all(|participant| participant.active_future_count() == 1)
+                    {
+                        break;
+                    }
+                }
+                drop(execution);
+                tokio::task::yield_now().await;
+                assert!(tracked
+                    .iter()
+                    .all(|participant| participant.active_future_count() == 0));
+                assert_eq!(
+                    value.execute(request, message_id(), cancellation()).await,
+                    Err(SpeechInteractionCancellationError::RuntimeFailure)
+                );
+                assert!(tracked
+                    .iter()
+                    .all(|participant| participant.consumed_outcome_count() == 1));
+            });
     }
 
     #[test]
