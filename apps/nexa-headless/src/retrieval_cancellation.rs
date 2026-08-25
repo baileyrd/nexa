@@ -70,12 +70,19 @@ pub struct RetrievalCancellationComposition<S> {
     terminal: ExecutionState,
     #[cfg(test)]
     fault: Option<TestFault>,
+    #[cfg(test)]
+    barrier: Option<TestBarrier>,
 }
 #[cfg(test)]
 #[derive(Clone, Copy)]
 enum TestFault {
     Join,
     Coverage,
+}
+#[cfg(test)]
+struct TestBarrier {
+    reached: tokio::sync::oneshot::Sender<()>,
+    release: tokio::sync::oneshot::Receiver<()>,
 }
 
 impl<S: RetrievalService + 'static> RetrievalCancellationComposition<S> {
@@ -124,6 +131,8 @@ impl<S: RetrievalService + 'static> RetrievalCancellationComposition<S> {
             terminal: ExecutionState::Ready,
             #[cfg(test)]
             fault: None,
+            #[cfg(test)]
+            barrier: None,
         })
     }
 
@@ -163,11 +172,23 @@ impl<S: RetrievalService + 'static> RetrievalCancellationComposition<S> {
         tasks
             .spawn_for_target(CancellationTarget::Retrieval, move |token| async move {
                 #[cfg(test)]
-                if matches!(fault, Some(TestFault::Join)) {
-                    panic!("injected join failure");
-                }
+                let task_token = token.clone();
                 let mut future = Box::pin(retrieve(&*service, exact, token));
                 let mut started_tx = Some(started_tx);
+                #[cfg(test)]
+                if matches!(fault, Some(TestFault::Join)) {
+                    std::future::poll_fn(|cx| {
+                        let _ = std::future::Future::poll(future.as_mut(), cx);
+                        if let Some(started_tx) = started_tx.take() {
+                            let _ = started_tx.send(());
+                        }
+                        std::task::Poll::Ready(())
+                    })
+                    .await;
+                    task_token.cancelled().await;
+                    drop(future);
+                    panic!("injected join failure during cancellation");
+                }
                 let outcome = std::future::poll_fn(|cx| {
                     let poll = std::future::Future::poll(future.as_mut(), cx);
                     if let Some(started_tx) = started_tx.take() {
@@ -187,6 +208,14 @@ impl<S: RetrievalService + 'static> RetrievalCancellationComposition<S> {
         if started_rx.await.is_err() {
             self.terminal = ExecutionState::Failed;
             return Err(RetrievalCancellationCompositionError::RuntimeFailure);
+        }
+        #[cfg(test)]
+        if let Some(barrier) = self.barrier.take() {
+            let _ = barrier.reached.send(());
+            if barrier.release.await.is_err() {
+                self.terminal = ExecutionState::Failed;
+                return Err(RetrievalCancellationCompositionError::RuntimeFailure);
+            }
         }
         #[cfg(test)]
         if matches!(self.fault, Some(TestFault::Coverage)) {
@@ -333,7 +362,30 @@ mod tests {
     #[tokio::test]
     async fn waiting_service_is_started_cancelled_joined_and_exactly_consumed() {
         let mut c = composition([Outcome::WaitForCancellation]);
-        let evidence = c.execute(query(10, "private query")).await.unwrap();
+        let observable = c.inspect_service(Clone::clone);
+        let (reached_tx, reached_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+        c.barrier = Some(TestBarrier {
+            reached: reached_tx,
+            release: release_rx,
+        });
+        let mut execution = Box::pin(c.execute(query(10, "private query")));
+        tokio::select! {
+            result = &mut execution => panic!("execution completed before cancellation barrier: {result:?}"),
+            result = reached_rx => result.expect("cancellation barrier must be reached"),
+        }
+        assert_eq!(
+            (
+                observable.received_queries(),
+                observable.consumed_outcome_count(),
+                observable.remaining_outcome_count(),
+                observable.active_operation_count()
+            ),
+            (vec![query(10, "private query")], 1, 0, 1)
+        );
+        release_tx.send(()).unwrap();
+        let evidence = execution.as_mut().await.unwrap();
+        drop(execution);
         assert_eq!(
             evidence.cancellation(),
             &RetrievalCancellation::from_query(&query(10, "private query")).unwrap()
@@ -501,32 +553,97 @@ mod tests {
     async fn runtime_failures_are_closed_and_terminal() {
         for fault in [TestFault::Join, TestFault::Coverage] {
             let mut c = composition([Outcome::WaitForCancellation]);
+            let observable = c.inspect_service(Clone::clone);
             c.fault = Some(fault);
             assert_eq!(
                 c.execute(query(10, "private query")).await,
                 Err(RetrievalCancellationCompositionError::RuntimeFailure)
             );
+            if matches!(fault, TestFault::Join) {
+                assert_eq!(
+                    (
+                        observable.received_queries(),
+                        observable.consumed_outcome_count(),
+                        observable.remaining_outcome_count(),
+                        observable.active_operation_count()
+                    ),
+                    (vec![query(10, "private query")], 1, 0, 0)
+                );
+            }
             assert_eq!(
                 c.execute(query(10, "private query")).await,
                 Err(RetrievalCancellationCompositionError::RuntimeFailure)
             );
+            if matches!(fault, TestFault::Join) {
+                assert_eq!(
+                    (
+                        observable.received_queries().len(),
+                        observable.consumed_outcome_count(),
+                        observable.active_operation_count()
+                    ),
+                    (1, 1, 0)
+                );
+            }
         }
     }
 
-    #[test]
-    fn public_surfaces_redact_content() {
+    #[tokio::test]
+    async fn public_surfaces_redact_content() {
         let q = query(10, "ultra-private-query-text");
         assert!(!format!("{q:?}").contains("ultra-private-query-text"));
         let e = RetrievalCancellation::from_query(&q).unwrap();
         assert!(!format!("{e:?} {e}").contains("ultra-private-query-text"));
-        for error in [
-            RetrievalCancellationCompositionError::InvalidWorkflow,
-            RetrievalCancellationCompositionError::AssociationMismatch,
-            RetrievalCancellationCompositionError::InvalidQuery,
-            RetrievalCancellationCompositionError::ServiceFailure,
-            RetrievalCancellationCompositionError::RuntimeFailure,
-            RetrievalCancellationCompositionError::ConflictingExecution,
+        let (w, s, c, t) = ids();
+        let mut composition = RetrievalCancellationComposition::new(
+            workflow(true),
+            w,
+            s,
+            c,
+            t,
+            q.clone(),
+            Service::new([Outcome::WaitForCancellation]),
+        )
+        .unwrap();
+        let evidence = composition.execute(q).await.unwrap();
+        let public_debug = format!("{evidence:?}");
+        assert!(!public_debug.contains("ultra-private-query-text"));
+        assert!(!public_debug.contains("StudentLearning"));
+        assert!(!public_debug.contains(&LEXICAL_RETRIEVAL_V1.to_string()));
+
+        for (error, debug, display) in [
+            (
+                RetrievalCancellationCompositionError::InvalidWorkflow,
+                "InvalidWorkflow",
+                "invalid cancelled workflow",
+            ),
+            (
+                RetrievalCancellationCompositionError::AssociationMismatch,
+                "AssociationMismatch",
+                "retrieval cancellation association mismatch",
+            ),
+            (
+                RetrievalCancellationCompositionError::InvalidQuery,
+                "InvalidQuery",
+                "invalid retrieval query",
+            ),
+            (
+                RetrievalCancellationCompositionError::ServiceFailure,
+                "ServiceFailure",
+                "retrieval cancellation service failure",
+            ),
+            (
+                RetrievalCancellationCompositionError::RuntimeFailure,
+                "RuntimeFailure",
+                "retrieval cancellation runtime failure",
+            ),
+            (
+                RetrievalCancellationCompositionError::ConflictingExecution,
+                "ConflictingExecution",
+                "conflicting retrieval cancellation execution",
+            ),
         ] {
+            assert_eq!(format!("{error:?}"), debug);
+            assert_eq!(error.to_string(), display);
             assert!(!format!("{error:?} {error}").contains("ultra-private-query-text"));
         }
     }
