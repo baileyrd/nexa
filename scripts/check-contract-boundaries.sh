@@ -19,7 +19,7 @@ expected={
  "nexa-tutor": {"nexa-domain", "nexa-knowledge", "serde", "serde_json", "sha2", "thiserror"},
  "nexa-orchestrator": {"nexa-domain", "serde", "thiserror"},
  "nexa-orchestrator-runtime": {"nexa-orchestrator", "tokio", "tokio-util"},
- "nexa-headless": {"nexa-avatar", "nexa-domain", "nexa-nbp", "nexa-orchestrator", "nexa-orchestrator-runtime", "tokio"},
+ "nexa-headless": {"nexa-avatar", "nexa-domain", "nexa-nbp", "nexa-orchestrator", "nexa-orchestrator-runtime", "nexa-tutor", "tokio"},
 }
 # Ignore dev-only dependencies while enforcing all normal dependency edges.
 for package, allowed in expected.items():
