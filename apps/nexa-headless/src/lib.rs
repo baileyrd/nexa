@@ -1,7 +1,12 @@
 //! Minimal headless composition of workflow-owned Behavior cancellation.
 #![forbid(unsafe_code)]
 
+mod retrieval_cancellation;
 mod tutor_cancellation;
+pub use retrieval_cancellation::{
+    RetrievalCancellationComposition, RetrievalCancellationCompositionError,
+    RetrievalCancellationEvidence,
+};
 pub use tutor_cancellation::{
     TutorGenerationCancellationComposition, TutorGenerationCancellationCompositionError,
     TutorGenerationCancellationEvidence,
