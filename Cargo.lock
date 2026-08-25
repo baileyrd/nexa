@@ -1254,6 +1254,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "nexa-labs"
+version = "0.1.0"
+dependencies = [
+ "nexa-domain",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
 name = "nexa-learning-core"
 version = "0.1.0"
 dependencies = [
