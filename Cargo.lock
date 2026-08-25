@@ -1221,6 +1221,7 @@ dependencies = [
  "nexa-nbp",
  "nexa-orchestrator",
  "nexa-orchestrator-runtime",
+ "nexa-tutor",
  "tokio",
  "uuid",
 ]

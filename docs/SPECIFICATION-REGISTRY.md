@@ -73,7 +73,8 @@ This registry is the navigation and governance authority for Nexa system specifi
 | ADR-0055 | [Target-aware workflow task ownership foundation](adr/0055-target-aware-workflow-task-ownership-foundation.md) | Accepted | Phase 5 closed-target task association and hierarchical token ownership foundation |
 | ADR-0056 | [Atomic exact-plan runtime cancellation execution](adr/0056-atomic-exact-plan-runtime-execution.md) | Accepted | Phase 5 atomic exact-plan selective cancellation, joining, and non-cancellable evidence foundation |
 | ADR-0057 | [Headless Behavior cancellation binding](adr/0057-headless-behavior-cancellation-binding.md) | Accepted | First concrete Phase 5 Behavior cancellation binding in an application composition root |
-| ADR-0058 | [Provider-neutral Tutor Generation cancellation control](adr/0058-provider-neutral-tutor-generation-cancellation-control.md) | Accepted | Phase 5 dependency-light cancellation-control contract foundation; no runtime binding or proof that generation stopped |
+| ADR-0058 | [Provider-neutral Tutor Generation cancellation control](adr/0058-provider-neutral-tutor-generation-cancellation-control.md) | Accepted | Phase 5 dependency-light cancellation-control contract foundation; no proof that generation stopped |
+| ADR-0059 | [Headless Tutor Generation cancellation-control binding](adr/0059-headless-tutor-generation-cancellation-control-binding.md) | Accepted | Second headless control binding; task join and acknowledgement do not prove provider generation stopped |
 | ADR-0014 | [Learning-core composition and atomicity](adr/0014-learning-core-composition-and-atomicity.md) | Accepted | Phase 3 policy composition, unit of work, idempotency, and deferred durable adapters |
 | ADR-0008 | [Controlled 3D workspace migration and ownership](adr/0008-controlled-3d-workspace-migration.md) | Accepted | 3D library, viewer, and validator ownership after migration |
 
@@ -97,7 +98,7 @@ This registry is the navigation and governance authority for Nexa system specifi
 | 11 | NEXA-3D-ART-001 | 3D production pipeline | Baseline Draft | Assets/tooling |
 | 11 | NEXA-3D-REF-001 | Canonical 3D reference | Baseline Draft | Assets |
 | 11 | NEXA-3D-RUNTIME-001 | 3D validation runtime | Implemented slice | `crates/nexa-3d`; `apps/nexa-3d-viewer`; `tools/nexa-3d-validate` |
-| 12 | NEXA-ORCH-001 | Session orchestration | Baseline Draft; ADR-0051 through ADR-0058 foundations and sole concrete Behavior binding implemented | `nexa-orchestrator`; `nexa-orchestrator-runtime`; `apps/nexa-headless` |
+| 12 | NEXA-ORCH-001 | Session orchestration | Baseline Draft; ADR-0051 through ADR-0059 foundations and Behavior plus Tutor Generation control bindings implemented | `nexa-orchestrator`; `nexa-orchestrator-runtime`; `apps/nexa-headless` |
 
 Directories 13 through 27 reserve future specification namespaces. A reserved directory is not an approved subsystem contract.
 
