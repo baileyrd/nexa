@@ -75,7 +75,7 @@ Exit: grounded responses carry citations, confidence, and machine-validated tuto
 
 ## Phase 5 — Orchestrate a complete session
 
-**Status:** In progress. ADR-0051 through ADR-0056 establish lifecycle, planning, port, Tokio ownership, target association, and atomic exact-plan execution; ADR-0057 adds the Behavior cancellation binding; ADR-0058 adds the Tutor Generation cancellation-control contract; ADR-0059 adds its separate headless control binding.
+**Status:** In progress. ADR-0051 through ADR-0056 establish lifecycle, planning, port, Tokio ownership, target association, and atomic exact-plan execution; ADR-0057 adds the Behavior cancellation binding; ADR-0058 adds the Tutor Generation cancellation-control contract; ADR-0059 adds its separate headless control binding; ADR-0060 adds the separate async cooperative Retrieval service foundation.
 
 - [x] deterministic session/workflow lifecycle and lifecycle cancellation foundation (ADR-0051)
 - [ ] cancellation-safe execution and propagation
@@ -83,6 +83,8 @@ Exit: grounded responses carry citations, confidence, and machine-validated tuto
 ADR-0057 composes the existing exact-plan runtime with renderer-neutral `AvatarPort` cancellation for Behavior only, with side-effect-free preflight, cooperative token waiting, one exact adapter call, joining, observed immutable evidence, exact preview/actual agreement, and terminalized success, failure, or caller drop. Retrieval, speech, tools/labs, real renderer/provider/network cancellation, and policy/recovery concerns remain deferred, so the broader checklist item stays incomplete.
 
 ADR-0058 adds the synchronous dependency-light `nexa-tutor` control boundary. ADR-0059 separately binds it in `apps/nexa-headless` through one canonical Tutor Generation target task. Exact acceptance acknowledgement plus completion/join of that owned control task does not change or wrap generation, prove `LanguageModelProvider::generate` or provider work stopped, or add concrete provider cancellation. Behavior and Tutor Generation control now have headless bindings; retrieval, speech, tool/lab, and all existing deferrals remain unchanged, and the broad checklist item stays incomplete. NEXA-TUTOR-001 and NEXA-ORCH-001 remain Baseline Draft.
+
+ADR-0060 keeps `nexa-knowledge` synchronous and runtime-independent while adding `nexa-knowledge-runtime` as an object-safe asynchronous service boundary. Cooperative cancellation completion proves only that the service future observed cancellation and terminated. The Retrieval headless cancellation-plan binding, concrete dependencies, retry, timeout, persistence, and recovery remain deferred, so the broad checklist item stays incomplete.
 - [ ] speech input/output ports
 - [ ] behavior synchronization
 - [ ] tool/lab execution

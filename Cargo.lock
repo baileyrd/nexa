@@ -1239,6 +1239,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "nexa-knowledge-runtime"
+version = "0.1.0"
+dependencies = [
+ "nexa-domain",
+ "nexa-knowledge",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
 name = "nexa-learning-core"
 version = "0.1.0"
 dependencies = [

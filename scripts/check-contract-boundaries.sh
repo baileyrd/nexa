@@ -16,6 +16,7 @@ expected={
  "nexa-assessment": {"nexa-domain", "nexa-student", "serde", "thiserror"},
  "nexa-learning-core": {"nexa-domain", "nexa-events", "nexa-student", "nexa-pedagogy", "nexa-lessons", "nexa-assessment", "serde", "thiserror"},
  "nexa-knowledge": {"nexa-domain", "serde", "sha2", "thiserror"},
+ "nexa-knowledge-runtime": {"nexa-domain", "nexa-knowledge", "tokio", "tokio-util"},
  "nexa-tutor": {"nexa-domain", "nexa-knowledge", "serde", "serde_json", "sha2", "thiserror"},
  "nexa-orchestrator": {"nexa-domain", "serde", "thiserror"},
  "nexa-orchestrator-runtime": {"nexa-orchestrator", "tokio", "tokio-util"},
