@@ -1218,11 +1218,14 @@ version = "0.1.0"
 dependencies = [
  "nexa-avatar",
  "nexa-domain",
+ "nexa-knowledge",
+ "nexa-knowledge-runtime",
  "nexa-nbp",
  "nexa-orchestrator",
  "nexa-orchestrator-runtime",
  "nexa-tutor",
  "tokio",
+ "tokio-util",
  "uuid",
 ]
 

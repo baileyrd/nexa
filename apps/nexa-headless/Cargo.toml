@@ -8,6 +8,8 @@ license.workspace = true
 nexa-avatar = { path = "../../crates/nexa-avatar" }
 nexa-domain = { path = "../../crates/nexa-domain" }
 nexa-nbp = { path = "../../crates/nexa-nbp" }
+nexa-knowledge = { path = "../../crates/nexa-knowledge" }
+nexa-knowledge-runtime = { path = "../../crates/nexa-knowledge-runtime" }
 nexa-orchestrator = { path = "../../crates/nexa-orchestrator" }
 nexa-orchestrator-runtime = { path = "../../crates/nexa-orchestrator-runtime" }
 nexa-tutor = { path = "../../crates/nexa-tutor" }
@@ -15,4 +17,5 @@ tokio = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros"] }
+tokio-util.workspace = true
 uuid.workspace = true
