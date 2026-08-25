@@ -101,6 +101,8 @@ pub struct ToolExecutionCancellationComposition<C> {
     terminal: ExecutionState,
     #[cfg(test)]
     fault: Option<TestFault>,
+    #[cfg(test)]
+    lifecycle: TestLifecycleProbe,
 }
 #[cfg(test)]
 #[derive(Clone, Copy)]
@@ -112,6 +114,81 @@ enum TestFault {
     RuntimeEvidence,
     HoldNonCancellable,
     HoldBeforePlan,
+}
+
+#[cfg(test)]
+#[derive(Clone, Default)]
+struct TestLifecycleProbe {
+    state: Arc<(Mutex<TestLifecycleState>, tokio::sync::Notify)>,
+}
+#[cfg(test)]
+#[derive(Default)]
+struct TestLifecycleState {
+    before_plan: usize,
+    cancellable_started: usize,
+    cancellable_dropped: usize,
+    placeholder_started: usize,
+    placeholder_completed: usize,
+    placeholder_dropped: usize,
+}
+#[cfg(test)]
+#[derive(Clone, Copy)]
+enum TestLifecycleEvent {
+    BeforePlan,
+    CancellableStarted,
+    CancellableDropped,
+    PlaceholderStarted,
+    PlaceholderCompleted,
+    PlaceholderDropped,
+}
+#[cfg(test)]
+impl TestLifecycleProbe {
+    fn signal(&self, event: TestLifecycleEvent) {
+        let mut state = self.state.0.lock().unwrap();
+        *match event {
+            TestLifecycleEvent::BeforePlan => &mut state.before_plan,
+            TestLifecycleEvent::CancellableStarted => &mut state.cancellable_started,
+            TestLifecycleEvent::CancellableDropped => &mut state.cancellable_dropped,
+            TestLifecycleEvent::PlaceholderStarted => &mut state.placeholder_started,
+            TestLifecycleEvent::PlaceholderCompleted => &mut state.placeholder_completed,
+            TestLifecycleEvent::PlaceholderDropped => &mut state.placeholder_dropped,
+        } += 1;
+        drop(state);
+        self.state.1.notify_waiters();
+    }
+
+    fn count(&self, event: TestLifecycleEvent) -> usize {
+        let state = self.state.0.lock().unwrap();
+        match event {
+            TestLifecycleEvent::BeforePlan => state.before_plan,
+            TestLifecycleEvent::CancellableStarted => state.cancellable_started,
+            TestLifecycleEvent::CancellableDropped => state.cancellable_dropped,
+            TestLifecycleEvent::PlaceholderStarted => state.placeholder_started,
+            TestLifecycleEvent::PlaceholderCompleted => state.placeholder_completed,
+            TestLifecycleEvent::PlaceholderDropped => state.placeholder_dropped,
+        }
+    }
+
+    async fn wait_for(&self, event: TestLifecycleEvent, count: usize) {
+        loop {
+            let notified = self.state.1.notified();
+            if self.count(event) >= count {
+                return;
+            }
+            notified.await;
+        }
+    }
+}
+#[cfg(test)]
+struct TestLifecycleGuard {
+    probe: TestLifecycleProbe,
+    event: TestLifecycleEvent,
+}
+#[cfg(test)]
+impl Drop for TestLifecycleGuard {
+    fn drop(&mut self) {
+        self.probe.signal(self.event);
+    }
 }
 
 impl<C: ToolCancellationControl + 'static> ToolExecutionCancellationComposition<C> {
@@ -182,6 +259,8 @@ impl<C: ToolCancellationControl + 'static> ToolExecutionCancellationComposition<
             terminal: ExecutionState::Ready,
             #[cfg(test)]
             fault: None,
+            #[cfg(test)]
+            lifecycle: TestLifecycleProbe::default(),
         })
     }
 
@@ -233,6 +312,8 @@ impl<C: ToolCancellationControl + 'static> ToolExecutionCancellationComposition<
         let admitted = self.admitted.clone();
         #[cfg(test)]
         let fault = self.fault;
+        #[cfg(test)]
+        let lifecycle = self.lifecycle.clone();
 
         let (release, started, completed) = if capability.semantics == ToolSemantics::NonCancellable
         {
@@ -244,6 +325,13 @@ impl<C: ToolCancellationControl + 'static> ToolExecutionCancellationComposition<
                     let _ = started_tx.send(token.is_cancelled());
                     let _ = release_rx.await;
                     #[cfg(test)]
+                    let _drop_guard = TestLifecycleGuard {
+                        probe: lifecycle.clone(),
+                        event: TestLifecycleEvent::PlaceholderDropped,
+                    };
+                    #[cfg(test)]
+                    lifecycle.signal(TestLifecycleEvent::PlaceholderStarted);
+                    #[cfg(test)]
                     if matches!(fault, Some(TestFault::Join)) {
                         panic!("injected");
                     }
@@ -251,6 +339,8 @@ impl<C: ToolCancellationControl + 'static> ToolExecutionCancellationComposition<
                     if matches!(fault, Some(TestFault::HoldNonCancellable)) {
                         std::future::pending::<()>().await;
                     }
+                    #[cfg(test)]
+                    lifecycle.signal(TestLifecycleEvent::PlaceholderCompleted);
                     let _ = completed_tx.send(token.is_cancelled());
                 })
                 .map_err(|_| ToolExecutionCancellationCompositionError::RuntimeFailure)?;
@@ -259,6 +349,13 @@ impl<C: ToolCancellationControl + 'static> ToolExecutionCancellationComposition<
             tasks
                 .spawn_for_target(CancellationTarget::ToolExecution, move |token| async move {
                     token.cancelled().await;
+                    #[cfg(test)]
+                    let _drop_guard = TestLifecycleGuard {
+                        probe: lifecycle.clone(),
+                        event: TestLifecycleEvent::CancellableDropped,
+                    };
+                    #[cfg(test)]
+                    lifecycle.signal(TestLifecycleEvent::CancellableStarted);
                     #[cfg(test)]
                     if matches!(fault, Some(TestFault::Join)) {
                         panic!("injected");
@@ -288,6 +385,7 @@ impl<C: ToolCancellationControl + 'static> ToolExecutionCancellationComposition<
         }
         #[cfg(test)]
         if matches!(self.fault, Some(TestFault::HoldBeforePlan)) {
+            self.lifecycle.signal(TestLifecycleEvent::BeforePlan);
             std::future::pending::<()>().await;
         }
         #[cfg(test)]
@@ -652,12 +750,28 @@ mod tests {
                 c.execute(capability(ToolSemantics::Cancellable)).await,
                 Err(ToolExecutionCancellationCompositionError::ControlFailure)
             );
-            let count = c.inspect_control(|v| v.received().len());
+            let accounting = c.inspect_control(|v| {
+                (
+                    v.received().len(),
+                    v.remaining_outcomes(),
+                    v.active_futures(),
+                    v.dropped_futures(),
+                )
+            });
+            assert_eq!(accounting, (1, 0, 0, 1));
             assert_eq!(
                 c.execute(capability(ToolSemantics::Cancellable)).await,
                 Err(ToolExecutionCancellationCompositionError::RuntimeFailure)
             );
-            assert_eq!(c.inspect_control(|v| v.received().len()), count);
+            assert_eq!(
+                c.inspect_control(|v| (
+                    v.received().len(),
+                    v.remaining_outcomes(),
+                    v.active_futures(),
+                    v.dropped_futures(),
+                )),
+                accounting
+            );
         }
         for fault in [TestFault::Join, TestFault::Coverage, TestFault::Evidence] {
             let ack = ToolCancellationAcknowledgement {
@@ -692,6 +806,12 @@ mod tests {
             .execute(capability(ToolSemantics::NonCancellable))
             .await
             .unwrap();
+        assert_eq!(c.lifecycle.count(TestLifecycleEvent::PlaceholderStarted), 1);
+        assert_eq!(
+            c.lifecycle.count(TestLifecycleEvent::PlaceholderCompleted),
+            1
+        );
+        assert_eq!(c.lifecycle.count(TestLifecycleEvent::PlaceholderDropped), 1);
         assert_eq!(
             evidence.cancellation().kind,
             ToolCancellationOutcomeKind::DeclaredNonCancellable
@@ -998,11 +1118,11 @@ mod tests {
         );
         waiting.fault = Some(TestFault::HoldBeforePlan);
         let waiting_observer = waiting.inspect_control(Clone::clone);
+        let waiting_lifecycle = waiting.lifecycle.clone();
         let mut before_token = Box::pin(waiting.execute(capability(ToolSemantics::Cancellable)));
         tokio::select! {
-            biased;
             result = &mut before_token => panic!("pre-token barrier completed: {result:?}"),
-            _ = tokio::task::yield_now() => {}
+            _ = waiting_lifecycle.wait_for(TestLifecycleEvent::BeforePlan, 1) => {}
         }
         assert_eq!(
             (
@@ -1020,11 +1140,11 @@ mod tests {
             [ScriptedCancellationOutcome::Pending],
         );
         let observer = c.inspect_control(Clone::clone);
+        let lifecycle = c.lifecycle.clone();
         let mut execution = Box::pin(c.execute(capability(ToolSemantics::Cancellable)));
         tokio::select! {
-            biased;
             result = &mut execution => panic!("pending dependency completed: {result:?}"),
-            _ = tokio::task::yield_now() => {}
+            _ = lifecycle.wait_for(TestLifecycleEvent::CancellableStarted, 1) => {}
         }
         assert_eq!(
             (
@@ -1035,7 +1155,9 @@ mod tests {
             (1, 0, 1)
         );
         drop(execution);
-        tokio::task::yield_now().await;
+        lifecycle
+            .wait_for(TestLifecycleEvent::CancellableDropped, 1)
+            .await;
         assert_eq!(
             (
                 observer.received().len(),
@@ -1137,13 +1259,25 @@ mod tests {
             [ScriptedCancellationOutcome::DependencyFailure],
         );
         dropped.fault = Some(TestFault::HoldNonCancellable);
+        let lifecycle = dropped.lifecycle.clone();
         let mut execution = Box::pin(dropped.execute(capability(ToolSemantics::NonCancellable)));
         tokio::select! {
-            biased;
             result = &mut execution => panic!("held placeholder completed: {result:?}"),
-            _ = tokio::task::yield_now() => {}
+            _ = lifecycle.wait_for(TestLifecycleEvent::PlaceholderStarted, 1) => {}
         }
+        assert_eq!(
+            (
+                lifecycle.count(TestLifecycleEvent::PlaceholderCompleted),
+                lifecycle.count(TestLifecycleEvent::PlaceholderDropped)
+            ),
+            (0, 0),
+            "the accepted placeholder must still be live and privately owned"
+        );
         drop(execution);
+        lifecycle
+            .wait_for(TestLifecycleEvent::PlaceholderDropped, 1)
+            .await;
+        assert_eq!(lifecycle.count(TestLifecycleEvent::PlaceholderCompleted), 0);
         assert_eq!(
             dropped.inspect_control(|v| (
                 v.received().len(),
