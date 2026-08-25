@@ -3,8 +3,8 @@ use nexa_knowledge::{
     Audience, RetrievalFilters, RetrievalQuery, RetrievalResult, LEXICAL_RETRIEVAL_V1, V1,
 };
 use nexa_knowledge_runtime::{
-    retrieve, RetrievalServiceError, RetrievalServiceOutcome, ScriptedRetrievalOutcome,
-    ScriptedRetrievalService,
+    retrieve, RetrievalCancellation, RetrievalFuture, RetrievalService, RetrievalServiceError,
+    RetrievalServiceOutcome, ScriptedRetrievalOutcome, ScriptedRetrievalService,
 };
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -42,6 +42,68 @@ fn result(query: &RetrievalQuery) -> RetrievalResult {
         candidates: vec![],
         exclusions: vec![],
     }
+}
+
+struct CancellingAdapter {
+    evidence: RetrievalCancellation,
+}
+
+impl RetrievalService for CancellingAdapter {
+    fn retrieve(
+        &self,
+        _query: RetrievalQuery,
+        _cancellation: CancellationToken,
+    ) -> RetrievalFuture<'_> {
+        Box::pin(async move { RetrievalServiceOutcome::Cancelled(self.evidence) })
+    }
+}
+
+#[tokio::test]
+async fn external_adapter_can_report_exact_validated_cancellation_without_query_text() {
+    let request = query(60, "adapter-private-query-text");
+    let evidence = RetrievalCancellation::from_query(&request).unwrap();
+    assert!(!format!("{evidence:?} {evidence}").contains("adapter-private-query-text"));
+
+    let outcome = retrieve(
+        &CancellingAdapter { evidence },
+        request.clone(),
+        CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        outcome,
+        RetrievalServiceOutcome::Cancelled(RetrievalCancellation::from_query(&request).unwrap())
+    );
+    assert!(!format!("{outcome:?} {outcome}").contains("adapter-private-query-text"));
+}
+
+#[tokio::test]
+async fn external_adapter_cancellation_mismatch_is_rejected_not_reassociated() {
+    let request = query(70, "requested-private-query-text");
+    let other = query(80, "other-private-query-text");
+    let evidence = RetrievalCancellation::from_query(&other).unwrap();
+
+    let error = retrieve(
+        &CancellingAdapter { evidence },
+        request,
+        CancellationToken::new(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error, RetrievalServiceError::AssociationMismatch);
+    assert!(!format!("{evidence:?} {evidence} {error:?} {error}").contains("private-query-text"));
+}
+
+#[test]
+fn public_cancellation_construction_rejects_invalid_query_without_disclosure() {
+    let invalid = RetrievalQuery {
+        maximum_results: 0,
+        ..query(90, "invalid-private-query-text")
+    };
+    let error = RetrievalCancellation::from_query(&invalid).unwrap_err();
+    assert_eq!(error, RetrievalServiceError::InvalidQuery);
+    assert!(!format!("{error:?} {error}").contains("invalid-private-query-text"));
 }
 
 #[tokio::test]
@@ -158,12 +220,8 @@ async fn dropping_caller_future_terminates_all_adapter_work() {
 fn futures_poll_once<F: std::future::Future>(
     future: &mut std::pin::Pin<&mut F>,
 ) -> std::task::Poll<F::Output> {
-    struct Noop;
-    impl std::task::Wake for Noop {
-        fn wake(self: std::sync::Arc<Self>) {}
-    }
-    let waker = std::task::Waker::from(std::sync::Arc::new(Noop));
+    let waker = std::task::Waker::noop();
     future
         .as_mut()
-        .poll(&mut std::task::Context::from_waker(&waker))
+        .poll(&mut std::task::Context::from_waker(waker))
 }

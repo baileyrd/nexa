@@ -36,11 +36,34 @@ pub struct RetrievalCancellation {
 }
 
 impl RetrievalCancellation {
+    /// Construct cancellation evidence associated with one exact, valid query.
+    ///
+    /// The query text is validated but is not retained in the evidence.
+    pub fn from_query(query: &RetrievalQuery) -> Result<Self, RetrievalServiceError> {
+        query
+            .validate()
+            .map_err(|_| RetrievalServiceError::InvalidQuery)?;
+        Ok(Self {
+            query_id: query.query_id,
+            result_id: query.result_id,
+        })
+    }
+
     pub const fn query_id(&self) -> RetrievalQueryId {
         self.query_id
     }
     pub const fn result_id(&self) -> RetrievalResultId {
         self.result_id
+    }
+}
+
+impl fmt::Display for RetrievalCancellation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "retrieval cancelled for query {} and result {}",
+            self.query_id, self.result_id
+        )
     }
 }
 
@@ -50,6 +73,16 @@ pub enum RetrievalServiceOutcome {
     Success(RetrievalResult),
     Cancelled(RetrievalCancellation),
     DependencyFailure,
+}
+
+impl fmt::Display for RetrievalServiceOutcome {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Success(_) => f.write_str("retrieval succeeded"),
+            Self::Cancelled(evidence) => evidence.fmt(f),
+            Self::DependencyFailure => f.write_str("retrieval dependency failed"),
+        }
+    }
 }
 
 /// Closed, content-free host error.
