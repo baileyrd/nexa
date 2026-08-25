@@ -3,6 +3,7 @@
 
 mod retrieval_cancellation;
 mod speech_cancellation;
+mod tool_cancellation;
 mod tutor_cancellation;
 pub use retrieval_cancellation::{
     RetrievalCancellationComposition, RetrievalCancellationCompositionError,
@@ -11,6 +12,10 @@ pub use retrieval_cancellation::{
 pub use speech_cancellation::{
     SpeechInteractionCancellationComposition, SpeechInteractionCancellationError,
     SpeechInteractionCancellationEvidence,
+};
+pub use tool_cancellation::{
+    ToolExecutionCancellationComposition, ToolExecutionCancellationCompositionError,
+    ToolExecutionCancellationEvidence,
 };
 pub use tutor_cancellation::{
     TutorGenerationCancellationComposition, TutorGenerationCancellationCompositionError,

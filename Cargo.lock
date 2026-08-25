@@ -1220,6 +1220,7 @@ dependencies = [
  "nexa-domain",
  "nexa-knowledge",
  "nexa-knowledge-runtime",
+ "nexa-labs",
  "nexa-nbp",
  "nexa-orchestrator",
  "nexa-orchestrator-runtime",

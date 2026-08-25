@@ -10,6 +10,7 @@ nexa-domain = { path = "../../crates/nexa-domain" }
 nexa-nbp = { path = "../../crates/nexa-nbp" }
 nexa-knowledge = { path = "../../crates/nexa-knowledge" }
 nexa-knowledge-runtime = { path = "../../crates/nexa-knowledge-runtime" }
+nexa-labs = { path = "../../crates/nexa-labs" }
 nexa-orchestrator = { path = "../../crates/nexa-orchestrator" }
 nexa-orchestrator-runtime = { path = "../../crates/nexa-orchestrator-runtime" }
 nexa-speech = { path = "../../crates/nexa-speech" }
