@@ -4,6 +4,7 @@
 pub mod admission;
 pub mod authorization;
 pub mod availability;
+pub mod cancellation;
 pub mod generation;
 pub mod model;
 pub mod prompt;
