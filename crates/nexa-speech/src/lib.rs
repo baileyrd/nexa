@@ -71,7 +71,7 @@ pub struct SpeechCancellationAcknowledgement {
 impl SpeechCancellationAcknowledgement {
     pub const fn for_request(request: &SpeechCancellationRequest) -> Self {
         Self {
-            contract_version: request.contract_version,
+            contract_version: SPEECH_CANCELLATION_V1,
             speech_id: request.speech_id,
         }
     }

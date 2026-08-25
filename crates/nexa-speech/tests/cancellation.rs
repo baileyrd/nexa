@@ -9,8 +9,7 @@ use serde_json::json;
 use std::{
     future::Future,
     pin::Pin,
-    sync::Arc,
-    task::{Context, Poll, Wake, Waker},
+    task::{Context, Poll, Waker},
 };
 use uuid::Uuid;
 
@@ -23,12 +22,7 @@ fn request(value: u128) -> Request {
 }
 
 fn poll_once<F: Future>(future: Pin<&mut F>) -> Poll<F::Output> {
-    struct Noop;
-    impl Wake for Noop {
-        fn wake(self: Arc<Self>) {}
-    }
-    let waker = Waker::from(Arc::new(Noop));
-    future.poll(&mut Context::from_waker(&waker))
+    future.poll(&mut Context::from_waker(Waker::noop()))
 }
 
 fn complete<F: Future>(mut future: Pin<&mut F>) -> F::Output {
@@ -58,6 +52,20 @@ fn exact_v1_wire_is_strict_and_round_trips() {
         assert!(serde_json::from_value::<Ack>(invalid).is_err());
     }
     assert!(serde_json::from_value::<ServiceOutcome>(json!({"kind":"provider_secret"})).is_err());
+}
+
+#[test]
+fn acknowledgement_construction_uses_v1_and_preserves_the_exact_id() {
+    let mut request = request(1);
+    request.contract_version = ProtocolVersion::new(2, 0);
+
+    let acknowledgement = Ack::for_request(&request);
+
+    assert_eq!(
+        acknowledgement.contract_version,
+        nexa_speech::SPEECH_CANCELLATION_V1
+    );
+    assert_eq!(acknowledgement.speech_id, request.speech_id);
 }
 
 #[test]
