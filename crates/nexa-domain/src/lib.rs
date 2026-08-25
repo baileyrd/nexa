@@ -99,6 +99,10 @@ uuid_id!(
     ModelId,
     ModelInvocationId,
     SpeechId,
+    LabSessionId,
+    ToolRequestId,
+    ToolExecutionId,
+    EnvironmentInstanceId,
     WorkflowId
 );
 
