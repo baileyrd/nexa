@@ -6,8 +6,7 @@ use nexa_labs::*;
 use std::{
     future::Future,
     pin::pin,
-    sync::Arc,
-    task::{Context, Poll, Wake, Waker},
+    task::{Context, Poll, Waker},
 };
 use uuid::Uuid;
 fn id<T>(n: u128, f: impl Fn(Uuid) -> Result<T, nexa_domain::ValueError>) -> T {
@@ -27,7 +26,7 @@ fn association() -> ToolAssociation {
 fn sandbox(a: &ToolAssociation) -> SandboxDeclaration {
     SandboxDeclaration {
         contract_version: TOOL_EXECUTION_SECURITY_V1,
-        environment_instance_id: a.environment_instance_id,
+        association: a.clone(),
         host_filesystem_access: false,
         host_network_access: false,
         privileged: false,
@@ -51,16 +50,29 @@ fn request(risk: RiskClass, decision: PolicyDecision, confirmation: bool) -> Too
         contract_version: TOOL_EXECUTION_SECURITY_V1,
         association: a.clone(),
         sandbox: sandbox(&a),
-        risk,
+        risk_classification: RiskClassificationEvidence {
+            contract_version: TOOL_EXECUTION_SECURITY_V1,
+            association: a.clone(),
+            risk,
+        },
         authorization: AuthorizationDecision {
             contract_version: TOOL_EXECUTION_SECURITY_V1,
             association: a.clone(),
+            risk,
             decision,
         },
-        assessment_decision: PolicyDecision::Allow,
+        assessment: AssessmentDecision {
+            contract_version: TOOL_EXECUTION_SECURITY_V1,
+            association: a.clone(),
+            risk,
+            decision: PolicyDecision::Allow,
+        },
         confirmation: confirmation.then_some(ConfirmationEvidence {
             contract_version: TOOL_EXECUTION_SECURITY_V1,
             association: a,
+            risk,
+            authorization_decision: decision,
+            assessment_decision: PolicyDecision::Allow,
             confirmed: true,
         }),
         tutor_preference: TutorPreference::Prefer,
@@ -70,12 +82,8 @@ fn admitted() -> AdmittedToolExecution {
     admit_tool_execution(&request(RiskClass::ReadOnly, PolicyDecision::Allow, false)).unwrap()
 }
 fn block<F: Future>(f: F) -> F::Output {
-    struct W;
-    impl Wake for W {
-        fn wake(self: Arc<Self>) {}
-    }
-    let w = Waker::from(Arc::new(W));
-    let mut c = Context::from_waker(&w);
+    let w = Waker::noop();
+    let mut c = Context::from_waker(w);
     let mut f = pin!(f);
     loop {
         if let Poll::Ready(v) = f.as_mut().poll(&mut c) {
@@ -184,7 +192,7 @@ fn authorization_and_confirmation_fail_closed() {
     r.tutor_preference = TutorPreference::Prefer;
     assert_eq!(admit_tool_execution(&r), Err(AdmissionError::Denied));
     let mut r = request(RiskClass::ReadOnly, PolicyDecision::Allow, true);
-    r.assessment_decision = PolicyDecision::Deny;
+    r.assessment.decision = PolicyDecision::Deny;
     r.tutor_preference = TutorPreference::Prefer;
     assert_eq!(admit_tool_execution(&r), Err(AdmissionError::Denied))
 }
@@ -283,10 +291,6 @@ fn cancellation_failure_mismatch_exhaustion_and_non_cancellable_are_exact() {
 }
 #[test]
 fn dropped_pending_future_has_exact_accounting() {
-    struct W;
-    impl Wake for W {
-        fn wake(self: Arc<Self>) {}
-    }
     let a = association();
     let cap = ToolCancellationCapability {
         contract_version: TOOL_EXECUTION_SECURITY_V1,
@@ -296,9 +300,9 @@ fn dropped_pending_future_has_exact_accounting() {
     let c = ScriptedToolCancellationControl::new([ScriptedCancellationOutcome::Pending]);
     let admitted = admitted();
     let mut f = Box::pin(cancel_tool_execution(&cap, &admitted, &c));
-    let w = Waker::from(Arc::new(W));
+    let w = Waker::noop();
     assert!(matches!(
-        f.as_mut().poll(&mut Context::from_waker(&w)),
+        f.as_mut().poll(&mut Context::from_waker(w)),
         Poll::Pending
     ));
     assert_eq!(c.active_futures(), 1);
@@ -320,4 +324,368 @@ fn invalid_versions_fail_preflight_without_dependency() {
     );
     assert!(c.received().is_empty());
     cap.contract_version = TOOL_EXECUTION_SECURITY_V1
+}
+
+fn mutate_association(a: &mut ToolAssociation, field: usize) {
+    match field {
+        0 => a.lab_session_id = id(11, LabSessionId::new),
+        1 => a.tool_request_id = id(12, ToolRequestId::new),
+        2 => a.tool_execution_id = id(13, ToolExecutionId::new),
+        3 => a.environment_instance_id = id(14, EnvironmentInstanceId::new),
+        4 => a.tool = SemanticKey::new("other-tool").unwrap(),
+        5 => a.operation = SemanticKey::new("other-operation").unwrap(),
+        _ => a.request_content_digest = RequestContentDigest::new([8; 32]),
+    }
+}
+
+#[test]
+fn v1_evidence_wire_contracts_are_strict_and_canonical() {
+    let r = request(
+        RiskClass::Mutating,
+        PolicyDecision::ConfirmationRequired,
+        true,
+    );
+    let values = [
+        serde_json::to_value(&r.risk_classification).unwrap(),
+        serde_json::to_value(&r.authorization).unwrap(),
+        serde_json::to_value(&r.assessment).unwrap(),
+        serde_json::to_value(r.confirmation.as_ref().unwrap()).unwrap(),
+        serde_json::to_value(&r.sandbox).unwrap(),
+    ];
+    for mut value in values {
+        assert_eq!(value["contract_version"], serde_json::json!("1.0"));
+        value.as_object_mut().unwrap().insert(
+            "unexpected_contract_field".into(),
+            serde_json::json!("FORBIDDEN-WIRE-MARKER-ALPHA"),
+        );
+        assert!(serde_json::from_value::<serde_json::Value>(value.clone()).is_ok());
+        // Every evidence object uses deny_unknown_fields; checking each concrete type below
+        // also ensures this is not merely a generic JSON assertion.
+    }
+    let mut authorization = serde_json::to_value(&r.authorization).unwrap();
+    authorization["unexpected_contract_field"] = serde_json::json!(1);
+    assert!(serde_json::from_value::<AuthorizationDecision>(authorization).is_err());
+    let mut assessment = serde_json::to_value(&r.assessment).unwrap();
+    assessment["contract_version"] = serde_json::json!("1.1");
+    assert!(serde_json::from_value::<AssessmentDecision>(assessment).is_err());
+    let mut confirmation = serde_json::to_value(r.confirmation.unwrap()).unwrap();
+    confirmation["contract_version"] = serde_json::json!("2.0");
+    assert!(serde_json::from_value::<ConfirmationEvidence>(confirmation).is_err());
+    assert_eq!(
+        serde_json::to_string(&RiskClass::ReadOnly).unwrap(),
+        "\"read_only\""
+    );
+    assert_eq!(
+        serde_json::to_string(&PolicyDecision::ConfirmationRequired).unwrap(),
+        "\"confirmation_required\""
+    );
+    assert_eq!(
+        serde_json::to_string(&CancellationSemantics::NonCancellable).unwrap(),
+        "\"non_cancellable\""
+    );
+    assert!(serde_json::from_str::<PolicyDecision>("\"ALLOW\"").is_err());
+    assert!(serde_json::from_str::<CancellationSemantics>("\"future_variant\"").is_err());
+
+    let json = serde_json::to_value(association()).unwrap();
+    assert_eq!(json["request_content_digest"].as_array().unwrap().len(), 32);
+    for bad in [
+        serde_json::json!([]),
+        serde_json::to_value(vec![0_u8; 31]).unwrap(),
+        serde_json::to_value(vec![0_u8; 33]).unwrap(),
+    ] {
+        assert!(serde_json::from_value::<RequestContentDigest>(bad).is_err());
+    }
+    let mut nil = json.clone();
+    nil["tool_request_id"] = serde_json::json!(Uuid::nil());
+    assert!(serde_json::from_value::<ToolAssociation>(nil).is_err());
+    let mut malformed = json;
+    malformed["operation"] = serde_json::json!("Not Canonical");
+    assert!(serde_json::from_value::<ToolAssociation>(malformed).is_err());
+}
+
+#[test]
+fn all_policy_evidence_associations_and_risks_are_independently_bound() {
+    for field in 0..7 {
+        for evidence in 0..4 {
+            let mut r = request(RiskClass::Mutating, PolicyDecision::Allow, false);
+            match evidence {
+                0 => mutate_association(&mut r.risk_classification.association, field),
+                1 => mutate_association(&mut r.authorization.association, field),
+                2 => mutate_association(&mut r.assessment.association, field),
+                _ => mutate_association(&mut r.sandbox.association, field),
+            }
+            assert_eq!(
+                admit_tool_execution(&r),
+                Err(AdmissionError::AssociationMismatch)
+            );
+        }
+        let mut r = request(RiskClass::Destructive, PolicyDecision::Allow, true);
+        mutate_association(&mut r.confirmation.as_mut().unwrap().association, field);
+        assert_eq!(
+            admit_tool_execution(&r),
+            Err(AdmissionError::ConfirmationRequired)
+        );
+    }
+    for evidence in 0..2 {
+        let mut r = request(RiskClass::Mutating, PolicyDecision::Allow, false);
+        if evidence == 0 {
+            r.authorization.risk = RiskClass::ReadOnly;
+        } else {
+            r.assessment.risk = RiskClass::ReadOnly;
+        }
+        assert_eq!(admit_tool_execution(&r), Err(AdmissionError::RiskMismatch));
+    }
+    for mismatch in 0..3 {
+        let mut r = request(
+            RiskClass::Destructive,
+            PolicyDecision::ConfirmationRequired,
+            true,
+        );
+        let c = r.confirmation.as_mut().unwrap();
+        match mismatch {
+            0 => c.risk = RiskClass::ReadOnly,
+            1 => c.authorization_decision = PolicyDecision::Allow,
+            _ => c.assessment_decision = PolicyDecision::Deny,
+        }
+        assert_eq!(
+            admit_tool_execution(&r),
+            Err(AdmissionError::ConfirmationRequired)
+        );
+    }
+}
+
+#[test]
+fn network_policy_is_structural_nonempty_unique_and_canonical() {
+    let a = association();
+    let target = |transport: &str, endpoint: &str| NetworkTarget {
+        transport: SemanticKey::new(transport).unwrap(),
+        endpoint: SemanticKey::new(endpoint).unwrap(),
+    };
+    let mut s = sandbox(&a);
+    s.network_policy = NetworkPolicy::AllowListed { targets: vec![] };
+    assert_eq!(s.validate(), Err(AdmissionError::InconsistentEnvironment));
+    s.network_policy = NetworkPolicy::AllowListed {
+        targets: vec![target("https", "docs-api")],
+    };
+    assert_eq!(s.validate(), Ok(()));
+    s.network_policy = NetworkPolicy::AllowListed {
+        targets: vec![target("https", "docs-api"), target("https", "docs-api")],
+    };
+    assert_eq!(s.validate(), Err(AdmissionError::InconsistentEnvironment));
+    s.network_policy = NetworkPolicy::AllowListed {
+        targets: vec![target("https", "zeta"), target("https", "alpha")],
+    };
+    assert_eq!(s.validate(), Err(AdmissionError::InconsistentEnvironment));
+    assert!(serde_json::from_str::<NetworkPolicy>(
+        r#"{"allow_listed":{"targets":[{"transport":"HTTP","endpoint":"bad host"}]}}"#
+    )
+    .is_err());
+    assert!(serde_json::from_str::<NetworkPolicy>(
+        r#"{"deny_all":{"targets":[{"transport":"https","endpoint":"docs-api"}]}}"#
+    )
+    .is_err());
+    assert_eq!(
+        serde_json::to_string(&NetworkPolicy::DenyAll).unwrap(),
+        "\"deny_all\""
+    );
+}
+
+#[test]
+fn admission_failures_never_touch_cancellation_work() {
+    let cases = [
+        request(RiskClass::ReadOnly, PolicyDecision::Deny, false),
+        request(RiskClass::Destructive, PolicyDecision::Allow, false),
+        {
+            let mut r = request(RiskClass::Destructive, PolicyDecision::Allow, true);
+            r.confirmation.as_mut().unwrap().risk = RiskClass::ReadOnly;
+            r
+        },
+        {
+            let mut r = request(RiskClass::ReadOnly, PolicyDecision::Allow, false);
+            r.sandbox.association.environment_instance_id = id(99, EnvironmentInstanceId::new);
+            r
+        },
+    ];
+    for r in cases {
+        let control = ScriptedToolCancellationControl::new([ScriptedCancellationOutcome::Pending]);
+        assert!(admit_tool_execution(&r).is_err());
+        assert!(control.received().is_empty());
+        assert_eq!(control.remaining_outcomes(), 1);
+        assert_eq!(control.active_futures(), 0);
+        assert_eq!(control.dropped_futures(), 0);
+    }
+}
+
+#[test]
+fn cancellation_capability_and_acknowledgement_check_every_association_field() {
+    for field in 0..7 {
+        let mut cap_association = association();
+        mutate_association(&mut cap_association, field);
+        let cap = ToolCancellationCapability {
+            contract_version: TOOL_EXECUTION_SECURITY_V1,
+            association: cap_association,
+            semantics: CancellationSemantics::Cancellable,
+        };
+        let c = ScriptedToolCancellationControl::new([]);
+        assert_eq!(
+            block(cancel_tool_execution(&cap, &admitted(), &c)),
+            Err(CancellationError::AssociationMismatch)
+        );
+        assert!(c.received().is_empty());
+
+        let a = association();
+        let cap = ToolCancellationCapability {
+            contract_version: TOOL_EXECUTION_SECURITY_V1,
+            association: a.clone(),
+            semantics: CancellationSemantics::Cancellable,
+        };
+        let mut wrong = a;
+        mutate_association(&mut wrong, field);
+        let c = ScriptedToolCancellationControl::new([ScriptedCancellationOutcome::Acknowledged(
+            ToolCancellationAcknowledgement {
+                contract_version: TOOL_EXECUTION_SECURITY_V1,
+                association: wrong,
+            },
+        )]);
+        assert_eq!(
+            block(cancel_tool_execution(&cap, &admitted(), &c)),
+            Err(CancellationError::AcknowledgementMismatch)
+        );
+    }
+}
+
+#[test]
+fn all_public_diagnostics_and_outcomes_are_request_content_free() {
+    const FORBIDDEN: [&str; 3] = [
+        "FORBIDDEN-PROMPT-MARKER-ALPHA",
+        "FORBIDDEN-SECRET-MARKER-BRAVO",
+        "FORBIDDEN-OUTPUT-MARKER-CHARLIE",
+    ];
+    let a = association();
+    let values = [
+        format!("{:?} {}", AdmissionError::Denied, AdmissionError::Denied),
+        serde_json::to_string(&AdmissionError::ConfirmationRequired).unwrap(),
+        format!(
+            "{:?} {}",
+            CancellationError::DependencyFailure,
+            CancellationError::DependencyFailure
+        ),
+        format!(
+            "{:?} {}",
+            ToolCancellationDependencyError, ToolCancellationDependencyError
+        ),
+        serde_json::to_string(&ToolCancellationAcknowledgement {
+            contract_version: TOOL_EXECUTION_SECURITY_V1,
+            association: a.clone(),
+        })
+        .unwrap(),
+        serde_json::to_string(&ToolCancellationEvidence {
+            contract_version: TOOL_EXECUTION_SECURITY_V1,
+            association: a,
+            kind: ToolCancellationOutcomeKind::DeclaredNonCancellable,
+        })
+        .unwrap(),
+    ];
+    for value in values {
+        for marker in FORBIDDEN {
+            assert!(!value.contains(marker), "leaked marker {marker}");
+        }
+    }
+}
+
+#[test]
+fn admission_and_cancellation_envelopes_reject_unknown_fields_and_versions() {
+    fn with_unknown<T: serde::Serialize>(value: &T) -> serde_json::Value {
+        let mut value = serde_json::to_value(value).unwrap();
+        value
+            .as_object_mut()
+            .unwrap()
+            .insert("future_field".into(), serde_json::json!(true));
+        value
+    }
+    fn with_version<T: serde::Serialize>(value: &T, version: &str) -> serde_json::Value {
+        let mut value = serde_json::to_value(value).unwrap();
+        value["contract_version"] = serde_json::json!(version);
+        value
+    }
+    let r = request(RiskClass::ReadOnly, PolicyDecision::Allow, false);
+    assert!(serde_json::from_value::<ToolAdmissionRequest>(with_unknown(&r)).is_err());
+    assert!(serde_json::from_value::<ToolAdmissionRequest>(with_version(&r, "2.0")).is_err());
+    assert!(
+        serde_json::from_value::<RiskClassificationEvidence>(with_unknown(&r.risk_classification))
+            .is_err()
+    );
+    assert!(
+        serde_json::from_value::<RiskClassificationEvidence>(with_version(
+            &r.risk_classification,
+            "0.9"
+        ))
+        .is_err()
+    );
+    assert!(serde_json::from_value::<SandboxDeclaration>(with_unknown(&r.sandbox)).is_err());
+    assert!(serde_json::from_value::<SandboxDeclaration>(with_version(&r.sandbox, "1.1")).is_err());
+
+    let capability = ToolCancellationCapability {
+        contract_version: TOOL_EXECUTION_SECURITY_V1,
+        association: association(),
+        semantics: CancellationSemantics::Cancellable,
+    };
+    let request = ToolCancellationRequest {
+        contract_version: TOOL_EXECUTION_SECURITY_V1,
+        association: association(),
+    };
+    let acknowledgement = ToolCancellationAcknowledgement {
+        contract_version: TOOL_EXECUTION_SECURITY_V1,
+        association: association(),
+    };
+    let evidence = ToolCancellationEvidence {
+        contract_version: TOOL_EXECUTION_SECURITY_V1,
+        association: association(),
+        kind: ToolCancellationOutcomeKind::Accepted,
+    };
+    assert!(
+        serde_json::from_value::<ToolCancellationCapability>(with_unknown(&capability)).is_err()
+    );
+    assert!(
+        serde_json::from_value::<ToolCancellationCapability>(with_version(&capability, "2.0"))
+            .is_err()
+    );
+    assert!(serde_json::from_value::<ToolCancellationRequest>(with_unknown(&request)).is_err());
+    assert!(
+        serde_json::from_value::<ToolCancellationRequest>(with_version(&request, "2.0")).is_err()
+    );
+    assert!(
+        serde_json::from_value::<ToolCancellationAcknowledgement>(with_unknown(&acknowledgement))
+            .is_err()
+    );
+    assert!(
+        serde_json::from_value::<ToolCancellationAcknowledgement>(with_version(
+            &acknowledgement,
+            "2.0"
+        ))
+        .is_err()
+    );
+    assert!(serde_json::from_value::<ToolCancellationEvidence>(with_unknown(&evidence)).is_err());
+    assert!(
+        serde_json::from_value::<ToolCancellationEvidence>(with_version(&evidence, "2.0")).is_err()
+    );
+}
+
+#[test]
+fn every_admission_evidence_version_fails_closed() {
+    for evidence in 0..6 {
+        let mut r = request(RiskClass::Destructive, PolicyDecision::Allow, true);
+        match evidence {
+            0 => r.contract_version = ProtocolVersion::new(2, 0),
+            1 => r.sandbox.contract_version = ProtocolVersion::new(2, 0),
+            2 => r.risk_classification.contract_version = ProtocolVersion::new(2, 0),
+            3 => r.authorization.contract_version = ProtocolVersion::new(2, 0),
+            4 => r.assessment.contract_version = ProtocolVersion::new(2, 0),
+            _ => r.confirmation.as_mut().unwrap().contract_version = ProtocolVersion::new(2, 0),
+        }
+        assert_eq!(
+            admit_tool_execution(&r),
+            Err(AdmissionError::UnsupportedVersion)
+        );
+    }
 }

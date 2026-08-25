@@ -79,11 +79,19 @@ pub struct ToolAssociation {
     pub request_content_digest: RequestContentDigest,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NetworkPolicy {
     DenyAll,
-    AllowListed,
+    AllowListed { targets: Vec<NetworkTarget> },
+}
+/// Provider-neutral, canonical network destination. These keys declare intent;
+/// they do not select or implement a networking provider.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NetworkTarget {
+    pub transport: SemanticKey,
+    pub endpoint: SemanticKey,
 }
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -100,7 +108,7 @@ pub struct ResourceBounds {
 pub struct SandboxDeclaration {
     #[serde(deserialize_with = "deserialize_v1")]
     pub contract_version: ProtocolVersion,
-    pub environment_instance_id: EnvironmentInstanceId,
+    pub association: ToolAssociation,
     pub host_filesystem_access: bool,
     pub host_network_access: bool,
     pub privileged: bool,
@@ -128,14 +136,10 @@ impl SandboxDeclaration {
         {
             return Err(AdmissionError::MissingResourceBound);
         }
-        if self.network_policy == NetworkPolicy::DenyAll
-            && !self.authorized_capabilities.is_empty()
-            && self
-                .authorized_capabilities
-                .iter()
-                .any(|v| v.as_str() == "network")
-        {
-            return Err(AdmissionError::InconsistentEnvironment);
+        if let NetworkPolicy::AllowListed { targets } = &self.network_policy {
+            if targets.is_empty() || targets.windows(2).any(|pair| pair[0] >= pair[1]) {
+                return Err(AdmissionError::InconsistentEnvironment);
+            }
         }
         Ok(())
     }
@@ -165,10 +169,28 @@ pub enum TutorPreference {
 }
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct RiskClassificationEvidence {
+    #[serde(deserialize_with = "deserialize_v1")]
+    pub contract_version: ProtocolVersion,
+    pub association: ToolAssociation,
+    pub risk: RiskClass,
+}
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AuthorizationDecision {
     #[serde(deserialize_with = "deserialize_v1")]
     pub contract_version: ProtocolVersion,
     pub association: ToolAssociation,
+    pub risk: RiskClass,
+    pub decision: PolicyDecision,
+}
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AssessmentDecision {
+    #[serde(deserialize_with = "deserialize_v1")]
+    pub contract_version: ProtocolVersion,
+    pub association: ToolAssociation,
+    pub risk: RiskClass,
     pub decision: PolicyDecision,
 }
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -177,6 +199,9 @@ pub struct ConfirmationEvidence {
     #[serde(deserialize_with = "deserialize_v1")]
     pub contract_version: ProtocolVersion,
     pub association: ToolAssociation,
+    pub risk: RiskClass,
+    pub authorization_decision: PolicyDecision,
+    pub assessment_decision: PolicyDecision,
     pub confirmed: bool,
 }
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -186,10 +211,10 @@ pub struct ToolAdmissionRequest {
     pub contract_version: ProtocolVersion,
     pub association: ToolAssociation,
     pub sandbox: SandboxDeclaration,
-    pub risk: RiskClass,
+    pub risk_classification: RiskClassificationEvidence,
     pub authorization: AuthorizationDecision,
     /// Caller-supplied assessment-policy restriction; Tutor preference cannot weaken it.
-    pub assessment_decision: PolicyDecision,
+    pub assessment: AssessmentDecision,
     pub confirmation: Option<ConfirmationEvidence>,
     pub tutor_preference: TutorPreference,
 }
@@ -220,6 +245,8 @@ pub enum AdmissionError {
     InconsistentEnvironment,
     #[error("tool execution association mismatch")]
     AssociationMismatch,
+    #[error("tool execution risk classification mismatch")]
+    RiskMismatch,
     #[error("tool execution denied")]
     Denied,
     #[error("exact confirmation is required")]
@@ -229,40 +256,53 @@ pub fn admit_tool_execution(
     r: &ToolAdmissionRequest,
 ) -> Result<AdmittedToolExecution, AdmissionError> {
     if r.contract_version != TOOL_EXECUTION_SECURITY_V1
+        || r.risk_classification.contract_version != TOOL_EXECUTION_SECURITY_V1
         || r.authorization.contract_version != TOOL_EXECUTION_SECURITY_V1
+        || r.assessment.contract_version != TOOL_EXECUTION_SECURITY_V1
     {
         return Err(AdmissionError::UnsupportedVersion);
     }
     // Security is checked before preferences or any participant can be consulted.
     r.sandbox.validate()?;
-    if r.sandbox.environment_instance_id != r.association.environment_instance_id
+    if r.sandbox.association != r.association
+        || r.risk_classification.association != r.association
         || r.authorization.association != r.association
+        || r.assessment.association != r.association
     {
         return Err(AdmissionError::AssociationMismatch);
     }
+    let risk = r.risk_classification.risk;
+    if r.authorization.risk != risk || r.assessment.risk != risk {
+        return Err(AdmissionError::RiskMismatch);
+    }
     if r.authorization.decision == PolicyDecision::Deny
-        || r.assessment_decision == PolicyDecision::Deny
+        || r.assessment.decision == PolicyDecision::Deny
     {
         return Err(AdmissionError::Denied);
     }
     let required = r.authorization.decision == PolicyDecision::ConfirmationRequired
-        || r.assessment_decision == PolicyDecision::ConfirmationRequired
-        || matches!(r.risk, RiskClass::Destructive | RiskClass::Privileged);
+        || r.assessment.decision == PolicyDecision::ConfirmationRequired
+        || matches!(risk, RiskClass::Destructive | RiskClass::Privileged);
     if required {
         let c = r
             .confirmation
             .as_ref()
             .ok_or(AdmissionError::ConfirmationRequired)?;
-        if c.contract_version != TOOL_EXECUTION_SECURITY_V1
-            || !c.confirmed
+        if c.contract_version != TOOL_EXECUTION_SECURITY_V1 {
+            return Err(AdmissionError::UnsupportedVersion);
+        }
+        if !c.confirmed
             || c.association != r.association
+            || c.risk != risk
+            || c.authorization_decision != r.authorization.decision
+            || c.assessment_decision != r.assessment.decision
         {
             return Err(AdmissionError::ConfirmationRequired);
         }
     }
     Ok(AdmittedToolExecution {
         association: r.association.clone(),
-        risk: r.risk,
+        risk,
     })
 }
 
