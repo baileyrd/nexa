@@ -345,32 +345,29 @@ fn v1_evidence_wire_contracts_are_strict_and_canonical() {
         PolicyDecision::ConfirmationRequired,
         true,
     );
-    let values = [
-        serde_json::to_value(&r.risk_classification).unwrap(),
-        serde_json::to_value(&r.authorization).unwrap(),
-        serde_json::to_value(&r.assessment).unwrap(),
-        serde_json::to_value(r.confirmation.as_ref().unwrap()).unwrap(),
-        serde_json::to_value(&r.sandbox).unwrap(),
-    ];
-    for mut value in values {
-        assert_eq!(value["contract_version"], serde_json::json!("1.0"));
-        value.as_object_mut().unwrap().insert(
-            "unexpected_contract_field".into(),
-            serde_json::json!("FORBIDDEN-WIRE-MARKER-ALPHA"),
-        );
-        assert!(serde_json::from_value::<serde_json::Value>(value.clone()).is_ok());
-        // Every evidence object uses deny_unknown_fields; checking each concrete type below
-        // also ensures this is not merely a generic JSON assertion.
+    macro_rules! strict_v1 {
+        ($ty:ty, $value:expr) => {{
+            let expected: $ty = $value;
+            let canonical = serde_json::to_value(&expected).unwrap();
+            assert_eq!(canonical["contract_version"], serde_json::json!("1.0"));
+            assert_eq!(
+                serde_json::from_value::<$ty>(canonical.clone()).unwrap(),
+                expected
+            );
+            let mut unknown = canonical.clone();
+            unknown["future_field"] = serde_json::json!(true);
+            assert!(serde_json::from_value::<$ty>(unknown).is_err());
+            let mut version = canonical;
+            version["contract_version"] = serde_json::json!("1.1");
+            assert!(serde_json::from_value::<$ty>(version).is_err());
+        }};
     }
-    let mut authorization = serde_json::to_value(&r.authorization).unwrap();
-    authorization["unexpected_contract_field"] = serde_json::json!(1);
-    assert!(serde_json::from_value::<AuthorizationDecision>(authorization).is_err());
-    let mut assessment = serde_json::to_value(&r.assessment).unwrap();
-    assessment["contract_version"] = serde_json::json!("1.1");
-    assert!(serde_json::from_value::<AssessmentDecision>(assessment).is_err());
-    let mut confirmation = serde_json::to_value(r.confirmation.unwrap()).unwrap();
-    confirmation["contract_version"] = serde_json::json!("2.0");
-    assert!(serde_json::from_value::<ConfirmationEvidence>(confirmation).is_err());
+    strict_v1!(RiskClassificationEvidence, r.risk_classification.clone());
+    strict_v1!(AuthorizationDecision, r.authorization.clone());
+    strict_v1!(AssessmentDecision, r.assessment.clone());
+    strict_v1!(ConfirmationEvidence, r.confirmation.clone().unwrap());
+    strict_v1!(SandboxDeclaration, r.sandbox.clone());
+    strict_v1!(ToolAdmissionRequest, r.clone());
     assert_eq!(
         serde_json::to_string(&RiskClass::ReadOnly).unwrap(),
         "\"read_only\""
@@ -481,6 +478,10 @@ fn network_policy_is_structural_nonempty_unique_and_canonical() {
     )
     .is_err());
     assert!(serde_json::from_str::<NetworkPolicy>(
+        r#"{"allow_listed":{"targets":[{"transport":"https","endpoint":"docs-api"}],"future_field":true}}"#
+    )
+    .is_err());
+    assert!(serde_json::from_str::<NetworkPolicy>(
         r#"{"deny_all":{"targets":[{"transport":"https","endpoint":"docs-api"}]}}"#
     )
     .is_err());
@@ -488,6 +489,36 @@ fn network_policy_is_structural_nonempty_unique_and_canonical() {
         serde_json::to_string(&NetworkPolicy::DenyAll).unwrap(),
         "\"deny_all\""
     );
+    let allow_listed = NetworkPolicy::AllowListed {
+        targets: vec![target("https", "docs-api")],
+    };
+    assert_eq!(
+        serde_json::from_str::<NetworkPolicy>(&serde_json::to_string(&allow_listed).unwrap())
+            .unwrap(),
+        allow_listed
+    );
+    assert!(serde_json::from_str::<NetworkPolicy>(r#"{"future_policy":{}}"#).is_err());
+
+    let target = target("https", "docs-api");
+    let mut target_json = serde_json::to_value(&target).unwrap();
+    assert_eq!(
+        serde_json::from_value::<NetworkTarget>(target_json.clone()).unwrap(),
+        target
+    );
+    target_json["future_field"] = serde_json::json!(true);
+    assert!(serde_json::from_value::<NetworkTarget>(target_json).is_err());
+
+    let bounds = sandbox(&a).bounds;
+    let mut bounds_json = serde_json::to_value(&bounds).unwrap();
+    assert_eq!(
+        serde_json::from_value::<ResourceBounds>(bounds_json.clone()).unwrap(),
+        bounds
+    );
+    bounds_json["future_field"] = serde_json::json!(true);
+    assert!(serde_json::from_value::<ResourceBounds>(bounds_json).is_err());
+    let mut malformed_bounds = serde_json::to_value(&bounds).unwrap();
+    malformed_bounds["process_count"] = serde_json::json!(-1);
+    assert!(serde_json::from_value::<ResourceBounds>(malformed_bounds).is_err());
 }
 
 #[test]
@@ -561,31 +592,115 @@ fn all_public_diagnostics_and_outcomes_are_request_content_free() {
         "FORBIDDEN-SECRET-MARKER-BRAVO",
         "FORBIDDEN-OUTPUT-MARKER-CHARLIE",
     ];
-    let a = association();
-    let values = [
-        format!("{:?} {}", AdmissionError::Denied, AdmissionError::Denied),
-        serde_json::to_string(&AdmissionError::ConfirmationRequired).unwrap(),
-        format!(
-            "{:?} {}",
-            CancellationError::DependencyFailure,
-            CancellationError::DependencyFailure
-        ),
-        format!(
-            "{:?} {}",
-            ToolCancellationDependencyError, ToolCancellationDependencyError
-        ),
-        serde_json::to_string(&ToolCancellationAcknowledgement {
-            contract_version: TOOL_EXECUTION_SECURITY_V1,
-            association: a.clone(),
-        })
-        .unwrap(),
-        serde_json::to_string(&ToolCancellationEvidence {
-            contract_version: TOOL_EXECUTION_SECURITY_V1,
-            association: a,
-            kind: ToolCancellationOutcomeKind::DeclaredNonCancellable,
-        })
-        .unwrap(),
+    // Request content is representable only by its opaque digest. Derive that digest from
+    // command/argument/path/secret/output-like markers rather than testing an unrelated value.
+    let mut digest = [0_u8; 32];
+    for (index, byte) in FORBIDDEN.join(" --arg /private/path ").bytes().enumerate() {
+        digest[index % digest.len()] ^= byte;
+    }
+    let mut a = association();
+    a.request_content_digest = RequestContentDigest::new(digest);
+
+    let admission_errors = [
+        AdmissionError::UnsupportedVersion,
+        AdmissionError::UnrestrictedEnvironment,
+        AdmissionError::MissingResourceBound,
+        AdmissionError::InconsistentEnvironment,
+        AdmissionError::AssociationMismatch,
+        AdmissionError::RiskMismatch,
+        AdmissionError::Denied,
+        AdmissionError::ConfirmationRequired,
     ];
+    let cancellation_errors = [
+        CancellationError::UnsupportedVersion,
+        CancellationError::AssociationMismatch,
+        CancellationError::DependencyFailure,
+        CancellationError::AcknowledgementMismatch,
+    ];
+    let mut values = Vec::new();
+    for error in admission_errors {
+        values.push(format!("{error:?} {error}"));
+        values.push(serde_json::to_string(&error).unwrap());
+    }
+    for error in cancellation_errors {
+        values.push(format!("{error:?} {error}"));
+    }
+    values.push(format!(
+        "{:?} {}",
+        ToolCancellationDependencyError, ToolCancellationDependencyError
+    ));
+
+    let mut admission = request(RiskClass::ReadOnly, PolicyDecision::Allow, false);
+    admission.association = a.clone();
+    admission.sandbox.association = a.clone();
+    admission.risk_classification.association = a.clone();
+    admission.authorization.association = a.clone();
+    admission.assessment.association = a.clone();
+    let admitted = admit_tool_execution(&admission).unwrap();
+    let mut denied_admission = admission.clone();
+    denied_admission.authorization.decision = PolicyDecision::Deny;
+    let exercised_admission_error = admit_tool_execution(&denied_admission).unwrap_err();
+    assert_eq!(exercised_admission_error, AdmissionError::Denied);
+    values.push(format!(
+        "{exercised_admission_error:?} {exercised_admission_error}"
+    ));
+    let cap = ToolCancellationCapability {
+        contract_version: TOOL_EXECUTION_SECURITY_V1,
+        association: a.clone(),
+        semantics: CancellationSemantics::Cancellable,
+    };
+    let dependency =
+        ScriptedToolCancellationControl::new([ScriptedCancellationOutcome::DependencyFailure]);
+    let dependency_error = block(cancel_tool_execution(&cap, &admitted, &dependency)).unwrap_err();
+    values.push(format!("{dependency_error:?} {dependency_error}"));
+
+    let mut wrong = a.clone();
+    wrong.request_content_digest = RequestContentDigest::new([0; 32]);
+    let mismatch =
+        ScriptedToolCancellationControl::new([ScriptedCancellationOutcome::Acknowledged(
+            ToolCancellationAcknowledgement {
+                contract_version: TOOL_EXECUTION_SECURITY_V1,
+                association: wrong,
+            },
+        )]);
+    let mismatch_error = block(cancel_tool_execution(&cap, &admitted, &mismatch)).unwrap_err();
+    values.push(format!("{mismatch_error:?} {mismatch_error}"));
+
+    let non_cancellable = ToolCancellationCapability {
+        semantics: CancellationSemantics::NonCancellable,
+        ..cap.clone()
+    };
+    let unused = ScriptedToolCancellationControl::new([ScriptedCancellationOutcome::Pending]);
+    let evidence = block(cancel_tool_execution(&non_cancellable, &admitted, &unused)).unwrap();
+    values.push(format!("{evidence:?}"));
+    values.push(serde_json::to_string(&evidence).unwrap());
+
+    let acknowledgement = ToolCancellationAcknowledgement {
+        contract_version: TOOL_EXECUTION_SECURITY_V1,
+        association: a.clone(),
+    };
+    values.push(format!("{acknowledgement:?}"));
+    let acknowledgement_json = serde_json::to_string(&acknowledgement).unwrap();
+    assert!(acknowledgement_json.contains(&a.tool_request_id.to_string()));
+    values.push(acknowledgement_json);
+
+    let pending = ScriptedToolCancellationControl::new([ScriptedCancellationOutcome::Pending]);
+    let mut future = Box::pin(cancel_tool_execution(&cap, &admitted, &pending));
+    assert!(matches!(
+        future
+            .as_mut()
+            .poll(&mut Context::from_waker(Waker::noop())),
+        Poll::Pending
+    ));
+    drop(future);
+    assert_eq!(pending.active_futures(), 0);
+    assert_eq!(pending.dropped_futures(), 1);
+    values.push(format!(
+        "active={} dropped={}",
+        pending.active_futures(),
+        pending.dropped_futures()
+    ));
+
     for value in values {
         for marker in FORBIDDEN {
             assert!(!value.contains(marker), "leaked marker {marker}");
@@ -643,6 +758,32 @@ fn admission_and_cancellation_envelopes_reject_unknown_fields_and_versions() {
         association: association(),
         kind: ToolCancellationOutcomeKind::Accepted,
     };
+    assert_eq!(
+        serde_json::from_value::<ToolCancellationCapability>(
+            serde_json::to_value(&capability).unwrap()
+        )
+        .unwrap(),
+        capability
+    );
+    assert_eq!(
+        serde_json::from_value::<ToolCancellationRequest>(serde_json::to_value(&request).unwrap())
+            .unwrap(),
+        request
+    );
+    assert_eq!(
+        serde_json::from_value::<ToolCancellationAcknowledgement>(
+            serde_json::to_value(&acknowledgement).unwrap()
+        )
+        .unwrap(),
+        acknowledgement
+    );
+    assert_eq!(
+        serde_json::from_value::<ToolCancellationEvidence>(
+            serde_json::to_value(&evidence).unwrap()
+        )
+        .unwrap(),
+        evidence
+    );
     assert!(
         serde_json::from_value::<ToolCancellationCapability>(with_unknown(&capability)).is_err()
     );
@@ -669,6 +810,9 @@ fn admission_and_cancellation_envelopes_reject_unknown_fields_and_versions() {
     assert!(
         serde_json::from_value::<ToolCancellationEvidence>(with_version(&evidence, "2.0")).is_err()
     );
+    assert!(serde_json::from_str::<ToolCancellationOutcomeKind>("\"future_kind\"").is_err());
+    assert!(serde_json::from_str::<TutorPreference>("\"future_preference\"").is_err());
+    assert!(serde_json::from_str::<AdmissionError>("\"future_error\"").is_err());
 }
 
 #[test]
