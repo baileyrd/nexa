@@ -273,6 +273,10 @@ impl TutorGenerationCancellationPort for ScriptedTutorGenerationCancellationPort
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::{
+        LanguageModelProvider, ModelCapabilities, ModelDescriptor, ModelErrorKind,
+        ScriptedModelProvider, ScriptedOutcome,
+    };
     use serde_json::{json, Value};
     use uuid::Uuid;
 
@@ -314,12 +318,69 @@ mod tests {
             serde_json::from_str::<TutorGenerationCancellationAcknowledgement>(exact).unwrap(),
             acknowledgement
         );
-        let error = TutorGenerationCancellationError::DependencyFailure;
-        let error_json = r#"{"contract_version":"1.0","kind":"dependency_failure"}"#;
-        assert_eq!(serde_json::to_string(&error).unwrap(), error_json);
+        for (error, error_json) in [
+            (
+                TutorGenerationCancellationError::UnsupportedVersion,
+                r#"{"contract_version":"1.0","kind":"unsupported_version"}"#,
+            ),
+            (
+                TutorGenerationCancellationError::AssociationMismatch,
+                r#"{"contract_version":"1.0","kind":"association_mismatch"}"#,
+            ),
+            (
+                TutorGenerationCancellationError::DependencyFailure,
+                r#"{"contract_version":"1.0","kind":"dependency_failure"}"#,
+            ),
+            (
+                TutorGenerationCancellationError::AcknowledgementMismatch,
+                r#"{"contract_version":"1.0","kind":"acknowledgement_mismatch"}"#,
+            ),
+        ] {
+            assert_eq!(serde_json::to_string(&error).unwrap(), error_json);
+            assert_eq!(
+                serde_json::from_str::<TutorGenerationCancellationError>(error_json).unwrap(),
+                error
+            );
+        }
+    }
+
+    #[test]
+    fn cancellation_control_does_not_invoke_or_mutate_generation() {
+        let request = request(1);
+        let acknowledgement = TutorGenerationCancellationAcknowledgement::for_request(&request);
+        let provider = ScriptedModelProvider::new(
+            ModelDescriptor::new(
+                request.provider_id,
+                request.model_id,
+                crate::model::PrivacyClass::LocalOnly,
+                ModelCapabilities {
+                    streaming: false,
+                    structured_output: true,
+                    tool_calling: false,
+                    vision: false,
+                    context_window_tokens: 4_096,
+                    maximum_output_tokens: 512,
+                },
+            )
+            .unwrap(),
+            [ScriptedOutcome::Error(ModelErrorKind::Internal)],
+        )
+        .unwrap();
+        let generation_provider: &dyn LanguageModelProvider = &provider;
+        let generation_state_before = provider.remaining();
+        let mut cancellation_port = ScriptedTutorGenerationCancellationPort::new([
+            ScriptedTutorGenerationCancellationOutcome::Acknowledged(acknowledgement.clone()),
+        ]);
+
         assert_eq!(
-            serde_json::from_str::<TutorGenerationCancellationError>(error_json).unwrap(),
-            error
+            call(&mut cancellation_port, &request).unwrap(),
+            acknowledgement
+        );
+        assert_eq!(provider.remaining(), generation_state_before);
+        assert_eq!(provider.remaining(), 1);
+        assert_eq!(
+            generation_provider.descriptor().provider_id,
+            request.provider_id
         );
     }
 
