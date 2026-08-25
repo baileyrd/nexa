@@ -270,6 +270,12 @@ impl WorkflowTaskGroup {
                         .is_some_and(|association| self.association_is_required(association));
                     self.remove_association(error.id());
                     self.plan_join_failed |= failure_is_required;
+                    if failure_is_required {
+                        // A required target can no longer satisfy the accepted plan. Abort the
+                        // remaining owned work before continuing to drain so a failed execution
+                        // cannot wait forever or leave another target running.
+                        self.tasks.abort_all();
+                    }
                 }
             }
         }

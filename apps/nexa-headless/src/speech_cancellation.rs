@@ -98,7 +98,9 @@ pub struct SpeechInteractionCancellationComposition<A> {
 #[derive(Clone, Default)]
 struct TestExecutionSeam {
     behavior_panics: bool,
+    behavior_panics_when: Option<Arc<dyn Fn() -> bool + Send + Sync>>,
     omit_behavior_result: bool,
+    runtime_evidence_mismatch: bool,
     behavior_active: Option<Arc<std::sync::atomic::AtomicUsize>>,
     behavior_pending: bool,
 }
@@ -275,15 +277,21 @@ impl<A: AvatarPort + Send + 'static> SpeechInteractionCancellationComposition<A>
                     .map(|mut adapter| adapter.handle(request));
                 #[cfg(test)]
                 {
+                    let _active_probe = behavior_seam.behavior_active.as_ref().map(|active| {
+                        active.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        ActiveBehaviorProbe(Arc::clone(active))
+                    });
+                    if let Some(ready) = behavior_seam.behavior_panics_when {
+                        while !ready() {
+                            tokio::task::yield_now().await;
+                        }
+                        panic!("test-only behavior task failure after both targets started");
+                    }
                     if behavior_seam.behavior_panics {
                         panic!("test-only behavior task failure");
                     }
-                    if let Some(active) = behavior_seam.behavior_active {
-                        active.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                        let _probe = ActiveBehaviorProbe(active);
-                        if behavior_seam.behavior_pending {
-                            std::future::pending::<()>().await;
-                        }
+                    if behavior_seam.behavior_pending {
+                        std::future::pending::<()>().await;
                     }
                     if behavior_seam.omit_behavior_result {
                         return;
@@ -318,11 +326,30 @@ impl<A: AvatarPort + Send + 'static> SpeechInteractionCancellationComposition<A>
             self.terminal = ExecutionState::Failed;
             return Err(SpeechInteractionCancellationError::RuntimeFailure);
         };
+        #[cfg(test)]
+        let runtime_evidence_mismatch = self.test_seam.runtime_evidence_mismatch;
+        #[cfg(not(test))]
+        let runtime_evidence_mismatch = false;
         if speech.speech_id != self.speech_request.speech_id
             || invoked != self.behavior_request
             || report != self.behavior_preview
             || report.terminal_status() != RuntimeStatus::Cancelled
-            || runtime.target_outcomes().len() != 2
+            || runtime.workflow() != self.workflow
+            || runtime
+                .target_outcomes()
+                .iter()
+                .map(|evidence| (evidence.target(), evidence.outcome()))
+                .ne([
+                    (
+                        CancellationTarget::Speech,
+                        nexa_orchestrator_runtime::CancellationTargetExecutionOutcome::Stopped,
+                    ),
+                    (
+                        CancellationTarget::Behavior,
+                        nexa_orchestrator_runtime::CancellationTargetExecutionOutcome::Stopped,
+                    ),
+                ])
+            || runtime_evidence_mismatch
         {
             self.terminal = ExecutionState::Failed;
             return Err(SpeechInteractionCancellationError::RuntimeFailure);
@@ -867,6 +894,102 @@ mod tests {
                         assert_eq!(participant.active_future_count(), 0);
                     }
                 }
+
+                let (tracked, erased) = tracked_participants(
+                    SpeechCancellationSurface::ALL.into_iter().map(|surface| {
+                        SpeechCancellationCapability::cancellable(speech_id(), surface)
+                    }),
+                    std::iter::empty::<ScriptedSpeechCancellationOutcome>(),
+                );
+                let (w, s, c, t) = ids();
+                let request = SpeechCancellationRequest::new(speech_id());
+                let avatar = InspectableAvatar::new(true, true, true);
+                let avatar_handle = avatar.clone();
+                let mut value = SpeechInteractionCancellationComposition::new(
+                    workflow(true),
+                    w,
+                    s,
+                    c,
+                    t,
+                    speech_id(),
+                    request,
+                    erased,
+                    message_id(),
+                    cancellation(),
+                    avatar,
+                )
+                .unwrap();
+                assert_eq!(
+                    value.execute(request, message_id(), cancellation()).await,
+                    Err(SpeechInteractionCancellationError::RuntimeFailure)
+                );
+                assert_eq!(avatar_handle.request_count(), 1);
+                for participant in &tracked {
+                    assert_eq!(participant.received_requests(), vec![request]);
+                    assert_eq!(participant.consumed_outcome_count(), 0);
+                    assert_eq!(participant.remaining_outcome_count(), 0);
+                    assert_eq!(participant.active_future_count(), 0);
+                }
+                assert_eq!(
+                    value.execute(request, message_id(), cancellation()).await,
+                    Err(SpeechInteractionCancellationError::RuntimeFailure)
+                );
+                assert_eq!(avatar_handle.request_count(), 1);
+                assert!(tracked
+                    .iter()
+                    .all(|participant| participant.received_requests() == vec![request]));
+            });
+    }
+
+    #[test]
+    fn runtime_evidence_mismatch_is_terminal_with_no_residual_work() {
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let request = SpeechCancellationRequest::new(speech_id());
+                let (tracked, erased) = tracked_participants(
+                    SpeechCancellationSurface::ALL.into_iter().map(|surface| {
+                        SpeechCancellationCapability::cancellable(speech_id(), surface)
+                    }),
+                    [ScriptedSpeechCancellationOutcome::Acknowledged(
+                        SpeechCancellationAcknowledgement::for_request(&request),
+                    )],
+                );
+                let avatar = InspectableAvatar::new(true, true, true);
+                let avatar_handle = avatar.clone();
+                let (w, s, c, t) = ids();
+                let mut value = SpeechInteractionCancellationComposition::new(
+                    workflow(true),
+                    w,
+                    s,
+                    c,
+                    t,
+                    speech_id(),
+                    request,
+                    erased,
+                    message_id(),
+                    cancellation(),
+                    avatar,
+                )
+                .unwrap();
+                value.test_seam.runtime_evidence_mismatch = true;
+                assert_eq!(
+                    value.execute(request, message_id(), cancellation()).await,
+                    Err(SpeechInteractionCancellationError::RuntimeFailure)
+                );
+                assert_eq!(avatar_handle.request_count(), 1);
+                for participant in &tracked {
+                    assert_eq!(participant.received_requests(), vec![request]);
+                    assert_eq!(participant.consumed_outcome_count(), 1);
+                    assert_eq!(participant.remaining_outcome_count(), 0);
+                    assert_eq!(participant.active_future_count(), 0);
+                }
+                assert_eq!(
+                    value.execute(request, message_id(), cancellation()).await,
+                    Err(SpeechInteractionCancellationError::RuntimeFailure)
+                );
+                assert_eq!(avatar_handle.request_count(), 1);
             });
     }
 
@@ -948,7 +1071,13 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         enum Case {
-            Workflow(InteractionWorkflow, WorkflowId),
+            Association(
+                InteractionWorkflow,
+                WorkflowId,
+                SessionId,
+                CorrelationId,
+                TraceId,
+            ),
             Request(SpeechCancellationRequest),
             Capabilities(Vec<SpeechCancellationCapability>),
             Behavior(bool, bool),
@@ -956,10 +1085,34 @@ mod tests {
         let mut wrong_version = request;
         wrong_version.contract_version = unsupported;
         let cases = vec![
-            Case::Workflow(workflow(false), w),
-            Case::Workflow(
+            Case::Association(workflow(false), w, s, c, t),
+            Case::Association(
                 workflow(true),
                 WorkflowId::new(Uuid::from_u128(88)).unwrap(),
+                s,
+                c,
+                t,
+            ),
+            Case::Association(
+                workflow(true),
+                w,
+                SessionId::new(Uuid::from_u128(89)).unwrap(),
+                c,
+                t,
+            ),
+            Case::Association(
+                workflow(true),
+                w,
+                s,
+                CorrelationId::new(Uuid::from_u128(90)).unwrap(),
+                t,
+            ),
+            Case::Association(
+                workflow(true),
+                w,
+                s,
+                c,
+                TraceId::new(Uuid::from_u128(91)).unwrap(),
             ),
             Case::Request(wrong_version),
             Case::Request(SpeechCancellationRequest::new(other_speech)),
@@ -996,24 +1149,54 @@ mod tests {
             Case::Behavior(true, false),
         ];
         for case in cases {
-            let (workflow_value, workflow_id, supplied_request, capabilities, capable, preview) =
-                match case {
-                    Case::Workflow(value, id) => {
-                        (value, id, request, valid_capabilities(), true, true)
-                    }
-                    Case::Request(value) => {
-                        (workflow(true), w, value, valid_capabilities(), true, true)
-                    }
-                    Case::Capabilities(values) => (workflow(true), w, request, values, true, true),
-                    Case::Behavior(capable, preview) => (
-                        workflow(true),
-                        w,
-                        request,
-                        valid_capabilities(),
-                        capable,
-                        preview,
-                    ),
-                };
+            let (
+                workflow_value,
+                workflow_id,
+                session_id,
+                correlation_id,
+                trace_id,
+                supplied_request,
+                capabilities,
+                capable,
+                preview,
+            ) = match case {
+                Case::Association(value, workflow_id, session_id, correlation_id, trace_id) => (
+                    value,
+                    workflow_id,
+                    session_id,
+                    correlation_id,
+                    trace_id,
+                    request,
+                    valid_capabilities(),
+                    true,
+                    true,
+                ),
+                Case::Request(value) => (
+                    workflow(true),
+                    w,
+                    s,
+                    c,
+                    t,
+                    value,
+                    valid_capabilities(),
+                    true,
+                    true,
+                ),
+                Case::Capabilities(values) => {
+                    (workflow(true), w, s, c, t, request, values, true, true)
+                }
+                Case::Behavior(capable, preview) => (
+                    workflow(true),
+                    w,
+                    s,
+                    c,
+                    t,
+                    request,
+                    valid_capabilities(),
+                    capable,
+                    preview,
+                ),
+            };
             let (tracked, erased) =
                 tracked_participants(capabilities, [ScriptedSpeechCancellationOutcome::Pending]);
             let avatar = InspectableAvatar::new(capable, preview, true);
@@ -1021,9 +1204,9 @@ mod tests {
             assert!(SpeechInteractionCancellationComposition::new(
                 workflow_value,
                 workflow_id,
-                s,
-                c,
-                t,
+                session_id,
+                correlation_id,
+                trace_id,
                 speech_id(),
                 supplied_request,
                 erased,
@@ -1094,6 +1277,66 @@ mod tests {
                     );
                     assert_eq!(avatar_handle.request_count(), 1);
                 }
+            });
+    }
+
+    #[test]
+    fn behavior_failure_after_both_targets_start_aborts_pending_speech() {
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let request = SpeechCancellationRequest::new(speech_id());
+                let (tracked, erased) = tracked_participants(
+                    SpeechCancellationSurface::ALL.into_iter().map(|surface| {
+                        SpeechCancellationCapability::cancellable(speech_id(), surface)
+                    }),
+                    [ScriptedSpeechCancellationOutcome::Pending],
+                );
+                let avatar = InspectableAvatar::new(true, true, true);
+                let avatar_handle = avatar.clone();
+                let (w, s, c, t) = ids();
+                let mut value = SpeechInteractionCancellationComposition::new(
+                    workflow(true),
+                    w,
+                    s,
+                    c,
+                    t,
+                    speech_id(),
+                    request,
+                    erased,
+                    message_id(),
+                    cancellation(),
+                    avatar,
+                )
+                .unwrap();
+                let active = Arc::new(AtomicUsize::new(0));
+                value.test_seam.behavior_active = Some(Arc::clone(&active));
+                let participants = tracked.clone();
+                value.test_seam.behavior_panics_when = Some(Arc::new(move || {
+                    participants
+                        .iter()
+                        .all(|participant| participant.active_future_count() == 1)
+                }));
+
+                assert_eq!(
+                    value.execute(request, message_id(), cancellation()).await,
+                    Err(SpeechInteractionCancellationError::RuntimeFailure)
+                );
+                assert_eq!(active.load(Ordering::SeqCst), 0);
+                assert_eq!(avatar_handle.request_count(), 1);
+                for participant in &tracked {
+                    assert_eq!(participant.received_requests(), vec![request]);
+                    assert_eq!(participant.consumed_outcome_count(), 1);
+                    assert_eq!(participant.remaining_outcome_count(), 0);
+                    assert_eq!(participant.active_future_count(), 0);
+                }
+                assert_eq!(
+                    value.execute(request, message_id(), cancellation()).await,
+                    Err(SpeechInteractionCancellationError::RuntimeFailure)
+                );
+                assert_eq!(avatar_handle.request_count(), 1);
+                assert_eq!(active.load(Ordering::SeqCst), 0);
             });
     }
 
