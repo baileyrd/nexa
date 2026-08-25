@@ -108,6 +108,10 @@ enum TestFault {
     Join,
     Coverage,
     Evidence,
+    MissingResult,
+    RuntimeEvidence,
+    HoldNonCancellable,
+    HoldBeforePlan,
 }
 
 impl<C: ToolCancellationControl + 'static> ToolExecutionCancellationComposition<C> {
@@ -243,6 +247,10 @@ impl<C: ToolCancellationControl + 'static> ToolExecutionCancellationComposition<
                     if matches!(fault, Some(TestFault::Join)) {
                         panic!("injected");
                     }
+                    #[cfg(test)]
+                    if matches!(fault, Some(TestFault::HoldNonCancellable)) {
+                        std::future::pending::<()>().await;
+                    }
                     let _ = completed_tx.send(token.is_cancelled());
                 })
                 .map_err(|_| ToolExecutionCancellationCompositionError::RuntimeFailure)?;
@@ -257,8 +265,14 @@ impl<C: ToolCancellationControl + 'static> ToolExecutionCancellationComposition<
                     }
                     let result =
                         cancel_tool_execution(&capability, &admitted, control.as_ref()).await;
-                    if let Ok(mut slot) = task_observed.lock() {
-                        *slot = Some(result);
+                    #[cfg(test)]
+                    let record_result = !matches!(fault, Some(TestFault::MissingResult));
+                    #[cfg(not(test))]
+                    let record_result = true;
+                    if record_result {
+                        if let Ok(mut slot) = task_observed.lock() {
+                            *slot = Some(result);
+                        }
                     }
                 })
                 .map_err(|_| ToolExecutionCancellationCompositionError::RuntimeFailure)?;
@@ -271,6 +285,10 @@ impl<C: ToolCancellationControl + 'static> ToolExecutionCancellationComposition<
             {
                 return Err(ToolExecutionCancellationCompositionError::RuntimeFailure);
             }
+        }
+        #[cfg(test)]
+        if matches!(self.fault, Some(TestFault::HoldBeforePlan)) {
+            std::future::pending::<()>().await;
         }
         #[cfg(test)]
         if matches!(self.fault, Some(TestFault::Coverage)) {
@@ -321,6 +339,10 @@ impl<C: ToolCancellationControl + 'static> ToolExecutionCancellationComposition<
         let injected_evidence_failure = matches!(self.fault, Some(TestFault::Evidence));
         #[cfg(not(test))]
         let injected_evidence_failure = false;
+        #[cfg(test)]
+        let injected_runtime_failure = matches!(self.fault, Some(TestFault::RuntimeEvidence));
+        #[cfg(not(test))]
+        let injected_runtime_failure = false;
         if runtime.target_outcomes().len() != 1
             || runtime.target_outcomes()[0].target() != CancellationTarget::ToolExecution
             || runtime.target_outcomes()[0].outcome() != expected_outcome
@@ -328,6 +350,7 @@ impl<C: ToolCancellationControl + 'static> ToolExecutionCancellationComposition<
             || cancellation.kind != expected_kind
             || cancellation.association != *self.admitted.association()
             || injected_evidence_failure
+            || injected_runtime_failure
         {
             return Err(ToolExecutionCancellationCompositionError::RuntimeFailure);
         }
@@ -689,6 +712,20 @@ mod tests {
                 .unwrap(),
             evidence
         );
+        let mut conflicting = capability(ToolSemantics::NonCancellable);
+        reassociate(&mut conflicting.association, 0);
+        assert_eq!(
+            c.execute(conflicting).await,
+            Err(ToolExecutionCancellationCompositionError::ConflictingExecution)
+        );
+        assert_eq!(
+            c.inspect_control(|v| (
+                v.received().len(),
+                v.remaining_outcomes(),
+                v.active_futures()
+            )),
+            (0, 1, 0)
+        );
     }
 
     #[test]
@@ -706,5 +743,499 @@ mod tests {
             assert!(!text.contains("sensitive"));
             assert!(!text.contains("165"));
         }
+    }
+
+    fn workflow_in(state: WorkflowState) -> InteractionWorkflow {
+        use WorkflowState::*;
+        let mut w = workflow(false);
+        if state == Created {
+            return w;
+        }
+        if state == Failed {
+            return w.fail().unwrap();
+        }
+        for next in [
+            NormalizingInput,
+            PreparingContext,
+            SelectingPedagogy,
+            RetrievingKnowledge,
+            GeneratingTutorResponse,
+            ExecutingTools,
+            PlanningResponse,
+            Speaking,
+            WaitingForStudent,
+            Completed,
+        ] {
+            w = w.advance(next).unwrap();
+            if next == state {
+                return w;
+            }
+        }
+        unreachable!()
+    }
+
+    fn assert_preflight_rejected(
+        w: InteractionWorkflow,
+        admission: ToolAdmissionRequest,
+        capability: ToolCancellationCapability,
+        expected: ToolExecutionCancellationCompositionError,
+    ) {
+        let control = control([ScriptedCancellationOutcome::DependencyFailure]);
+        let observer = control.clone();
+        let result = ToolExecutionCancellationComposition::new(
+            w,
+            w.workflow_id(),
+            w.session_id(),
+            w.correlation_id(),
+            w.trace_id(),
+            admission,
+            capability,
+            control,
+        );
+        assert!(matches!(result, Err(error) if error == expected));
+        assert_eq!(
+            (
+                observer.received().len(),
+                observer.remaining_outcomes(),
+                observer.active_futures(),
+                observer.dropped_futures(),
+            ),
+            (0, 1, 0, 0),
+            "preflight must not create or consume dependency/runtime work"
+        );
+    }
+
+    #[test]
+    fn every_non_cancelled_workflow_state_is_rejected_without_side_effects() {
+        use WorkflowState::*;
+        for state in [
+            Created,
+            NormalizingInput,
+            PreparingContext,
+            SelectingPedagogy,
+            RetrievingKnowledge,
+            GeneratingTutorResponse,
+            ExecutingTools,
+            PlanningResponse,
+            Speaking,
+            WaitingForStudent,
+            Completed,
+            Failed,
+        ] {
+            assert_preflight_rejected(
+                workflow_in(state),
+                admission(),
+                capability(ToolSemantics::Cancellable),
+                ToolExecutionCancellationCompositionError::InvalidWorkflow,
+            );
+        }
+    }
+
+    fn reassociate(a: &mut ToolAssociation, field: usize) {
+        match field {
+            0 => a.lab_session_id = id(31, LabSessionId::new),
+            1 => a.tool_request_id = id(32, ToolRequestId::new),
+            2 => a.tool_execution_id = id(33, ToolExecutionId::new),
+            3 => a.environment_instance_id = id(34, EnvironmentInstanceId::new),
+            4 => a.tool = SemanticKey::new("other-tool").unwrap(),
+            5 => a.operation = SemanticKey::new("other-operation").unwrap(),
+            6 => a.request_content_digest = RequestContentDigest::new([0x5a; 32]),
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn every_capability_association_field_and_version_is_preflighted_without_work() {
+        for field in 0..7 {
+            let mut cap = capability(ToolSemantics::Cancellable);
+            reassociate(&mut cap.association, field);
+            assert_preflight_rejected(
+                workflow(true),
+                admission(),
+                cap,
+                ToolExecutionCancellationCompositionError::AssociationMismatch,
+            );
+        }
+        let mut cap = capability(ToolSemantics::Cancellable);
+        cap.contract_version = ProtocolVersion::new(9, 9);
+        assert_preflight_rejected(
+            workflow(true),
+            admission(),
+            cap,
+            ToolExecutionCancellationCompositionError::UnsupportedVersion,
+        );
+    }
+
+    #[test]
+    fn every_workflow_identity_reference_is_independently_side_effect_free() {
+        let w = workflow(true);
+        for field in 0..4 {
+            let mut ids = (
+                w.workflow_id(),
+                w.session_id(),
+                w.correlation_id(),
+                w.trace_id(),
+            );
+            match field {
+                0 => ids.0 = id(41, WorkflowId::new),
+                1 => ids.1 = id(42, SessionId::new),
+                2 => ids.2 = id(43, CorrelationId::new),
+                _ => ids.3 = id(44, TraceId::new),
+            }
+            let dependency = control([ScriptedCancellationOutcome::DependencyFailure]);
+            let observer = dependency.clone();
+            let result = ToolExecutionCancellationComposition::new(
+                w,
+                ids.0,
+                ids.1,
+                ids.2,
+                ids.3,
+                admission(),
+                capability(ToolSemantics::Cancellable),
+                dependency,
+            );
+            assert!(matches!(
+                result,
+                Err(ToolExecutionCancellationCompositionError::AssociationMismatch)
+            ));
+            assert_eq!(
+                (
+                    observer.received().len(),
+                    observer.remaining_outcomes(),
+                    observer.active_futures(),
+                    observer.dropped_futures()
+                ),
+                (0, 1, 0, 0)
+            );
+        }
+    }
+
+    #[test]
+    fn every_admission_rejection_category_is_closed_and_side_effect_free() {
+        let mut cases = Vec::new();
+        let mut r = admission();
+        r.contract_version = ProtocolVersion::new(2, 0);
+        cases.push(r);
+        for unrestricted in 0..4 {
+            let mut r = admission();
+            match unrestricted {
+                0 => r.sandbox.host_filesystem_access = true,
+                1 => r.sandbox.host_network_access = true,
+                2 => r.sandbox.privileged = true,
+                _ => r.sandbox.root = true,
+            }
+            cases.push(r);
+        }
+        for bound in 0..6 {
+            let mut r = admission();
+            match bound {
+                0 => r.sandbox.bounds.cpu_millis = 0,
+                1 => r.sandbox.bounds.memory_bytes = 0,
+                2 => r.sandbox.bounds.storage_bytes = 0,
+                3 => r.sandbox.bounds.process_count = 0,
+                4 => r.sandbox.bounds.execution_time_millis = 0,
+                _ => r.sandbox.bounds.output_bytes = 0,
+            }
+            cases.push(r);
+        }
+        let mut inconsistent = admission();
+        inconsistent.sandbox.network_policy = NetworkPolicy::AllowListed { targets: vec![] };
+        cases.push(inconsistent);
+        for member in 0..4 {
+            let mut r = admission();
+            match member {
+                0 => reassociate(&mut r.sandbox.association, 0),
+                1 => reassociate(&mut r.risk_classification.association, 1),
+                2 => reassociate(&mut r.authorization.association, 2),
+                _ => reassociate(&mut r.assessment.association, 3),
+            }
+            cases.push(r);
+        }
+        for member in 0..2 {
+            let mut r = admission();
+            if member == 0 {
+                r.authorization.risk = RiskClass::Mutating;
+            } else {
+                r.assessment.risk = RiskClass::Mutating;
+            }
+            cases.push(r);
+        }
+        for member in 0..2 {
+            let mut r = admission();
+            if member == 0 {
+                r.authorization.decision = PolicyDecision::Deny;
+            } else {
+                r.assessment.decision = PolicyDecision::Deny;
+            }
+            r.tutor_preference = TutorPreference::Prefer;
+            cases.push(r);
+        }
+        for risk in [RiskClass::Destructive, RiskClass::Privileged] {
+            let mut r = admission();
+            r.risk_classification.risk = risk;
+            r.authorization.risk = risk;
+            r.assessment.risk = risk;
+            cases.push(r);
+        }
+        let mut required = admission();
+        required.authorization.decision = PolicyDecision::ConfirmationRequired;
+        cases.push(required);
+        for request in cases {
+            assert_preflight_rejected(
+                workflow(true),
+                request,
+                capability(ToolSemantics::Cancellable),
+                ToolExecutionCancellationCompositionError::AdmissionRejected,
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn cancellable_waits_for_token_and_caller_drop_aborts_pending_control() {
+        let mut waiting = composition(
+            ToolSemantics::Cancellable,
+            [ScriptedCancellationOutcome::DependencyFailure],
+        );
+        waiting.fault = Some(TestFault::HoldBeforePlan);
+        let waiting_observer = waiting.inspect_control(Clone::clone);
+        let mut before_token = Box::pin(waiting.execute(capability(ToolSemantics::Cancellable)));
+        tokio::select! {
+            biased;
+            result = &mut before_token => panic!("pre-token barrier completed: {result:?}"),
+            _ = tokio::task::yield_now() => {}
+        }
+        assert_eq!(
+            (
+                waiting_observer.received().len(),
+                waiting_observer.remaining_outcomes(),
+                waiting_observer.active_futures()
+            ),
+            (0, 1, 0),
+            "the dependency must remain untouched before plan-driven token cancellation"
+        );
+        drop(before_token);
+
+        let mut c = composition(
+            ToolSemantics::Cancellable,
+            [ScriptedCancellationOutcome::Pending],
+        );
+        let observer = c.inspect_control(Clone::clone);
+        let mut execution = Box::pin(c.execute(capability(ToolSemantics::Cancellable)));
+        tokio::select! {
+            biased;
+            result = &mut execution => panic!("pending dependency completed: {result:?}"),
+            _ = tokio::task::yield_now() => {}
+        }
+        assert_eq!(
+            (
+                observer.received().len(),
+                observer.remaining_outcomes(),
+                observer.active_futures()
+            ),
+            (1, 0, 1)
+        );
+        drop(execution);
+        tokio::task::yield_now().await;
+        assert_eq!(
+            (
+                observer.received().len(),
+                observer.active_futures(),
+                observer.dropped_futures()
+            ),
+            (1, 0, 1)
+        );
+    }
+
+    #[tokio::test]
+    async fn acknowledgements_reject_version_and_every_reassociated_field_terminally() {
+        let mut acknowledgements = Vec::new();
+        let mut wrong_version = ToolCancellationAcknowledgement {
+            contract_version: ProtocolVersion::new(2, 0),
+            association: association(),
+        };
+        acknowledgements.push(wrong_version.clone());
+        wrong_version.contract_version = TOOL_EXECUTION_SECURITY_V1;
+        for field in 0..7 {
+            let mut ack = wrong_version.clone();
+            reassociate(&mut ack.association, field);
+            acknowledgements.push(ack);
+        }
+        for ack in acknowledgements {
+            let mut c = composition(
+                ToolSemantics::Cancellable,
+                [ScriptedCancellationOutcome::Acknowledged(ack)],
+            );
+            assert_eq!(
+                c.execute(capability(ToolSemantics::Cancellable)).await,
+                Err(ToolExecutionCancellationCompositionError::ControlFailure)
+            );
+            assert_eq!(
+                c.inspect_control(|v| (
+                    v.received().len(),
+                    v.remaining_outcomes(),
+                    v.active_futures()
+                )),
+                (1, 0, 0)
+            );
+            assert_eq!(
+                c.execute(capability(ToolSemantics::Cancellable)).await,
+                Err(ToolExecutionCancellationCompositionError::RuntimeFailure)
+            );
+            assert_eq!(c.inspect_control(|v| v.received().len()), 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn all_runtime_failure_categories_are_terminal_and_accounted() {
+        for fault in [
+            TestFault::Join,
+            TestFault::Coverage,
+            TestFault::Evidence,
+            TestFault::MissingResult,
+            TestFault::RuntimeEvidence,
+        ] {
+            let ack = ToolCancellationAcknowledgement {
+                contract_version: TOOL_EXECUTION_SECURITY_V1,
+                association: association(),
+            };
+            let mut c = composition(
+                ToolSemantics::Cancellable,
+                [ScriptedCancellationOutcome::Acknowledged(ack)],
+            );
+            c.fault = Some(fault);
+            assert!(c
+                .execute(capability(ToolSemantics::Cancellable))
+                .await
+                .is_err());
+            let accounting = c.inspect_control(|v| {
+                (
+                    v.received().len(),
+                    v.remaining_outcomes(),
+                    v.active_futures(),
+                )
+            });
+            assert_eq!(accounting.2, 0);
+            assert_eq!(
+                c.execute(capability(ToolSemantics::Cancellable)).await,
+                Err(ToolExecutionCancellationCompositionError::RuntimeFailure)
+            );
+            assert_eq!(
+                c.inspect_control(|v| (
+                    v.received().len(),
+                    v.remaining_outcomes(),
+                    v.active_futures()
+                )),
+                accounting
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn non_cancellable_drop_and_failures_never_invoke_control() {
+        let mut dropped = composition(
+            ToolSemantics::NonCancellable,
+            [ScriptedCancellationOutcome::DependencyFailure],
+        );
+        dropped.fault = Some(TestFault::HoldNonCancellable);
+        let mut execution = Box::pin(dropped.execute(capability(ToolSemantics::NonCancellable)));
+        tokio::select! {
+            biased;
+            result = &mut execution => panic!("held placeholder completed: {result:?}"),
+            _ = tokio::task::yield_now() => {}
+        }
+        drop(execution);
+        assert_eq!(
+            dropped.inspect_control(|v| (
+                v.received().len(),
+                v.remaining_outcomes(),
+                v.active_futures()
+            )),
+            (0, 1, 0)
+        );
+        for fault in [
+            TestFault::Join,
+            TestFault::Coverage,
+            TestFault::Evidence,
+            TestFault::RuntimeEvidence,
+        ] {
+            let mut c = composition(
+                ToolSemantics::NonCancellable,
+                [ScriptedCancellationOutcome::DependencyFailure],
+            );
+            c.fault = Some(fault);
+            assert!(c
+                .execute(capability(ToolSemantics::NonCancellable))
+                .await
+                .is_err());
+            assert_eq!(
+                c.inspect_control(|v| (
+                    v.received().len(),
+                    v.remaining_outcomes(),
+                    v.active_futures()
+                )),
+                (0, 1, 0)
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn exact_admitted_association_is_reused_and_security_rules_are_preserved() {
+        let admitted_association = association();
+        let ack = ToolCancellationAcknowledgement {
+            contract_version: TOOL_EXECUTION_SECURITY_V1,
+            association: admitted_association.clone(),
+        };
+        let mut c = composition(
+            ToolSemantics::Cancellable,
+            [ScriptedCancellationOutcome::Acknowledged(ack)],
+        );
+        let evidence = c
+            .execute(capability(ToolSemantics::Cancellable))
+            .await
+            .unwrap();
+        assert_eq!(evidence.association(), &admitted_association);
+        assert_eq!(
+            c.inspect_control(|v| v.received()[0].association.clone()),
+            admitted_association
+        );
+
+        for decision_owner in 0..2 {
+            let mut denied = admission();
+            denied.tutor_preference = TutorPreference::Prefer;
+            if decision_owner == 0 {
+                denied.authorization.decision = PolicyDecision::Deny;
+            } else {
+                denied.assessment.decision = PolicyDecision::Deny;
+            }
+            assert!(admit_tool_execution(&denied).is_err());
+        }
+        for risk in [RiskClass::Destructive, RiskClass::Privileged] {
+            let mut request = admission();
+            request.risk_classification.risk = risk;
+            request.authorization.risk = risk;
+            request.assessment.risk = risk;
+            assert!(admit_tool_execution(&request).is_err());
+            request.confirmation = Some(ConfirmationEvidence {
+                contract_version: TOOL_EXECUTION_SECURITY_V1,
+                association: request.association.clone(),
+                risk,
+                authorization_decision: PolicyDecision::Allow,
+                assessment_decision: PolicyDecision::Allow,
+                confirmed: true,
+            });
+            assert!(admit_tool_execution(&request).is_ok());
+        }
+        let mut policy_required = admission();
+        policy_required.assessment.decision = PolicyDecision::ConfirmationRequired;
+        assert!(admit_tool_execution(&policy_required).is_err());
+        policy_required.confirmation = Some(ConfirmationEvidence {
+            contract_version: TOOL_EXECUTION_SECURITY_V1,
+            association: policy_required.association.clone(),
+            risk: RiskClass::ReadOnly,
+            authorization_decision: PolicyDecision::Allow,
+            assessment_decision: PolicyDecision::ConfirmationRequired,
+            confirmed: true,
+        });
+        assert!(admit_tool_execution(&policy_required).is_ok());
     }
 }
