@@ -233,6 +233,77 @@ pub struct SpeechCancellationCoordinator<'a> {
     )>,
 }
 
+/// An owned, fully preflighted coordinator for composition roots that must move
+/// the exact participant association into a workflow task.
+///
+/// Construction performs the same capability discovery and canonicalization as
+/// [`SpeechCancellationCoordinator::new`]. Subsequent cancellation never
+/// rediscovers capabilities.
+pub struct OwnedSpeechCancellationCoordinator {
+    speech_id: SpeechId,
+    participants: Vec<(
+        Arc<dyn SpeechCancellationParticipant>,
+        SpeechCancellationCapability,
+    )>,
+}
+
+impl OwnedSpeechCancellationCoordinator {
+    pub fn new(
+        speech_id: SpeechId,
+        participants: impl IntoIterator<Item = Arc<dyn SpeechCancellationParticipant>>,
+    ) -> Result<Self, SpeechCancellationCoordinatorError> {
+        let mut values = participants
+            .into_iter()
+            .map(|participant| {
+                let capability = participant.cancellation_capability();
+                (participant, capability)
+            })
+            .collect::<Vec<_>>();
+        validate_and_canonicalize(speech_id, &mut values)?;
+        Ok(Self {
+            speech_id,
+            participants: values,
+        })
+    }
+
+    /// Invokes the stable, canonically preflighted participant set exactly once.
+    pub async fn cancel(
+        &self,
+        request: SpeechCancellationRequest,
+    ) -> Result<SpeechCancellationAggregateEvidence, SpeechCancellationCoordinatorError> {
+        cancel_preflighted(self.speech_id, &self.participants, request).await
+    }
+}
+
+fn validate_and_canonicalize<P>(
+    speech_id: SpeechId,
+    values: &mut [(P, SpeechCancellationCapability)],
+) -> Result<(), SpeechCancellationCoordinatorError> {
+    for (_, capability) in values.iter() {
+        capability.validate()?;
+        if capability.speech_id != speech_id {
+            return Err(SpeechCancellationCoordinatorError::AssociationMismatch);
+        }
+    }
+    values.sort_by_key(|(_, capability)| capability.surface);
+    for pair in values.windows(2) {
+        if pair[0].1.surface == pair[1].1.surface {
+            return Err(SpeechCancellationCoordinatorError::DuplicateSurface);
+        }
+    }
+    if values.len() != SpeechCancellationSurface::ALL.len() {
+        return Err(SpeechCancellationCoordinatorError::MissingSurface);
+    }
+    if values
+        .iter()
+        .map(|value| value.1.surface)
+        .ne(SpeechCancellationSurface::ALL)
+    {
+        return Err(SpeechCancellationCoordinatorError::InvalidCapabilitySet);
+    }
+    Ok(())
+}
+
 impl<'a> SpeechCancellationCoordinator<'a> {
     /// Inspects every capability and establishes canonical order without mutation.
     pub fn new(
@@ -243,28 +314,7 @@ impl<'a> SpeechCancellationCoordinator<'a> {
             .into_iter()
             .map(|p| (p, p.cancellation_capability()))
             .collect::<Vec<_>>();
-        for (_, capability) in &values {
-            capability.validate()?;
-            if capability.speech_id != speech_id {
-                return Err(SpeechCancellationCoordinatorError::AssociationMismatch);
-            }
-        }
-        values.sort_by_key(|(_, capability)| capability.surface);
-        for pair in values.windows(2) {
-            if pair[0].1.surface == pair[1].1.surface {
-                return Err(SpeechCancellationCoordinatorError::DuplicateSurface);
-            }
-        }
-        if values.len() != SpeechCancellationSurface::ALL.len() {
-            return Err(SpeechCancellationCoordinatorError::MissingSurface);
-        }
-        if values
-            .iter()
-            .map(|v| v.1.surface)
-            .ne(SpeechCancellationSurface::ALL)
-        {
-            return Err(SpeechCancellationCoordinatorError::InvalidCapabilitySet);
-        }
+        validate_and_canonicalize(speech_id, &mut values)?;
         Ok(Self {
             speech_id,
             participants: values,
@@ -276,81 +326,107 @@ impl<'a> SpeechCancellationCoordinator<'a> {
         &self,
         request: SpeechCancellationRequest,
     ) -> Result<SpeechCancellationAggregateEvidence, SpeechCancellationCoordinatorError> {
-        request
-            .validate()
-            .map_err(|_| SpeechCancellationCoordinatorError::UnsupportedVersion)?;
-        if request.speech_id != self.speech_id {
-            return Err(SpeechCancellationCoordinatorError::AssociationMismatch);
-        }
-        let mut futures = self
-            .participants
-            .iter()
-            .map(|(p, _)| Some(p.request_cancellation(request)))
-            .collect::<Vec<_>>();
-        let mut outcomes = (0..futures.len()).map(|_| None).collect::<Vec<_>>();
-        std::future::poll_fn(|cx| {
-            let mut pending = false;
-            for (index, future) in futures.iter_mut().enumerate() {
-                if let Some(value) = future.as_mut() {
-                    match value.as_mut().poll(cx) {
-                        std::task::Poll::Ready(outcome) => {
-                            outcomes[index] = Some(outcome);
-                            *future = None;
-                        }
-                        std::task::Poll::Pending => pending = true,
+        cancel_preflighted(self.speech_id, &self.participants, request).await
+    }
+}
+
+async fn cancel_preflighted<P>(
+    speech_id: SpeechId,
+    participants: &[(P, SpeechCancellationCapability)],
+    request: SpeechCancellationRequest,
+) -> Result<SpeechCancellationAggregateEvidence, SpeechCancellationCoordinatorError>
+where
+    P: ParticipantHandle,
+{
+    request
+        .validate()
+        .map_err(|_| SpeechCancellationCoordinatorError::UnsupportedVersion)?;
+    if request.speech_id != speech_id {
+        return Err(SpeechCancellationCoordinatorError::AssociationMismatch);
+    }
+    let mut futures = participants
+        .iter()
+        .map(|(participant, _)| Some(participant.participant().request_cancellation(request)))
+        .collect::<Vec<_>>();
+    let mut outcomes = (0..futures.len()).map(|_| None).collect::<Vec<_>>();
+    std::future::poll_fn(|cx| {
+        let mut pending = false;
+        for (index, future) in futures.iter_mut().enumerate() {
+            if let Some(value) = future.as_mut() {
+                match value.as_mut().poll(cx) {
+                    std::task::Poll::Ready(outcome) => {
+                        outcomes[index] = Some(outcome);
+                        *future = None;
                     }
+                    std::task::Poll::Pending => pending = true,
                 }
             }
-            if outcomes
-                .iter()
-                .flatten()
-                .any(|o| matches!(o, SpeechCancellationServiceOutcome::DependencyFailure))
-            {
-                // Dropping all remaining owned futures is the safe terminal path.
-                futures.clear();
-                std::task::Poll::Ready(())
-            } else if pending {
-                std::task::Poll::Pending
-            } else {
-                std::task::Poll::Ready(())
-            }
-        })
-        .await;
+        }
         if outcomes
             .iter()
             .flatten()
             .any(|o| matches!(o, SpeechCancellationServiceOutcome::DependencyFailure))
         {
-            return Err(SpeechCancellationCoordinatorError::DependencyFailure);
+            // Dropping all remaining owned futures is the safe terminal path.
+            futures.clear();
+            std::task::Poll::Ready(())
+        } else if pending {
+            std::task::Poll::Pending
+        } else {
+            std::task::Poll::Ready(())
         }
-        if outcomes.iter().any(Option::is_none) {
-            return Err(SpeechCancellationCoordinatorError::AggregateFailure);
+    })
+    .await;
+    if outcomes
+        .iter()
+        .flatten()
+        .any(|o| matches!(o, SpeechCancellationServiceOutcome::DependencyFailure))
+    {
+        return Err(SpeechCancellationCoordinatorError::DependencyFailure);
+    }
+    if outcomes.iter().any(Option::is_none) {
+        return Err(SpeechCancellationCoordinatorError::AggregateFailure);
+    }
+    let mut surfaces = Vec::with_capacity(4);
+    for ((_, capability), outcome) in participants.iter().zip(outcomes) {
+        let SpeechCancellationServiceOutcome::Acknowledged(acknowledgement) =
+            outcome.expect("complete outcome")
+        else {
+            unreachable!()
+        };
+        if acknowledgement.contract_version != capability.contract_version
+            || acknowledgement.speech_id != speech_id
+        {
+            return Err(SpeechCancellationCoordinatorError::AcknowledgementMismatch);
         }
-        let mut surfaces = Vec::with_capacity(4);
-        for ((_, capability), outcome) in self.participants.iter().zip(outcomes) {
-            let SpeechCancellationServiceOutcome::Acknowledged(acknowledgement) =
-                outcome.expect("complete outcome")
-            else {
-                unreachable!()
-            };
-            if acknowledgement.contract_version != capability.contract_version
-                || acknowledgement.speech_id != self.speech_id
-            {
-                return Err(SpeechCancellationCoordinatorError::AcknowledgementMismatch);
-            }
-            surfaces.push(SpeechSurfaceCancellationEvidence {
-                contract_version: capability.contract_version,
-                speech_id: self.speech_id,
-                surface: capability.surface,
-                acknowledgement,
-            });
-        }
-        Ok(SpeechCancellationAggregateEvidence {
-            contract_version: SPEECH_CANCELLATION_V1,
-            speech_id: self.speech_id,
-            kind: SpeechCancellationAggregateKind::Stopped,
-            surfaces,
-        })
+        surfaces.push(SpeechSurfaceCancellationEvidence {
+            contract_version: capability.contract_version,
+            speech_id,
+            surface: capability.surface,
+            acknowledgement,
+        });
+    }
+    Ok(SpeechCancellationAggregateEvidence {
+        contract_version: SPEECH_CANCELLATION_V1,
+        speech_id,
+        kind: SpeechCancellationAggregateKind::Stopped,
+        surfaces,
+    })
+}
+
+trait ParticipantHandle {
+    fn participant(&self) -> &dyn SpeechCancellationParticipant;
+}
+
+impl ParticipantHandle for &dyn SpeechCancellationParticipant {
+    fn participant(&self) -> &dyn SpeechCancellationParticipant {
+        *self
+    }
+}
+
+impl ParticipantHandle for Arc<dyn SpeechCancellationParticipant> {
+    fn participant(&self) -> &dyn SpeechCancellationParticipant {
+        self.as_ref()
     }
 }
 
