@@ -18,6 +18,7 @@ expected={
  "nexa-knowledge": {"nexa-domain", "serde", "sha2", "thiserror"},
  "nexa-knowledge-runtime": {"nexa-domain", "nexa-knowledge", "tokio", "tokio-util"},
  "nexa-tutor": {"nexa-domain", "nexa-knowledge", "serde", "serde_json", "sha2", "thiserror"},
+ "nexa-speech": {"nexa-domain", "serde"},
  "nexa-orchestrator": {"nexa-domain", "serde", "thiserror"},
  "nexa-orchestrator-runtime": {"nexa-orchestrator", "tokio", "tokio-util"},
  "nexa-headless": {"nexa-avatar", "nexa-domain", "nexa-knowledge", "nexa-knowledge-runtime", "nexa-nbp", "nexa-orchestrator", "nexa-orchestrator-runtime", "nexa-tutor", "tokio"},
@@ -32,14 +33,14 @@ print("contract dependency DAG passed")
 ' <<<"$metadata"
 
 # Renderer, platform, provider, executor, networking, and persistence crates must never enter contract crates.
-if rg -n --glob 'Cargo.toml' --glob '*.rs' '\b(wgpu|winit|gltf|tokio|async-std|rodio|cpal|reqwest|hyper|sqlx|rusqlite)\b' crates/nexa-{domain,events,nbp,avatar,student,pedagogy,lessons,assessment,learning-core,knowledge,tutor,orchestrator}; then
+if rg -n --glob 'Cargo.toml' --glob '*.rs' '\b(wgpu|winit|gltf|tokio|async-std|rodio|cpal|reqwest|hyper|sqlx|rusqlite)\b' crates/nexa-{domain,events,nbp,avatar,student,pedagogy,lessons,assessment,learning-core,knowledge,tutor,speech,orchestrator}; then
   echo "contract crate references a forbidden implementation dependency" >&2
   exit 1
 fi
 
 # Tokio is isolated in the runtime adapter and must not enter protected synchronous crates.
 if rg -n --glob 'Cargo.toml' --glob '*.rs' '\b(tokio|tokio-util|tokio_util)\b' \
-  crates/nexa-{domain,events,nbp,avatar,student,pedagogy,lessons,assessment,learning-core,knowledge,tutor,orchestrator}; then
+  crates/nexa-{domain,events,nbp,avatar,student,pedagogy,lessons,assessment,learning-core,knowledge,tutor,speech,orchestrator}; then
   echo "protected contract/domain crate references Tokio" >&2
   exit 1
 fi
@@ -61,7 +62,7 @@ if cargo tree -p nexa-3d-validate --edges normal | rg -q '\b(wgpu|winit|pollster
   exit 1
 fi
 
-for crate in nexa-domain nexa-events nexa-nbp nexa-avatar nexa-student nexa-pedagogy nexa-lessons nexa-assessment nexa-learning-core nexa-knowledge nexa-tutor nexa-orchestrator; do
+for crate in nexa-domain nexa-events nexa-nbp nexa-avatar nexa-student nexa-pedagogy nexa-lessons nexa-assessment nexa-learning-core nexa-knowledge nexa-tutor nexa-speech nexa-orchestrator; do
   if cargo tree -p "$crate" --edges normal | rg -q '\b(wgpu|winit|gltf|pollster)\b'; then
     echo "$crate dependency graph contains a renderer dependency" >&2
     exit 1

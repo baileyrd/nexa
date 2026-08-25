@@ -1323,6 +1323,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "nexa-speech"
+version = "0.1.0"
+dependencies = [
+ "nexa-domain",
+ "serde",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "nexa-student"
 version = "0.1.0"
 dependencies = [
