@@ -1,6 +1,6 @@
 # Phase 5 traceability
 
-Phase 5 is **in progress**. This matrix records the ADR-0051 through ADR-0057 foundations and first concrete Behavior binding; it does not claim a complete session runtime.
+Phase 5 is **in progress**. This matrix records the ADR-0051 through ADR-0058 foundations and sole concrete Behavior binding; it does not claim a complete session runtime.
 
 | Requirement | Evidence | Status |
 |---|---|---|
@@ -20,6 +20,7 @@ Phase 5 is **in progress**. This matrix records the ADR-0051 through ADR-0057 fo
 | Closed-target owned-task association | `WorkflowTaskGroup::spawn_for_target` and bounded per-target counts; direct all-five, multiple/simultaneous, exact return, rejection, root cancellation, natural drain, identity, panic, and abort-on-drop tests | Implemented foundation |
 | Atomic exact-plan runtime execution | Side-effect-free exact coverage preflight; global spawn closure; selective target and unclassified cancellation/joining; canonical stopped or target/count non-cancellable evidence; repeat/conflict and abort-on-drop tests | Implemented foundation (ADR-0056) |
 | Behavior cancellation binding | `apps/nexa-headless` exact workflow/identity/capability/preview preflight, canonical planner use, one target-aware task, one exact `AvatarPort` cancellation, joined runtime, observed adapter/task evidence, exact actual-report validation, terminal success/failure/drop, idempotent repeat, and closed conflict tests | First concrete binding implemented (ADR-0057) |
-| Five-subsystem cancellation binding and subsystem-specific non-cancellable reporting | Behavior is bound only; retrieval, tutor generation, speech, and tool execution remain absent | Not implemented |
+| Tutor Generation cancellation control | `nexa-tutor::cancellation` strict identity-preserving V1 request/acknowledgement/error contracts, side-effect-free exact-association preflight, one port call, and deterministic FIFO scripted adapter; direct strict-wire, mismatch, failure normalization, diagnostics, and accounting tests | Contract foundation implemented (ADR-0058); no runtime binding or proof generation stopped |
+| Five-subsystem cancellation binding and subsystem-specific non-cancellable reporting | Behavior is bound only; retrieval, Tutor Generation runtime composition, speech, and tool execution remain absent | Not implemented |
 
-NEXA-ORCH-001 remains Baseline Draft. The headless Behavior binding is the only concrete subsystem integration implied; no retrieval, tutor, speech, renderer, tool, provider/network, persistence, clock, observability, interruption, timeout, retry, or recovery integration is implied.
+NEXA-TUTOR-001 and NEXA-ORCH-001 remain Baseline Draft. The headless Behavior binding is the only concrete subsystem integration. ADR-0058 is control foundation only: no Tutor Generation provider cancellation, Tokio/runtime binding, task stopping/joining, or `apps/nexa-headless` composition is implied. Retrieval, speech, tool/lab, renderer, provider/network, persistence, clock, observability, interruption, timeout, retry, and recovery integrations remain absent.
