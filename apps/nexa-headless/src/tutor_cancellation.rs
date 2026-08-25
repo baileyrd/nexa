@@ -304,6 +304,7 @@ mod tests {
     use nexa_tutor::cancellation::{
         ScriptedTutorGenerationCancellationOutcome as Outcome,
         ScriptedTutorGenerationCancellationPort as Port,
+        TutorGenerationCancellationDependencyError,
     };
     use nexa_tutor::model::{
         ModelCapabilities, ModelDescriptor, ModelErrorKind, PrivacyClass, ScriptedModelProvider,
@@ -311,6 +312,36 @@ mod tests {
     };
     use std::future::Future;
     use uuid::Uuid;
+
+    #[derive(Clone, Debug)]
+    struct SharedPort(Arc<Mutex<Port>>);
+
+    impl SharedPort {
+        fn new(outcomes: impl IntoIterator<Item = Outcome>) -> Self {
+            Self(Arc::new(Mutex::new(Port::new(outcomes))))
+        }
+
+        fn accounting(&self) -> (usize, usize, usize) {
+            let port = self.0.lock().unwrap();
+            (
+                port.received_requests().len(),
+                port.consumed_outcomes(),
+                port.remaining_outcomes(),
+            )
+        }
+    }
+
+    impl TutorGenerationCancellationPort for SharedPort {
+        fn request_cancellation(
+            &mut self,
+            request: &TutorGenerationCancellationRequest,
+        ) -> Result<
+            TutorGenerationCancellationAcknowledgement,
+            TutorGenerationCancellationDependencyError,
+        > {
+            self.0.lock().unwrap().request_cancellation(request)
+        }
+    }
 
     fn id<T>(n: u128, make: impl Fn(Uuid) -> Result<T, nexa_domain::ValueError>) -> T {
         make(Uuid::from_u128(n)).unwrap()
@@ -385,21 +416,36 @@ mod tests {
         );
         let (w, s, c, t) = ids();
         let r = request();
-        assert!(matches!(
-            TutorGenerationCancellationComposition::new(
-                workflow(false),
-                w,
-                s,
-                c,
-                t,
-                r.clone(),
-                r.invocation_id,
-                r.provider_id,
-                r.model_id,
-                Port::new([])
-            ),
-            Err(TutorGenerationCancellationCompositionError::InvalidWorkflow)
-        ));
+        let assert_preflight_failure =
+            |workflow, workflow_id, session_id, correlation_id, trace_id, request, expected| {
+                let port = SharedPort::new([Outcome::Acknowledged(ack())]);
+                let observable = port.clone();
+                assert!(matches!(
+                    TutorGenerationCancellationComposition::new(
+                        workflow,
+                        workflow_id,
+                        session_id,
+                        correlation_id,
+                        trace_id,
+                        request,
+                        r.invocation_id,
+                        r.provider_id,
+                        r.model_id,
+                        port,
+                    ),
+                    Err(error) if error == expected
+                ));
+                assert_eq!(observable.accounting(), (0, 0, 1));
+            };
+        assert_preflight_failure(
+            workflow(false),
+            w,
+            s,
+            c,
+            t,
+            r.clone(),
+            TutorGenerationCancellationCompositionError::InvalidWorkflow,
+        );
         for changed in 0..7 {
             let mut rq = r.clone();
             let mut wi = w;
@@ -415,39 +461,27 @@ mod tests {
                 5 => rq.provider_id = id(20, ModelProviderId::new),
                 _ => rq.model_id = id(20, ModelId::new),
             }
-            assert!(matches!(
-                TutorGenerationCancellationComposition::new(
-                    workflow(true),
-                    wi,
-                    si,
-                    ci,
-                    ti,
-                    rq,
-                    r.invocation_id,
-                    r.provider_id,
-                    r.model_id,
-                    Port::new([])
-                ),
-                Err(TutorGenerationCancellationCompositionError::AssociationMismatch)
-            ));
+            assert_preflight_failure(
+                workflow(true),
+                wi,
+                si,
+                ci,
+                ti,
+                rq,
+                TutorGenerationCancellationCompositionError::AssociationMismatch,
+            );
         }
         let mut invalid = r.clone();
         invalid.contract_version = ProtocolVersion::new(2, 0);
-        assert!(matches!(
-            TutorGenerationCancellationComposition::new(
-                workflow(true),
-                w,
-                s,
-                c,
-                t,
-                invalid,
-                r.invocation_id,
-                r.provider_id,
-                r.model_id,
-                Port::new([])
-            ),
-            Err(TutorGenerationCancellationCompositionError::UnsupportedVersion)
-        ));
+        assert_preflight_failure(
+            workflow(true),
+            w,
+            s,
+            c,
+            t,
+            invalid,
+            TutorGenerationCancellationCompositionError::UnsupportedVersion,
+        );
     }
 
     #[tokio::test]
@@ -480,6 +514,10 @@ mod tests {
         assert_eq!(evidence.request(), &request());
         assert_eq!(evidence.acknowledgement(), &ack());
         assert_eq!(evidence.runtime().target_outcomes().len(), 1);
+        assert_eq!(
+            evidence.runtime().target_outcomes()[0].target(),
+            CancellationTarget::TutorGeneration
+        );
         assert_eq!(
             evidence.runtime().target_outcomes()[0].outcome(),
             CancellationTargetExecutionOutcome::Stopped
@@ -571,16 +609,41 @@ mod tests {
             )),
         ];
         for outcome in cases {
+            let expected = if outcome.is_none() {
+                (1, 0, 0)
+            } else {
+                (1, 1, 0)
+            };
             let mut c = composition(outcome);
             assert_eq!(
                 c.execute(request()).await,
                 Err(TutorGenerationCancellationCompositionError::ControlFailure)
             );
+            let accounting = c
+                .inspect_port(|p| {
+                    (
+                        p.received_requests().len(),
+                        p.consumed_outcomes(),
+                        p.remaining_outcomes(),
+                    )
+                })
+                .unwrap();
+            assert_eq!(accounting, expected);
             assert_eq!(
                 c.execute(request()).await,
                 Err(TutorGenerationCancellationCompositionError::RuntimeFailure)
             );
-            assert_eq!(c.inspect_port(|p| p.received_requests().len()).unwrap(), 1);
+            assert_eq!(
+                c.inspect_port(|p| {
+                    (
+                        p.received_requests().len(),
+                        p.consumed_outcomes(),
+                        p.remaining_outcomes(),
+                    )
+                })
+                .unwrap(),
+                accounting
+            );
         }
     }
 
@@ -633,15 +696,55 @@ mod tests {
 
     #[test]
     fn errors_are_closed_and_content_free() {
-        for error in [
-            TutorGenerationCancellationCompositionError::InvalidWorkflow,
-            TutorGenerationCancellationCompositionError::AssociationMismatch,
-            TutorGenerationCancellationCompositionError::UnsupportedVersion,
-            TutorGenerationCancellationCompositionError::ControlFailure,
-            TutorGenerationCancellationCompositionError::RuntimeFailure,
-            TutorGenerationCancellationCompositionError::ConflictingExecution,
-        ] {
-            assert!(!format!("{error:?} {error}").contains("provider_payload"));
+        let cases = [
+            (
+                TutorGenerationCancellationCompositionError::InvalidWorkflow,
+                "InvalidWorkflow",
+                "invalid cancelled workflow",
+            ),
+            (
+                TutorGenerationCancellationCompositionError::AssociationMismatch,
+                "AssociationMismatch",
+                "tutor cancellation association mismatch",
+            ),
+            (
+                TutorGenerationCancellationCompositionError::UnsupportedVersion,
+                "UnsupportedVersion",
+                "unsupported tutor cancellation version",
+            ),
+            (
+                TutorGenerationCancellationCompositionError::ControlFailure,
+                "ControlFailure",
+                "tutor cancellation control failure",
+            ),
+            (
+                TutorGenerationCancellationCompositionError::RuntimeFailure,
+                "RuntimeFailure",
+                "tutor cancellation runtime failure",
+            ),
+            (
+                TutorGenerationCancellationCompositionError::ConflictingExecution,
+                "ConflictingExecution",
+                "conflicting tutor cancellation execution",
+            ),
+        ];
+        let forbidden = [
+            "private_prompt",
+            "private_output",
+            "private_endpoint",
+            "client_secret",
+            "private_credential",
+            "provider_payload",
+            "runtime_detail",
+            "task_detail",
+        ];
+        for (error, debug, display) in cases {
+            assert_eq!(format!("{error:?}"), debug);
+            assert_eq!(error.to_string(), display);
+            let diagnostics = format!("{error:?} {error}");
+            for sentinel in forbidden {
+                assert!(!diagnostics.contains(sentinel));
+            }
         }
     }
 }
