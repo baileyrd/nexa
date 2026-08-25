@@ -75,12 +75,12 @@ Exit: grounded responses carry citations, confidence, and machine-validated tuto
 
 ## Phase 5 — Orchestrate a complete session
 
-**Status:** In progress. ADR-0051 activates `nexa-orchestrator` with synchronous lifecycle cancellation; ADR-0052 adds deterministic propagation planning; ADR-0053 adds a synchronous provider-neutral exact-plan propagation port; ADR-0054 adds the separate Tokio owned-task runtime; ADR-0055 adds closed-target task association; ADR-0056 adds atomic exact-plan execution with selective cancellation, joining, and generic non-cancellable evidence.
+**Status:** In progress. ADR-0051 through ADR-0056 establish lifecycle, planning, port, Tokio ownership, target association, and atomic exact-plan execution; ADR-0057 adds the first concrete Behavior cancellation binding in `apps/nexa-headless`.
 
 - [x] deterministic session/workflow lifecycle and lifecycle cancellation foundation (ADR-0051)
 - [ ] cancellation-safe execution and propagation
 
-ADR-0056 binds one canonical plan to the exact live task group only after side-effect-free coverage preflight, selectively cancels and joins requested targets and unclassified work, and preserves explicit non-cancellable target/count evidence while retaining ownership. All five concrete subsystem adapters, composition wiring, and provider/network propagation remain deferred, so the broader checklist item stays incomplete.
+ADR-0057 composes the existing exact-plan runtime with renderer-neutral `AvatarPort` cancellation for Behavior only, with side-effect-free preflight, cooperative token waiting, one exact adapter call, joining, observed immutable evidence, exact preview/actual agreement, and terminalized success, failure, or caller drop. Retrieval, tutor generation, speech, tools/labs, real renderer/provider/network cancellation, and policy/recovery concerns remain deferred, so the broader checklist item stays incomplete.
 - [ ] speech input/output ports
 - [ ] behavior synchronization
 - [ ] tool/lab execution

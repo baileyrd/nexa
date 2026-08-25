@@ -41,6 +41,7 @@ Speech, canvas, tools, and avatar adapters
 | `crates/nexa-assessment/` | Validated assessment contracts, deterministic scoring, attempt lifecycle, and evidence creation |
 | `crates/nexa-learning-core/` | Synchronous atomic composition of the Phase 3 learning-core policies |
 | `apps/nexa-3d-viewer/` | `wgpu`/`winit` interactive viewer composition root |
+| `apps/nexa-headless/` | Minimal headless Behavior-cancellation composition root |
 | `tools/nexa-3d-validate/` | GPU-free asset and manifest validation CLI |
 
 A directory containing only `.gitkeep` reserves a planned boundary; it does not indicate that the capability is implemented.

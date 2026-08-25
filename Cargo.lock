@@ -1213,6 +1213,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nexa-headless"
+version = "0.1.0"
+dependencies = [
+ "nexa-avatar",
+ "nexa-domain",
+ "nexa-nbp",
+ "nexa-orchestrator",
+ "nexa-orchestrator-runtime",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "nexa-knowledge"
 version = "0.1.0"
 dependencies = [
