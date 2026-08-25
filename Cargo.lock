@@ -1223,6 +1223,7 @@ dependencies = [
  "nexa-nbp",
  "nexa-orchestrator",
  "nexa-orchestrator-runtime",
+ "nexa-speech",
  "nexa-tutor",
  "tokio",
  "tokio-util",

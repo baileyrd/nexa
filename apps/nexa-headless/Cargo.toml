@@ -12,6 +12,7 @@ nexa-knowledge = { path = "../../crates/nexa-knowledge" }
 nexa-knowledge-runtime = { path = "../../crates/nexa-knowledge-runtime" }
 nexa-orchestrator = { path = "../../crates/nexa-orchestrator" }
 nexa-orchestrator-runtime = { path = "../../crates/nexa-orchestrator-runtime" }
+nexa-speech = { path = "../../crates/nexa-speech" }
 nexa-tutor = { path = "../../crates/nexa-tutor" }
 tokio = { workspace = true }
 

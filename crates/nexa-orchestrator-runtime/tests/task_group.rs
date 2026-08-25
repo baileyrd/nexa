@@ -593,20 +593,44 @@ async fn added_empty_and_omitted_live_targets_fail_before_spawn_closure() {
 #[tokio::test]
 async fn selected_failure_joins_all_required_work_and_keeps_reported_work_owned() {
     let mut group = WorkflowTaskGroup::new(workflow());
+    let (fail_tx, fail_rx) = oneshot::channel();
     group
-        .spawn_for_target(CancellationTarget::Retrieval, |_| async {
+        .spawn_for_target(CancellationTarget::Retrieval, |_| async move {
+            fail_rx.await.unwrap();
             panic!("selected private payload")
         })
         .unwrap();
-    let (joined_tx, joined_rx) = oneshot::channel();
+
+    let (unclassified_started_tx, unclassified_started_rx) = oneshot::channel();
+    let (unclassified_dropped_tx, unclassified_dropped_rx) = oneshot::channel();
     group
         .spawn(move |token| async move {
+            let _drop = DropSignal(Some(unclassified_dropped_tx));
             token.cancelled().await;
-            joined_tx.send(()).unwrap();
+            unclassified_started_tx.send(()).unwrap();
+            std::future::pending::<()>().await;
         })
         .unwrap();
+
+    let (speech_started_tx, speech_started_rx) = oneshot::channel();
+    let (speech_dropped_tx, speech_dropped_rx) = oneshot::channel();
     group
-        .spawn_for_target(CancellationTarget::Behavior, |_| std::future::pending())
+        .spawn_for_target(CancellationTarget::Speech, move |token| async move {
+            let _drop = DropSignal(Some(speech_dropped_tx));
+            token.cancelled().await;
+            speech_started_tx.send(()).unwrap();
+            std::future::pending::<()>().await;
+        })
+        .unwrap();
+
+    let (reported_started_tx, reported_started_rx) = oneshot::channel();
+    let (reported_dropped_tx, mut reported_dropped_rx) = oneshot::channel();
+    group
+        .spawn_for_target(CancellationTarget::Behavior, move |_| async move {
+            let _drop = DropSignal(Some(reported_dropped_tx));
+            reported_started_tx.send(()).unwrap();
+            std::future::pending::<()>().await;
+        })
         .unwrap();
     let execution_plan = plan(
         workflow(),
@@ -616,21 +640,44 @@ async fn selected_failure_joins_all_required_work_and_keeps_reported_work_owned(
                 CancellationSemantics::Cancellable,
             ),
             (
+                CancellationTarget::Speech,
+                CancellationSemantics::Cancellable,
+            ),
+            (
                 CancellationTarget::Behavior,
                 CancellationSemantics::NonCancellable,
             ),
         ],
     );
-    let error = group
-        .execute_cancellation_plan(&execution_plan)
-        .await
-        .unwrap_err();
-    assert_eq!(joined_rx.await, Ok(()));
+
+    let mut execution = Box::pin(group.execute_cancellation_plan(&execution_plan));
+    let mut context = Context::from_waker(Waker::noop());
+    assert_eq!(execution.as_mut().poll(&mut context), Poll::Pending);
+    unclassified_started_rx.await.unwrap();
+    speech_started_rx.await.unwrap();
+    reported_started_rx.await.unwrap();
+    fail_tx.send(()).unwrap();
+
+    let error = execution.await.unwrap_err();
+    unclassified_dropped_rx.await.unwrap();
+    speech_dropped_rx.await.unwrap();
     assert_eq!(error, WorkflowTaskGroupError::TaskJoinFailure);
     assert!(!format!("{error:?} {error}").contains("selected private payload"));
     assert_eq!(group.target_task_count(CancellationTarget::Retrieval), 0);
+    assert_eq!(group.target_task_count(CancellationTarget::Speech), 0);
+    assert_eq!(group.unclassified_task_count(), 0);
     assert_eq!(group.target_task_count(CancellationTarget::Behavior), 1);
     assert_eq!(group.task_count(), 1);
+    assert_eq!(
+        group.execute_cancellation_plan(&execution_plan).await,
+        Err(WorkflowTaskGroupError::TaskJoinFailure)
+    );
+    assert_eq!(group.target_task_count(CancellationTarget::Behavior), 1);
+    assert_eq!(group.task_count(), 1);
+
+    assert!(reported_dropped_rx.try_recv().is_err());
+    drop(group);
+    reported_dropped_rx.await.unwrap();
 }
 
 #[tokio::test]

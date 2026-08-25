@@ -2,10 +2,15 @@
 #![forbid(unsafe_code)]
 
 mod retrieval_cancellation;
+mod speech_cancellation;
 mod tutor_cancellation;
 pub use retrieval_cancellation::{
     RetrievalCancellationComposition, RetrievalCancellationCompositionError,
     RetrievalCancellationEvidence,
+};
+pub use speech_cancellation::{
+    SpeechInteractionCancellationComposition, SpeechInteractionCancellationError,
+    SpeechInteractionCancellationEvidence,
 };
 pub use tutor_cancellation::{
     TutorGenerationCancellationComposition, TutorGenerationCancellationCompositionError,
@@ -50,10 +55,16 @@ impl std::fmt::Display for BehaviorCancellationError {
 
 impl std::error::Error for BehaviorCancellationError {}
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct AvatarCancellationEvidence {
-    requests: Vec<AvatarRequest>,
-    report: AvatarReport,
+    pub(crate) requests: Vec<AvatarRequest>,
+    pub(crate) report: AvatarReport,
+}
+
+impl std::fmt::Debug for AvatarCancellationEvidence {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("AvatarCancellationEvidence { redacted }")
+    }
 }
 
 impl AvatarCancellationEvidence {
@@ -80,10 +91,16 @@ impl AvatarCancellationEvidence {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct BehaviorCancellationEvidence {
     runtime: WorkflowCancellationExecution,
     avatar: AvatarCancellationEvidence,
+}
+
+impl std::fmt::Debug for BehaviorCancellationEvidence {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("BehaviorCancellationEvidence { redacted }")
+    }
 }
 
 impl BehaviorCancellationEvidence {
