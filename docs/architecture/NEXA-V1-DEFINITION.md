@@ -117,31 +117,20 @@ Before Release Ready:
 - third-party license/runtime/model/asset disposition;
 - release acceptance evidence.
 
-## R2 concrete first path
+## Owner-approved concrete v1 path
 
-ADR-0068 establishes the first walking-skeleton implementation baseline:
+The concrete release path is:
 
-- `apps/nexa-desktop`;
-- `eframe`/`egui` after a bounded suitability spike;
-- SQLite/`rusqlite` behind `nexa-storage`;
-- local `llama.cpp` server adapter;
-- Windows x86_64 acceptance environment;
-- Networking Fundamentals / TCP Connection Establishment course;
-- text-first learner interaction.
+- one shared React/TypeScript/Vite frontend candidate used identically by the same-machine browser and a Tauri 2 Windows desktop shell candidate;
+- one local Rust runtime exposing one versioned loopback HTTP/WebSocket business API; Tauri commands do not form a second business API;
+- SQLite through `nexa-storage` as authoritative state;
+- the separately installed graphical LM Studio server as the sole v1 reference model server, with no bundled LLM weights or inference runtime;
+- bundled CPU-capable speech and synchronized animated 2D embodiment as release requirements; Sherpa-ONNX and Rive remain evidence-gated candidates;
+- Networking Fundamentals / TCP Connection Establishment as the governed first content package.
 
-## Not R2 exit criteria
+## Explicitly deferred from v1
 
-The following do not block the R2 walking skeleton:
-
-- speech input/output;
-- animated avatar/behavior integration;
-- labs/tool execution;
-- dynamic multi-provider routing/fallback;
-- remote-provider credentials/disclosure;
-- dedicated vector database;
-- final signed installer/update mechanism.
-
-They are reconsidered at their owning later roadmap gates.
+LAN/remote access, hosted deployment, cloud sync, accounts and multi-user administration, labs/tools, broad model-server support, dynamic routing/fallback, dedicated vector infrastructure unless evidence proves it necessary, durable event brokerage, and 3D release integration do not block v1. Text remains an accessibility and recovery path, but does not replace required speech or animated 2D behavior.
 
 ## System verification requirements
 
@@ -173,33 +162,3 @@ Those are evidence inputs at specific maturity levels, not product acceptance.
 Nexa v1 is Release Ready only when a new user can use the supported build to complete the primary learner journey with real configured dependencies, exit, restart, resume correct durable state, and pass the release acceptance suite with no unresolved critical architecture, security, privacy, data-integrity, or system-quality finding.
 
 ---
-
-## 2026-08-26 owner-authority reconciliation (controlling addendum)
-
-ADR-0069 records the explicit owner decisions from Issue #114. This addendum supersedes earlier text in this document only where it conflicts. Earlier `eframe`/`egui`, `llama.cpp`, text-first release, desktop-only, speech/avatar deferral, owner-delegation, or general R2-Continue/readiness language is preserved as historical evidence and is not active selection authority.
-
-Status: Approved, reconciled 2026-08-26 by ADR-0069
-
-### Mission and learner journey
-
-One local learner launches either the Windows desktop client or a browser on the same Windows PC. Both render the identical shared interface. The learner completes Networking Fundamentals / TCP Connection Establishment using governed knowledge, the separately installed graphical LM Studio server, admitted tutor output, assessment/practice, atomic SQLite progress, and restart/resume. Required bundled CPU-capable speech enables conversation; an animated 2D tutor provides synchronized lip-sync and semantic states. System verification, representative user acceptance, and packaging gates close v1.
-
-### Required boundaries
-
-- One shared React/TypeScript/Vite candidate frontend, packaged for Windows by candidate Tauri 2, subject to evidence.
-- One versioned loopback HTTP/WebSocket Rust business API for both clients; no second Tauri command API.
-- Same-PC loopback access only; no LAN or Internet-remote client.
-- One learner with no login, account, multi-user administration, or cloud sync.
-- SQLite behind `crates/nexa-storage`, canonical IDs, migrations, atomic evidence/progress, backup/recovery, and restart/resume.
-- LM Studio as the sole validated v1 reference model server through a narrow provider-neutral adapter. Nexa bundles no LLM weights or inference runtime.
-- Bundled/managed speech runtime and models behind provider-neutral ports; Sherpa-ONNX is only a candidate.
-- Animated 2D embodiment through semantic behavior ports; Rive is only a candidate and model output never selects primitives.
-- Local Rust runtime plus cloud-ready ports/contracts; no working hosted deployment.
-
-### Explicit deferrals
-
-Labs/tool execution, LAN/remote access, hosted deployment, cloud sync, broad/multiple model-server compatibility, dynamic routing/fallback, and 3D release integration are post-v1. Text remains an accessible equivalent, but speech and 2D avatar are required release capabilities.
-
-### Acceptance boundary
-
-Acceptance must distinguish same-machine browser evidence from hosted-web/remote evidence. Scripted providers, in-memory stores, technical research, or spike demonstrations cannot substitute for production adapter and full E2E evidence. Candidate spikes establish only suitability; failed candidates require authority revision.

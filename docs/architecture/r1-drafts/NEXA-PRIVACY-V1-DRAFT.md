@@ -201,7 +201,7 @@ Requirements:
 - retained answer content must be minimized according to assessment replay/review requirements;
 - mastery evidence should remain privacy-minimal where possible.
 
-## 11. Speech privacy — conditional v1
+## 11. Required v1 speech privacy
 
 If speech is promoted to v1:
 
@@ -267,7 +267,7 @@ Before release verify:
 - reset/deletion removes the classes promised by v1;
 - restart does not unexpectedly persist transient conversation/model data;
 - exported learner data excludes secrets and unrelated knowledge content;
-- conditional speech/lab paths satisfy their additional privacy tests if included.
+- required speech satisfies its audio/transcript privacy tests; labs remain excluded from v1.
 
 ## 16. Decisions required for approval
 

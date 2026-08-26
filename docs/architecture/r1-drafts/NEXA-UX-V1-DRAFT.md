@@ -181,7 +181,7 @@ The application should provide a safe way to identify:
 
 Do not present raw prompt/model/learner content as default diagnostic details.
 
-## 16. Conditional speech
+## 16. Required speech
 
 If speech is promoted to v1:
 
@@ -192,7 +192,7 @@ If speech is promoted to v1:
 - TTS/audio can be stopped/interrupted;
 - essential content is available in text.
 
-## 17. Conditional avatar
+## 17. Required animated 2D embodiment
 
 If avatar embodiment is promoted:
 

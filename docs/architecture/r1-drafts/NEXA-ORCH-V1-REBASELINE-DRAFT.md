@@ -128,7 +128,7 @@ R1 approval must define timeout categories for at least:
 - durable storage operations;
 - retrieval if asynchronous/external;
 - model invocation;
-- optional speech/tool dependencies if included.
+- required speech dependencies and their cancellation ownership; tool dependencies remain absent.
 
 Timeout diagnostics must be content-safe.
 
@@ -251,9 +251,9 @@ At startup:
 - reconstruct session capability from durable learner/course/lesson state rather than prior runtime task state;
 - offer/resume the exact supported learner activity according to the UX/lesson rules.
 
-## 18. Conditional speech/avatar/lab composition
+## 18. Required speech/avatar composition and deferred labs
 
-If omitted from v1, their absence must not prevent the text-first primary journey.
+Labs/tools remain omitted from v1. Speech and synchronized semantic 2D behavior are required parts of the primary journey, while accessible text and graceful degradation remain available.
 
 If included:
 

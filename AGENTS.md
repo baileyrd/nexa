@@ -28,6 +28,14 @@ One local learner uses identical Windows desktop and same-machine browser client
 
 Nexa bundles no LLM weights or inference runtime. LAN/remote access, hosted deployment, cloud sync, accounts/multi-user administration, labs/tools, broad model-server support, dynamic routing/fallback, dedicated vector infrastructure unless proven necessary, durable event brokerage, and 3D release integration are deferred.
 
+## ChatGPT–Codex coordination
+
+When development uses the human-coordinated or automated ChatGPT/Codex workflow, follow [`CHATGPT_WORKFLOW.md`](CHATGPT_WORKFLOW.md).
+
+ChatGPT/Chief Systems Architect selects work from current repository authority and the release path, reviews exact PR heads, requests corrections on the existing PR branch, and merges only the exact reviewed green head.
+
+Codex implements and validates bounded tasks; it does not independently redefine architecture, product scope, or authority status.
+
 ## Repository map and boundaries
 
 - `crates/nexa-domain`, `nexa-events`, `nexa-nbp`: dependency-light shared contract kernel.
@@ -47,11 +55,9 @@ Nexa bundles no LLM weights or inference runtime. LAN/remote access, hosted depl
 
 A `.gitkeep`-only boundary is planned, not implemented. Domain-facing crates remain independent of UI, OS, async runtime, databases, networking, renderers, and concrete providers. Tutor/model output is untrusted until admission and never selects renderer primitives or host authority.
 
-## Coordination, validation, and review
+## Required validation
 
-Follow [`CHATGPT_WORKFLOW.md`](CHATGPT_WORKFLOW.md). Codex implements bounded dispatched tasks and does not redefine scope or authority. Preserve exact reviewed heads.
-
-Documentation-only governance changes require Markdown-link validation, active-authority stale-claim auditing, Markdown-only scope checking, repository documentation checks, and `git diff --check`. Ordinary Rust changes additionally run:
+Run from the repository root for ordinary Rust implementation PRs:
 
 ```text
 cargo fmt --all --check
@@ -60,6 +66,22 @@ cargo check -p nexa-3d --no-default-features
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ./scripts/check-contract-boundaries.sh
+git diff --check
 ```
 
-Keep changes bounded. Reconcile architecture/specification/ADR/registry/status together. Review wire, dependency, evidence, security/privacy, and accessibility impacts proportionately. Do not claim `System Verified`, `User Accepted`, or `Release Ready` from unit, contract, headless, research, or spike evidence.
+As R2 activates Windows/UI/storage/model adapters, add focused concrete-adapter and Windows validation required by the owning R1 specifications. Passing the existing Linux/headless suite does not prove higher maturity.
+
+## Change and review rules
+
+- Make bounded, independently reviewable changes; do not bundle unrelated cleanup or speculative architecture.
+- Prefer a vertical maturity advance over another horizontal abstraction when both are possible.
+- Contract/architecture changes require explicit authority/impact notes; consequential cross-cutting decisions require an ADR; authority/status changes require a registry update.
+- Review wire changes for stable names, validation, compatibility, replay, and deterministic fixtures.
+- Review dependency changes against the inward DAG and renderer/provider/storage boundaries.
+- Review evidence/state changes for ownership, immutability/idempotency, policy versions, concurrency, and atomic failure behavior.
+- A PR is done only when implementation, tests, governing docs, status/registry/traceability, and applicable ADRs agree; all required checks pass on the exact reviewed head; the diff is focused; and deferrals/conflicts are explicit.
+- User-facing work requires proportionate accessibility checks.
+- Security/privacy review must match the actual changed trust/data boundary.
+- Do not claim `System Verified`, `User Accepted`, or `Release Ready` from unit/contract/headless evidence.
+
+---

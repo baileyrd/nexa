@@ -72,7 +72,7 @@ Measure:
 - optional GPU usage only if v1 embodiment/UI requires it;
 - network bytes per representative remote tutor interaction where measurable and useful for privacy/cost awareness.
 
-Do not set GPU budgets for a text-first v1 unless GPU use is actually part of the required release path.
+Record CPU and any observed GPU use for both identical clients, required bundled speech, and required animated 2D rendering. The reference path must remain usable on the CPU-only Windows reference PC; candidate evidence, not a blanket no-GPU rule, governs acceleration and fallback decisions.
 
 ## 7. Persistence performance
 

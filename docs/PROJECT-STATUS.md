@@ -12,11 +12,9 @@ This document is the concise current-state authority. Git history, accepted ADRs
 
 Issue #114 supplied the explicit owner review previously missing. [ADR-0069](adr/0069-owner-approved-v1-delivery-baseline.md) records those decisions and supersedes ADR-0068 only where they conflict. General product implementation remains paused. This documentation correction neither begins G1 nor changes implementation maturity.
 
-Existing contract, deterministic, runtime, cancellation, speech, and tool evidence remains at its demonstrated maturity. No shared UI/loopback production boundary, SQLite production path, LM Studio adapter, bundled speech adapter, synchronized 2D release renderer, complete system, user acceptance, or release package has been proven.
-
 ## Governing route
 
-Read [`../CHATGPT_WORKFLOW.md`](../CHATGPT_WORKFLOW.md), [`../AGENTS.md`](../AGENTS.md), this file, [`BASELINE.md`](BASELINE.md), [`SPECIFICATION-REGISTRY.md`](SPECIFICATION-REGISTRY.md), [NEXA-ARCH-002](architecture/NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md), [NEXA-R1](architecture/NEXA-R1-IMPLEMENTATION-BASELINE.md), ADR-0069, and the applicable supplement and [roadmap](architecture/NEXA-COMPLETION-ROADMAP.md). ADR-0068 is preserved historical evidence and applies only where ADR-0069 does not conflict.
+Read [`../CHATGPT_WORKFLOW.md`](../CHATGPT_WORKFLOW.md), [`../AGENTS.md`](../AGENTS.md), this file, [`BASELINE.md`](BASELINE.md), [`SPECIFICATION-REGISTRY.md`](SPECIFICATION-REGISTRY.md), [NEXA-ARCH-002](architecture/NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md), [NEXA-R1](architecture/NEXA-R1-IMPLEMENTATION-BASELINE.md), ADR-0069, applicable supplements, and the [completion roadmap](architecture/NEXA-COMPLETION-ROADMAP.md). ADR-0068 is preserved historical evidence and applies only where ADR-0069 does not conflict.
 
 ## Owner-approved v1 outcome
 
@@ -34,12 +32,10 @@ After G0 merges, the first and only selectable follow-on is a separately dispatc
 
 The Chief Systems Architect call is **Tactical Pause** outside the next eligible gate. The superseded open-ended Phase 5 sequence must not resume.
 
-## Capability maturity
+## Capability maturity and preserved evidence
 
-Use:
+Use `Concept -> Architecture Defined -> Specification Approved -> Contract Implemented -> Runtime Integrated -> Concrete Adapter Implemented -> System Verified -> User Accepted -> Release Ready`.
 
-`Concept -> Architecture Defined -> Specification Approved -> Contract Implemented -> Runtime Integrated -> Concrete Adapter Implemented -> System Verified -> User Accepted -> Release Ready`
+Existing shared domain/event/NBP contracts, deterministic learning/tutor policies, orchestrator runtime/cancellation work, speech cancellation foundations, avatar semantics, 3D foundations, labs/tool contracts, and headless integration evidence retain only their demonstrated maturity. Scripted providers and in-memory persistence remain test tools. No shared release UI, versioned loopback production boundary, SQLite production path, LM Studio adapter, bundled speech adapter, synchronized 2D release renderer, complete system, user acceptance, or release package has been proven.
 
-ADR-0069 and this reconciliation establish selected architecture/specification only. Existing slices retain their evidenced Contract Implemented or bounded Runtime Integrated state. Do not infer Concrete Adapter Implemented, System Verified, User Accepted, or Release Ready.
-
-Every later increment identifies its blocker, governing authority, E2E step, maturity transition, and required evidence.
+ADR-0069 and this reconciliation establish selected architecture/specification only. Every later increment identifies its blocker, governing authority, E2E step, maturity transition, and required evidence.

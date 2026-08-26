@@ -1,30 +1,58 @@
 # Nexa Implementation Roadmap
 
-Status: Active delivery control; reconciled 2026-08-26
+Status date: 2026-08-26
 
-The former Phase roadmap and pre-ADR-0069 R2 route remain in Git history. This document selects work only through the finite gates below.
+The pre-tactical-pause Phase 0–6 roadmap is preserved in Git history and phase traceability, but it no longer selects new implementation work.
+
+The current delivery authority is:
+
+- [`NEXA-COMPLETION-ROADMAP.md`](NEXA-COMPLETION-ROADMAP.md)
+- [`NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md`](NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md)
+- [`NEXA-R1-IMPLEMENTATION-BASELINE.md`](NEXA-R1-IMPLEMENTATION-BASELINE.md)
+- [`../adr/0069-owner-approved-v1-delivery-baseline.md`](../adr/0069-owner-approved-v1-delivery-baseline.md)
+- [`../adr/0068-v1-r2-walking-skeleton-baseline.md`](../adr/0068-v1-r2-walking-skeleton-baseline.md) (historical/non-conflicting scope)
+
+## Why the roadmap changed
+
+The tactical-pause assessment found that qualified deterministic/headless contract gates had become program-progress signals while parent architecture/specification maturity and vertical product integration lagged. The new roadmap is organized around capability maturity and a finite release outcome.
+
+Historical Phase 1–5 work remains valid evidence and reusable implementation. It is not discarded; it is reclassified according to what it actually proves.
 
 ## Finite dependency-ordered route
 
-| Gate | Increment | Exit evidence | Failure consequence |
-|---|---|---|---|
-| G0 | Authority reconciliation (this increment) | ADR-0069 and all active parents/supplements/status/deferrals agree; links, stale-claim scan, scope check pass | Tactical Pause; correct authority only |
-| G1 | Shared UI/loopback suitability spike | Same compiled React/TS/Vite candidate frontend in browser and Tauri 2 candidate shell; versioned HTTP request + WebSocket event; loopback bind/origin/auth; cancellation/reconnect/errors; keyboard/accessibility; Windows build; parity; startup/CPU/memory/package measurements | Reject disproved candidate/boundary; update ADR/architecture through owner route before production work |
-| G2 | Bundled speech suitability spike | Sherpa-ONNX measurements for recognition accuracy, latency, synthesis quality, memory, package size, interruption/cancellation, lip-sync on CPU-only Windows reference PC | Reject Sherpa-ONNX; evaluate `whisper.cpp` for recognition only and govern TTS separately |
-| G3 | Animated 2D suitability spike | Rive proves identical browser/desktop idle/listening/thinking/speaking/error states, interruption, lip-sync, accessible fallback, acceptable CPU | Reject Rive and govern a replacement before integration |
-| G4 | Persistent text lesson | Production shared boundary, SQLite migrations/atomicity/recovery, governed TCP lesson, assessment, restart/resume in both clients | Fix owning UI/data/content authority; do not advance |
-| G5 | LM Studio integration | Narrow adapter against documented separately installed reference server; admission, cancellation/error, compatibility and E2E text evidence | Reconcile provider adapter/compatibility authority |
-| G6 | Speech integration | Bundled selected speech adapter/device lifecycle, accessible text equivalent, interruption/lip-sync, package evidence | Return to speech selection/integration gate |
-| G7 | Animated tutor integration | Selected 2D runtime consumes admitted semantic states with synchronized speech and graceful fallback in both clients | Return to avatar selection/integration gate |
-| G8 | Complete-system verification | Full E2E/failure/security/privacy/performance/accessibility evidence on Windows reference PC and both clients | Correct owning gate; no maturity overstatement |
-| G9 | Packaging and user acceptance | Clean install/update/uninstall, package contents/licensing, representative acceptance; exact release head green | No Release Ready claim |
+| Gate | Outcome | Current disposition |
+|---|---|---|
+| G0 | Reconcile Issue #114 authority without changing implementation maturity | In progress; must merge before product work |
+| G1 | Prove shared React/TypeScript/Vite + Tauri 2 candidate and versioned loopback HTTP/WebSocket suitability | First separately dispatchable follow-on only |
+| G2 | Prove bundled CPU speech candidate, including cancellation, devices, packaging, latency, and licensing | Evidence-gated after G1 |
+| G3 | Prove synchronized Rive 2D candidate in both clients, including lip-sync, semantic states, interruption, accessibility, and CPU use | Evidence-gated after G2 |
+| G4 | Integrate the shared clients, local Rust runtime, SQLite, governed TCP lesson, and atomic restart/resume | Pending prior gates |
+| G5 | Integrate the narrow LM Studio adapter and admitted tutor response | Pending G4 |
+| G6 | Integrate required bundled speech | Pending G2 and G5 |
+| G7 | Integrate required synchronized animated 2D tutor | Pending G3 and G6 |
+| G8 | System verification and Windows packaging/recovery/security/privacy/accessibility/performance evidence | Pending integrated route |
+| G9 | Owner user acceptance and release decision | Pending G8 |
 
-## Work selection
+Candidate spike success does not silently select production architecture; failure removes that candidate and requires owner-governed reselection plus an authority update. General product implementation remains paused outside the next eligible, separately dispatched gate.
 
-G1 is the precise first permitted follow-on and must be separately dispatched. Spike branches are disposable evidence, independently reviewable, and cannot silently become production architecture. No later gate starts merely because research looks favorable. A recorded authority update accepts or rejects each candidate.
+Every increment states its finite-route blocker, governing authority, concrete E2E step, maturity before/after, and required evidence. Deferred scope is LAN/remote access, hosted deployment, cloud sync, accounts/multi-user administration, labs/tools, broad providers, dynamic routing/fallback, dedicated vector infrastructure unless proven necessary, durable event brokerage, and 3D release integration.
 
-The final outcome is completion of the governed TCP lesson from either identical client using LM Studio, durable restart/resume, bundled speech, synchronized 2D tutor behavior, and system/user/package evidence. Same-machine browser evidence is never labeled hosted-web or remote evidence.
+## Cross-stage quality gates
 
-## Deferrals and control
+Every increment still requires proportionate:
 
-Labs/tools, LAN/Internet-remote access, hosted deployment, cloud sync, broad providers, dynamic routing/fallback, and 3D release integration remain post-v1. Existing Phase 1–5 evidence is retained, not repeated as substitute release proof. The Chief Systems Architect maintains Tactical Pause outside the next eligible gate and records Continue, Redirect, or Tactical Pause at every gate.
+- formatting/build/lint/test checks;
+- contract/dependency-boundary verification;
+- architecture/specification traceability;
+- security/privacy review for the changed boundary;
+- deterministic evidence where the behavior is deterministic;
+- concrete-adapter/system evidence when claiming higher maturity;
+- documentation/status updates that do not overstate capability maturity.
+
+## Architecture rebaseline checkpoints
+
+At R2 exit, before R3 broadening, and at each later major stage boundary, the Chief Systems Architect must independently evaluate the whole program and record Continue, Redirect, or Tactical Pause.
+
+See [`../governance/ARCHITECTURE-REBASELINE-GATES.md`](../governance/ARCHITECTURE-REBASELINE-GATES.md).
+
+---

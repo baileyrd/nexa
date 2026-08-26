@@ -222,7 +222,7 @@ Performance claims without reproducible measurement do not pass the gate.
 
 The released learner UI must be reviewed against the UX/accessibility requirements selected for the supported platform, including at minimum keyboard navigation where applicable, readable focus/status/error states, text scaling/layout resilience where practical, and alternatives for information not conveyed solely by animation/audio.
 
-Conditional speech/avatar features must not make core instructional content inaccessible to text-only users unless the v1 product definition explicitly says otherwise and provides equivalent access.
+Required speech and animated 2D behavior must preserve equivalent access to core instructional content through text, captions/transcripts, reduced-motion/static presentation, and keyboard controls.
 
 ## 11. User acceptance
 
