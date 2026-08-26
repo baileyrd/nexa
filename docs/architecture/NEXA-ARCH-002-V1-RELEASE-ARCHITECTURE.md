@@ -58,7 +58,7 @@ React/TypeScript/Vite, Tauri 2, Sherpa-ONNX, and Rive are evidence-gated candida
 
 ## 5. Application boundary
 
-`apps/nexa-desktop` is the first learner-facing composition root.
+The identical shared frontend is the learner-facing boundary in both the same-machine browser and the evidence-gated Tauri 2 Windows shell. Its production composition location is selected only after G1 evidence and an authority update.
 
 It owns:
 
@@ -244,7 +244,7 @@ The outcome is explicitly Continue, Redirect, or Tactical Pause.
 ## 19. Relationship to existing authority
 
 - `NEXA-ARCH-001` is preserved as reconstructed design provenance and long-term context but is superseded by this document for v1 implementation selection.
-- Accepted ADR-0001 through ADR-0067 remain in force unless a direct conflict exists; in a v1 priority conflict, this architecture and later accepted ADRs control the R2 path while earlier capabilities remain retained/post-R2.
+- Accepted ADR-0001 through ADR-0067 remain in force unless a direct conflict exists; ADR-0069 controls conflicts with ADR-0068, while earlier capabilities remain retained at their factual maturity or deferred as recorded.
 - Baseline subsystem specifications remain applicable within their owned domains, supplemented by the approved R1 v1 baseline described in `NEXA-R1-IMPLEMENTATION-BASELINE.md`.
 
 ## 20. Approval basis

@@ -69,7 +69,7 @@ Measure:
 - process resident memory;
 - CPU during idle and active interaction;
 - storage footprint/growth;
-- optional GPU usage only if v1 embodiment/UI requires it;
+- observed GPU usage, if any, for the required UI/embodiment path and its CPU fallback;
 - network bytes per representative remote tutor interaction where measurable and useful for privacy/cost awareness.
 
 Record CPU and any observed GPU use for both identical clients, required bundled speech, and required animated 2D rendering. The reference path must remain usable on the CPU-only Windows reference PC; candidate evidence, not a blanket no-GPU rule, governs acceleration and fallback decisions.

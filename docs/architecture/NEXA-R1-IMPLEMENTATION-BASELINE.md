@@ -31,17 +31,17 @@ The following documents are approved as R2 governing requirements where they app
 
 They supplement, rather than erase, the original subsystem specifications and accepted ADRs. If an R1 supplement conflicts with an older Baseline Draft on an R2 behavior, `NEXA-ARCH-002`, this baseline, and any later accepted ADR control the v1/R2 behavior. A direct conflict with an accepted ADR requires explicit resolution rather than silent reinterpretation.
 
-## 3. R1 decisions resolved for R2
+## 3. R1 decisions resolved for v1
 
 ### 3.1 Supported process/concurrency model
 
-R2 supports one learner and one Nexa desktop process operating on one local data store at a time.
+v1 supports one learner and one authoritative local Rust runtime operating on one local data store at a time; both clients connect to that runtime.
 
 The storage adapter must still use explicit optimistic version/concurrency checks on mutable aggregates so stale state cannot silently overwrite accepted state. Multi-process simultaneous writers are unsupported in R2 and must fail safely through store locking/open policy rather than being treated as supported concurrency.
 
 ### 3.2 Persistence technology
 
-SQLite through `rusqlite` in `crates/nexa-storage` is approved by ADR-0068.
+SQLite through `rusqlite` in `crates/nexa-storage` is approved by ADR-0069.
 
 - Explicit transactions implement the learning-core atomic boundary.
 - Canonical domain IDs remain authoritative.
@@ -77,7 +77,7 @@ Remote disclosure requirements remain approved requirements for future remote-pr
 
 R2 uses a local model server and therefore does not require provider credentials.
 
-- `llama-server` binds to loopback by default.
+- the Nexa business API binds to loopback; LM Studio remains a separately configured local trust boundary.
 - Endpoint/model paths are trusted configuration.
 - The application runs as an ordinary user after installation.
 - Normal runtime does not require administrator/root privilege.
@@ -199,8 +199,6 @@ The following remain valid future requirements but do not block v1:
 - final remote-provider security/privacy design;
 - release model selection;
 - final installer/signing/update mechanism;
-- speech input/output;
-- animated avatar integration;
 - tool/lab execution and sandbox enforcement;
 - durable asynchronous event/outbox architecture;
 - multi-process/multi-user concurrency;
@@ -214,7 +212,7 @@ The following remain valid future requirements but do not block v1:
 R1 is sufficiently mature for R2 once:
 
 1. this baseline and `NEXA-ARCH-002` are registered as current v1 authorities;
-2. ADR-0068 is registered;
+2. ADR-0069 is registered and ADR-0068 is preserved only for non-conflicting scope;
 3. project status/roadmap terminology is reconciled so older qualified phase closures are not mistaken for product maturity;
 4. blocking deferrals are dispositioned consistently with this baseline;
 5. PR CI passes on the exact final documentation head.

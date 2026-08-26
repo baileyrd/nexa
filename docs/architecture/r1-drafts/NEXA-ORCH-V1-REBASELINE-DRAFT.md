@@ -255,11 +255,7 @@ At startup:
 
 Labs/tools remain omitted from v1. Speech and synchronized semantic 2D behavior are required parts of the primary journey, while accessible text and graceful degradation remain available.
 
-If included:
-
-- they attach through their existing semantic/control boundaries;
-- the orchestrator owns interaction sequencing/cancellation but not provider/renderer/tool semantics;
-- each requires concrete adapter and system-level acceptance, not only control-contract tests.
+Required speech and animated 2D behavior attach through their existing semantic/control boundaries. The orchestrator owns interaction sequencing/cancellation but not provider or renderer semantics. Each requires concrete-adapter and system-level acceptance, not only control-contract tests. Labs/tools remain absent.
 
 ## 19. Verification requirements
 
