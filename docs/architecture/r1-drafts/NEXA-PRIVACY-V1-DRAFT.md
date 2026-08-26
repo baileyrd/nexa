@@ -288,3 +288,7 @@ Before release verify:
 - federated/enterprise privacy administration;
 - plugin data-sharing policy;
 - server-side multi-tenant retention controls.
+
+## 2026-08-26 ADR-0069 reconciliation
+
+Speech is required and locally bundled/managed, so audio/transcript disclosure, retention, deletion, diagnostics, and consent/indicator behavior must be specified and tested rather than treated as conditional. The v1 client/API is loopback-only and LM Studio is local; remote-provider and cloud-sync provisions remain future safeguards, not v1 flows.

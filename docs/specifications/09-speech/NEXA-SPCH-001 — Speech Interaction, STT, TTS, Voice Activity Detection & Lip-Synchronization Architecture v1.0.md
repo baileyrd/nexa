@@ -2876,3 +2876,9 @@ avatar testing
 ```
 
 That is the next major milestone because it moves us from **Nexa having a voice** to **Nexa becoming an actually animated character on screen**.
+
+---
+
+## 2026-08-26 ADR-0069 v1 reconciliation
+
+Speech input and output are required v1 capabilities. Nexa bundles and manages the selected speech models/runtime behind this provider-neutral boundary, and the result must operate on the CPU-only Windows reference PC. Sherpa-ONNX is an evidence-gated candidate, not an accepted adapter. Its bounded spike measures recognition accuracy, latency, synthesis quality, memory, package size, interruption/cancellation, and lip-sync timing. If disproved, `whisper.cpp` proceeds only as the recognition fallback candidate and TTS requires a separately governed selection. Existing contracts/cancellation evidence is preserved but does not prove a concrete adapter or system maturity.

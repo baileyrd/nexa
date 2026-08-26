@@ -236,3 +236,7 @@ Blocking confusion, inaccessible primary actions, false save/completion state, o
 - reset/delete/export controls included in v1;
 - speech/avatar/labs v1 disposition;
 - concrete accessibility standard/platform mapping.
+
+## 2026-08-26 ADR-0069 reconciliation
+
+For v1, speech and animated 2D embodiment are required rather than conditional; text remains an accessible equivalent. The learner surface is one identical shared interface in Windows desktop and same-machine browser clients. React/TypeScript/Vite with Tauri 2 remains evidence-gated. Both clients use one versioned loopback HTTP/WebSocket business API. Setup exposes the separately installed LM Studio reference server and bundled speech readiness without requiring internal architecture knowledge. Labs/tools and remote access remain deferred.

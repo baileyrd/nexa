@@ -288,3 +288,7 @@ Unless explicitly promoted, v1 does not require:
 - prompt-injection acceptance policy;
 - whether any model/conversation content is persisted;
 - exact retry policy delegated to orchestration.
+
+## 2026-08-26 ADR-0069 reconciliation
+
+LM Studio is the sole validated v1 reference server through a narrow adapter; broad compatibility is not promised and no hidden fallback is allowed. Nexa bundles neither LLM weights nor inference runtime. Provider-neutral ports remain. Admitted tutor semantics may drive owned behavior states but model output never selects renderer primitives.

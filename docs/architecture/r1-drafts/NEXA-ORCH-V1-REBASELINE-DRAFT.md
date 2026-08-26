@@ -302,3 +302,7 @@ Before the orchestrator parent can be approved for v1, R1 must decide:
 - authoritative event/outbox scope;
 - speech/avatar/lab v1 disposition;
 - system-level test/acceptance contract.
+
+## 2026-08-26 ADR-0069 reconciliation
+
+The v1 workflow composes required speech and semantic 2D behavior, not optional branches, while preserving text accessibility and graceful degradation. It serves both identical clients through one versioned loopback API, owns cancellation/reconnect coordination, persists atomic learning state, and invokes the narrow LM Studio adapter. Labs/tools remain absent.

@@ -131,3 +131,29 @@ As R2 activates Windows/UI/storage/model adapters, add focused concrete-adapter 
 - User-facing work requires proportionate accessibility checks.
 - Security/privacy review must match the actual changed trust/data boundary.
 - Do not claim `System Verified`, `User Accepted`, or `Release Ready` from unit/contract/headless evidence.
+
+---
+
+## 2026-08-26 owner-authority reconciliation (controlling addendum)
+
+ADR-0069 records the explicit owner decisions from Issue #114. This addendum supersedes earlier text in this document only where it conflicts. Earlier `eframe`/`egui`, `llama.cpp`, text-first release, desktop-only, speech/avatar deferral, owner-delegation, or general R2-Continue/readiness language is preserved as historical evidence and is not active selection authority.
+
+## Authority and preservation
+
+Begin with [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md), then follow [`docs/BASELINE.md`](docs/BASELINE.md) and [`docs/SPECIFICATION-REGISTRY.md`](docs/SPECIFICATION-REGISTRY.md). The current v1 parents are NEXA-ARCH-002, NEXA-R1, ADR-0069, and the implementation roadmap. ADR-0068 is historical and applies only where ADR-0069 does not conflict. Reconstructed documents are provenance, not v1 selection authority. Report conflicts; never silently reconcile them.
+
+### Program integrity and current gate
+
+Use `Concept -> Architecture Defined -> Specification Approved -> Contract Implemented -> Runtime Integrated -> Concrete Adapter Implemented -> System Verified -> User Accepted -> Release Ready`. Existing contract/headless evidence retains its factual maturity. Do not infer system, user, or release maturity.
+
+The owner-approved v1 route is documented in ADR-0069. Product implementation remains under **Tactical Pause** except for separately dispatched, bounded evidence spikes. The first permitted follow-on increment is the shared React/TypeScript/Vite + Tauri 2 and versioned loopback HTTP/WebSocket suitability spike. These technologies, Sherpa-ONNX, and Rive remain candidates until their gates pass; a spike must not silently become production architecture.
+
+The release path requires identical Windows desktop and same-machine browser clients, one local learner, SQLite durability, the governed TCP lesson, LM Studio, bundled speech, and a synchronized animated 2D tutor. LAN/remote access, hosted deployment, cloud sync, labs/tools, broad providers, dynamic routing/fallback, and 3D release integration are deferred.
+
+### Boundaries
+
+Domain-facing crates remain independent of UI, OS, async runtime, databases, networking, renderers, and concrete providers. `crates/nexa-storage` owns SQLite; provider adapters remain narrow; one shared frontend uses one versioned loopback business API and Tauri commands never form another. Tutor output is untrusted until admission and never selects renderer primitives. See the registry for the complete repository map and subsystem route.
+
+### Validation and review
+
+For documentation-only governance changes, validate Markdown links, scan active authority for stale conflicts, run `git diff --check`, and run the repository documentation checks. Ordinary Rust PRs additionally run the complete Cargo and contract-boundary suite recorded in project status. Keep increments bounded; reconcile architecture/specification/ADR/registry/status together; preserve historical evidence; and state blocker, governing authority, E2E step, maturity transition, and required evidence for every implementation increment.

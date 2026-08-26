@@ -106,3 +106,32 @@ A new deferral is accepted only when it records:
 - explicit disposition/review owner.
 
 Repeated deferrals in the same horizontal area trigger the whole-system architecture rebaseline gate.
+
+---
+
+## 2026-08-26 owner-authority reconciliation (controlling addendum)
+
+ADR-0069 records the explicit owner decisions from Issue #114. This addendum supersedes earlier text in this document only where it conflicts. Earlier `eframe`/`egui`, `llama.cpp`, text-first release, desktop-only, speech/avatar deferral, owner-delegation, or general R2-Continue/readiness language is preserved as historical evidence and is not active selection authority.
+
+Status: Active Control; reconciled 2026-08-26
+
+### Current disposition
+
+| Capability | v1 disposition | Revisit/evidence |
+|---|---|---|
+| Shared UI and loopback API | Required; React/TS/Vite and Tauri 2 are candidates | First bounded spike |
+| SQLite persistence | Required behind `crates/nexa-storage` | migrations, atomicity, backup/recovery, restart/resume |
+| Model server | LM Studio sole validated reference; separately installed | adapter/system evidence; no bundled weights/runtime |
+| Speech input/output | Required and bundled/managed; Sherpa-ONNX candidate | bounded CPU-only Windows spike, then integration |
+| Animated 2D tutor | Required; Rive candidate | bounded parity/lip-sync/accessibility/CPU spike, then integration |
+| Labs/tool execution | Post-v1 | new owner/architecture decision |
+| LAN/Internet-remote clients | Post-v1 | explicit network/security/privacy architecture |
+| Hosted deployment | Post-v1; cloud-ready ports only | deployment authority and evidence |
+| Login/accounts/multi-user/cloud sync | Post-v1 | product/data/privacy authority |
+| Broad providers and dynamic routing/fallback | Post-v1 | provider policy and concrete evidence |
+| 3D release integration | Post-v1; foundations retained | release promotion decision |
+| Dedicated vectors/durable broker | Deferred unless a proven v1 blocker | owning ADR/specification |
+
+### Control rule
+
+A deferral cannot cross a required gate silently. Candidate failure triggers the authority consequence in ADR-0069 and the roadmap, not automatic fallback or scope expansion. Historical Phase 1–5 foundations remain evidence but do not promote deferred capabilities or prove release maturity.

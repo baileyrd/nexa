@@ -275,3 +275,7 @@ A release is blocked when:
 ## 15. Post-v1 testing scope
 
 Testing for optional/post-v1 capabilities should be added when those capabilities are promoted. Their foundation tests may remain green without making them part of the v1 release acceptance surface.
+
+## 2026-08-26 ADR-0069 reconciliation
+
+The release E2E must run through both identical clients on the same Windows PC, LM Studio, SQLite restart/resume, bundled speech, and synchronized semantic 2D behavior. It distinguishes browser-on-loopback evidence from hosted/remote evidence. Speech/avatar accessibility, interruption, timing, package/resource, and graceful-failure checks are required. Candidate spike evidence is suitability evidence only and cannot establish Concrete Adapter Implemented, System Verified, User Accepted, or Release Ready.

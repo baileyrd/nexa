@@ -310,3 +310,7 @@ Unless promoted by v1 evidence:
 - data warehouse/analytics pipeline;
 - plugin persistence API;
 - external vector database.
+
+## 2026-08-26 ADR-0069 reconciliation
+
+SQLite behind `crates/nexa-storage` is the selected v1 store. One local learner, canonical IDs, migrations, atomic progress/evidence, backup/recovery, and restart/resume remain mandatory. No login, accounts, multi-user administration, or cloud sync is in v1. Both identical clients reach the same authoritative store only through the local runtime API.

@@ -243,3 +243,7 @@ On a clean supported machine, a tester must be able to:
 - plugin distribution;
 - broad multi-OS certification beyond the first supported target;
 - cloud content synchronization.
+
+## 2026-08-26 ADR-0069 reconciliation
+
+The v1 package supplies the Windows Tauri shell, identical compiled shared frontend, local Rust runtime, governed content, migrations, and selected bundled speech runtime/models. It excludes LLM weights and inference runtime and integrates with separately installed graphical LM Studio. A same-machine browser uses the same assets/API; hosted deployment and remote/LAN access remain post-v1.

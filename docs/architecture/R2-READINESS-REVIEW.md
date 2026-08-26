@@ -101,3 +101,15 @@ Return to Redirect/Tactical Pause if:
 ## Final R2 start condition
 
 Once PR #110 is green on its exact final head, reviewed, and merged unchanged, the architecture gate outcome becomes **Continue — begin R2**.
+
+---
+
+## 2026-08-26 owner-authority reconciliation (controlling addendum)
+
+ADR-0069 records the explicit owner decisions from Issue #114. This addendum supersedes earlier text in this document only where it conflicts. Earlier `eframe`/`egui`, `llama.cpp`, text-first release, desktop-only, speech/avatar deferral, owner-delegation, or general R2-Continue/readiness language is preserved as historical evidence and is not active selection authority.
+
+Status: Superseded readiness conclusion; reconciled 2026-08-26
+
+The earlier review incorrectly cited owner-delegated convergence and concluded general R2 Continue. No such delegation occurred. ADR-0069 records the later explicit owner decisions and supersedes the conflicting desktop-only, `egui`, local `llama.cpp`, text-first release, and speech/avatar-deferral conclusions.
+
+Existing contract and runtime evidence remains valid at its demonstrated maturity. General product implementation is **not ready**. The Chief Systems Architect call is **Tactical Pause**, with a narrowly scoped **Continue only for the shared UI/loopback suitability spike after authority reconciliation merges and that spike is separately dispatched**. The spike must meet ADR-0069 and roadmap evidence and may not become production architecture implicitly.

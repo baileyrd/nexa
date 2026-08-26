@@ -156,3 +156,7 @@ R7 passes only when:
 - concrete numeric latency/resource budgets;
 - acceptable provider-latency reporting target versus hard requirement;
 - UI responsiveness thresholds after framework selection.
+
+## 2026-08-26 ADR-0069 reconciliation
+
+Budgets must cover both identical clients, the loopback HTTP/WebSocket boundary, LM Studio, bundled speech, and animated 2D rendering on the CPU-only Windows reference PC. The UI, Sherpa-ONNX, and Rive spikes record startup, CPU, memory, latency/timing, and package impact as applicable. The earlier text-only/no-GPU framing does not remove required speech/avatar measurements.

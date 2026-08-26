@@ -242,3 +242,7 @@ Before v1 release, verify at least:
 - fleet key management;
 - generalized sandbox infrastructure if labs are not v1;
 - cloud sync threat model.
+
+## 2026-08-26 ADR-0069 reconciliation
+
+The v1 trust surface includes a normal same-machine browser and Tauri shell against one loopback-only versioned HTTP/WebSocket API. Binding, origin/authorization, protocol validation, WebSocket lifecycle, and prevention of a second Tauri business API require evidence. LM Studio is separately installed/local; hosted, remote/LAN, labs/tools, and cloud sync are deferred. Bundled speech and the 2D renderer require dependency/package/device safety review.

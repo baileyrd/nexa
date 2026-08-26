@@ -174,3 +174,7 @@ A v1 release is blocked if:
 - content licensing/provenance policy;
 - exact first-course assessment types;
 - exact retrieval/evaluation corpus.
+
+## 2026-08-26 ADR-0069 reconciliation
+
+Networking Fundamentals remains first and TCP Connection Establishment is the first complete lesson and acceptance vehicle. Its package must support equivalent text, bundled speech presentation, and semantic 2D tutor behavior without placing renderer commands in authored/model content. Labs/tool content remains post-v1.

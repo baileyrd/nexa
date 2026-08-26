@@ -114,3 +114,36 @@ After an explicit owner decision authorizes implementation, each increment must 
 The active call is **Tactical Pause** because repository authority/status claims and the required owner-review history conflict. Local correctness and green CI are necessary but insufficient for continued program execution.
 
 The next action is owner review of the unresolved decision package above, not R2 implementation. Keep this PR unmerged pending re-review of its corrected exact head.
+
+---
+
+## 2026-08-26 owner-authority reconciliation (controlling addendum)
+
+ADR-0069 records the explicit owner decisions from Issue #114. This addendum supersedes earlier text in this document only where it conflicts. Earlier `eframe`/`egui`, `llama.cpp`, text-first release, desktop-only, speech/avatar deferral, owner-delegation, or general R2-Continue/readiness language is preserved as historical evidence and is not active selection authority.
+
+Status date: 2026-08-26
+Authority checkpoint: owner decisions recorded by ADR-0069
+
+### Current program state
+
+**Architecture outcome: Tactical Pause — bounded evidence work only.**
+
+Issue #114 supplied the explicit owner authority previously missing. ADR-0069 reconciles the v1 delivery baseline and supersedes ADR-0068 only for conflicts. This ends the owner-decision pause for documentation reconciliation and permits the ordered evidence spikes, but it does not declare general R2/product readiness.
+
+Existing Phase 1–5 contract, deterministic, runtime, cancellation, speech, and tool evidence is preserved at its demonstrated maturity. No shared UI, loopback production boundary, SQLite production path, LM Studio adapter, bundled speech adapter, or 2D release renderer is yet System Verified. This documentation increment changes authority, not implementation maturity.
+
+### Governing route
+
+Read `CHATGPT_WORKFLOW.md`, `AGENTS.md`, this file, [`BASELINE.md`](BASELINE.md), [`SPECIFICATION-REGISTRY.md`](SPECIFICATION-REGISTRY.md), NEXA-ARCH-002, NEXA-R1, ADR-0069, and the applicable supplement/roadmap. ADR-0068 is preserved historical evidence and governs only non-conflicting scope.
+
+### Owner-approved v1 outcome
+
+Windows desktop and same-machine browser ship with one identical shared interface against one local Rust runtime. One local learner completes Networking Fundamentals / TCP Connection Establishment with SQLite-backed atomic progress and restart/resume, the separately installed graphical LM Studio reference server, bundled CPU-capable speech, and a synchronized animated 2D tutor. The frontend candidate is React/TypeScript/Vite packaged by Tauri 2 over one versioned loopback HTTP/WebSocket API. Sherpa-ONNX and Rive remain evidence-gated candidates.
+
+Nexa bundles no LLM weights or inference runtime. LAN/Internet-remote access, hosted deployment, cloud sync, accounts/multi-user administration, labs/tools, broad model-server support, dynamic routing/fallback, and 3D release integration remain deferred.
+
+### Current work-selection gate
+
+The first and only presently selectable follow-on product increment is the independently reviewable **shared UI/loopback suitability spike** defined by ADR-0069 and the implementation roadmap. It must be separately dispatched and is not begun by the authority reconciliation. Speech and avatar spikes follow in that order unless recorded dependency evidence changes it. Failed candidates return to owner-governed selection. Research alone is insufficient.
+
+The Chief Systems Architect call remains **Tactical Pause** for general implementation and **Continue only for the bounded first spike after this reconciliation is reviewed and merged**. Do not resume the superseded open-ended Phase 5 sequence.

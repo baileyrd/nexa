@@ -3767,3 +3767,9 @@ publishing
 ```
 
 That will turn Nexa from an excellent freeform tutor into a **complete training platform capable of delivering authored, adaptive courses from beginning to mastery**.
+
+---
+
+## 2026-08-26 ADR-0069 v1 reconciliation
+
+An animated 2D tutor with lip-sync and basic idle, listening, thinking, speaking, and error semantic states is required in v1. Rive is an evidence-gated candidate, not an accepted adapter. Its bounded spike must prove interruption, lip-sync timing, accessible fallback, identical same-machine browser/Windows desktop rendering, and acceptable CPU use. Only admitted semantic behavior crosses this boundary; tutor/model output never selects renderer primitives. Existing renderer-neutral contracts remain factual evidence but do not prove the candidate or release integration. 3D release integration is post-v1.

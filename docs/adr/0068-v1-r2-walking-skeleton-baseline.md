@@ -1,13 +1,13 @@
 # ADR-0068 — Nexa v1 R2 walking-skeleton baseline
 
-Status: Accepted
+Status: Superseded in conflicting scope by ADR-0069; retained as historical evidence
 Date: 2026-08-26
 
 ## Context
 
 The tactical-pause assessment found that Nexa had strong deterministic contract and conformance foundations but no sufficiently concrete release path. Parent architecture/specification maturity trailed implementation, and qualified headless/contract gates were allowed to act as program-progress signals.
 
-The owner subsequently delegated completion of the R0/R1 review and convergence work, including bounded decisions necessary to remove R2 blockers, without waiting for further interaction.
+No owner delegation authorized autonomous product-scope approval. The decisions in this record were merged as a proposed baseline and are retained as historical evidence; ADR-0069 records the subsequent explicit owner decisions.
 
 This ADR establishes the minimum concrete baseline for the R2 thin production walking skeleton. It is intentionally narrower than the full long-term Nexa architecture.
 
@@ -136,3 +136,5 @@ The following remain later gates unless evidence promotes them:
 ## Supersession
 
 This ADR does not invalidate ADR-0001 through ADR-0067. Where an earlier ADR describes a broader possible capability, this ADR controls only the R2 release path and maturity priority.
+
+ADR-0069 supersedes this record only where its owner-approved client, loopback API, model-server, speech, avatar, delivery-sequence, or v1-scope decisions conflict. The SQLite, canonical-identity, first-course, atomic-durability, and restart/resume decisions remain consistent and in force through ADR-0069.
