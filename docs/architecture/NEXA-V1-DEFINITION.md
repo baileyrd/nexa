@@ -1,173 +1,173 @@
 # Nexa v1 Product Definition and Release Boundary
 
-Status: Proposed product boundary; non-authoritative pending owner review
+Status: Approved
+Date: 2026-08-26
+Governing architecture: `NEXA-ARCH-002`
 
 ## Purpose
 
-This document gives Nexa a finite first-release target. It intentionally separates what must work in v1 from capabilities that may follow later.
-
-Nexa v1 is not defined by how many subsystem contracts exist. It is defined by whether a learner can complete a real adaptive lesson through one supported application and receive persistent, grounded, observable results.
+This document gives Nexa a finite first-release target. Nexa v1 is defined by an observable learner outcome, not by the number of subsystem contracts, crates, ADRs, or technical gates completed.
 
 ## v1 mission
 
-A learner can launch Nexa locally, enter or resume a course, interact with the tutor, receive grounded adaptive instruction, complete an assessment, have competency progress updated and persisted, and complete the lesson through one supported composition root.
+A learner can launch Nexa locally, enter or resume a governed course, interact with the tutor, receive grounded adaptive instruction, complete assessment/practice, have competency progress updated durably, exit, restart, and resume without loss or duplication of accepted work.
 
-The experience must use real runtime dependencies for every release-critical boundary rather than scripted test doubles.
+Release-critical boundaries use real/concrete dependencies rather than scripted test doubles.
 
-## Primary v1 learner journey
+## Primary learner journey
 
-1. Install and launch Nexa on a supported desktop platform.
-2. Select or resume a locally available course.
-3. Nexa loads learner state, lesson state, and governed course/knowledge content.
-4. The learner provides text input. Speech input may be included if it reaches release maturity without blocking the core release.
-5. The orchestrator establishes one interaction workflow.
-6. Tutor context is assembled from lesson, learner, pedagogy, and governed knowledge.
-7. One configured model provider generates a structured tutor response.
-8. Nexa validates/adapts the response and presents it through the user interface.
-9. The learner completes an assessment or governed practice step.
-10. Nexa records evidence, updates/replays mastery, and chooses the next authored/adaptive route.
-11. Progress is committed durably and can be resumed after restart.
-12. Operational failures are surfaced clearly and do not corrupt learner state.
+1. Install/launch Nexa on the supported desktop target.
+2. Select or resume a locally available governed course.
+3. Load learner, lesson, and governed knowledge state.
+4. Submit text input through the learner application.
+5. Establish one orchestrated interaction workflow.
+6. Derive learning/pedagogy context and retrieve governed knowledge.
+7. Invoke one configured concrete model path.
+8. Structurally admit and release-quality-check the tutor response.
+9. Present the response through the learner UI.
+10. Complete governed assessment/practice.
+11. Record evidence, replay/update mastery, and apply the next authored/adaptive route.
+12. Commit progress durably.
+13. Exit and restart.
+14. Resume the accepted state correctly.
+15. Complete the bounded lesson acceptance outcome.
 
-## Required v1 capabilities
+## Required v1 capability families
 
-### Application and UX
+### Learner application
 
-- One supported learner-facing desktop application/composition root.
-- Course/lesson selection and resume.
-- Text conversation/input and tutor response presentation.
-- Visible lesson/progress state sufficient to understand current activity.
-- Clear recoverable and terminal error presentation.
-- Accessibility baseline proportional to the supported UI.
+- one supported desktop application/composition root;
+- course/lesson start and resume;
+- text input and tutor response presentation;
+- assessment/practice and progress presentation;
+- understandable recoverable/terminal failures;
+- supported accessibility baseline.
 
 ### Session orchestration
 
-- Complete session and interaction workflow composition.
-- Deterministic ownership of subsystem work.
-- Cancellation/interruption for active learner interaction.
-- Bounded timeout and retry/recovery behavior where dependencies can fail.
-- Clean shutdown without state corruption.
+- complete learner interaction composition;
+- work ownership/cancellation;
+- bounded timeout/failure/recovery policy;
+- explicit commit points;
+- safe shutdown and restart.
 
-### Learning core
+### Learning
 
-- Authored curriculum/lesson progression.
-- Student evidence ledger and mastery replay.
-- Adaptive pedagogy decision.
-- Assessment scoring/evidence.
-- Atomic durable persistence of learning progress.
+- authored curriculum/lesson progression;
+- immutable evidence and replayable mastery;
+- adaptive pedagogy;
+- deterministic assessment/scoring where specified;
+- atomic durable learning progress.
 
-### Tutor and model execution
+### Tutor/model
 
-- One concrete supported model-provider adapter.
-- One concrete tokenizer/capacity integration compatible with that provider where required.
-- Governed prompt/context compilation.
-- Strict structured output admission.
-- Grounded citation-bearing responses over governed Nexa knowledge.
-- Bounded failure behavior with no hidden fallback.
+- one concrete supported model adapter;
+- governed prompt/context construction;
+- strict structured output admission;
+- grounding/citation quality appropriate to the released course;
+- bounded failures with no hidden fallback.
 
-v1 does not require multi-provider dynamic routing. Provider neutrality remains an architectural property; release success needs one reliable concrete path first.
+Multi-provider dynamic routing is not required for the first release.
 
 ### Knowledge
 
-- Durable governed content store.
-- Production-capable ingestion for the v1 content format(s).
-- Retrieval sufficient for the released course corpus.
-- Context assembly and citation resolution integrated with tutor execution.
-- Content/version provenance retained across restart.
+- durable governed content/provenance;
+- production-style ingestion for the first course format;
+- retrieval/context/citation sufficient for the released course;
+- provenance that survives restart.
 
-A dedicated external vector database is not mandatory if the released corpus and performance requirements are satisfied by a simpler durable design.
+A dedicated vector database is not required unless measured release evidence justifies it.
 
-### Persistence and data
+### Data/persistence
 
-Durably persist at minimum:
+Persist and recover at minimum:
 
-- learner/profile identity required by the application;
-- course/lesson progress;
-- competency evidence/mastery state or authoritative replay inputs;
-- authored content/version identity;
-- knowledge provenance required for citation/replay;
-- operational state required for safe restart/recovery.
+- learner identity/profile fields required by v1;
+- authored course/lesson version identity;
+- lesson progress;
+- assessment state required for progression;
+- immutable learning evidence;
+- mastery/replay metadata;
+- knowledge provenance;
+- schema/recovery metadata needed for safe startup.
 
-Persistence must define transaction, concurrency, migration, backup/recovery, retention, and corruption/failure behavior for v1.
+### Security/privacy
 
-### Security and privacy
+- least-privilege local operation;
+- explicit trust boundaries;
+- no secret/raw learner/prompt/model/source content in normal diagnostics;
+- remote disclosure only through an explicitly approved path if remote inference is later supported;
+- learner-data retention/reset/deletion mechanisms appropriate to v1.
 
-- Local data boundaries and sensitive-data classification.
-- Secrets/credential handling for any configured model provider.
-- Explicit remote-disclosure boundary when remote inference is enabled.
-- No sensitive content in normal diagnostics.
-- Least-privilege file/network access appropriate to the application.
-- Defined retention/deletion behavior for learner data.
+### Observability/recovery
 
-### Observability and recovery
+- structured content-safe logging/correlation;
+- dependency failure visibility;
+- timeout/cancellation/recovery evidence;
+- startup/shutdown/restart diagnostics.
 
-- Structured operational logging with content-safe diagnostics.
-- Correlation across a learner interaction/workflow.
-- Dependency failure visibility.
-- Startup/recovery diagnostics.
-- Sufficient evidence to troubleshoot a failed session without exposing learner/model content unnecessarily.
+### Packaging/release
 
-### Packaging and release
+Before Release Ready:
 
-- Reproducible release build.
-- Installer/package for at least one explicitly supported desktop target.
-- Configuration path for local and/or remote model provider chosen for v1.
-- Upgrade/migration strategy for persisted data.
-- Version reporting and release notes.
-- License/third-party asset provenance sufficient for distribution.
+- reproducible supported build;
+- installation/distribution path for at least one desktop target;
+- data migration/upgrade strategy;
+- version/provenance reporting;
+- third-party license/runtime/model/asset disposition;
+- release acceptance evidence.
 
-### System verification
+## R2 concrete first path
 
-- Automated end-to-end test covering the primary learner journey with production-equivalent adapters wherever practical.
-- Persistence restart/resume verification.
-- failure-injection tests for model, storage, and cancellation/recovery paths.
-- security/privacy review against the v1 data flows.
-- measured performance against explicit v1 budgets.
-- user acceptance of the primary learner journey.
+ADR-0068 establishes the first walking-skeleton implementation baseline:
 
-## Conditionally required for v1
+- `apps/nexa-desktop`;
+- `eframe`/`egui` after a bounded suitability spike;
+- SQLite/`rusqlite` behind `nexa-storage`;
+- local `llama.cpp` server adapter;
+- Windows x86_64 acceptance environment;
+- Networking Fundamentals / TCP Connection Establishment course;
+- text-first learner interaction.
 
-These capabilities are valuable but must not block the first release unless subsequent evidence shows they are essential to the accepted learner experience:
+## Not R2 exit criteria
 
-- speech input;
-- speech output/TTS;
-- full animated avatar embodiment in the primary learner workflow;
-- advanced vector retrieval;
-- interactive labs/tool execution.
+The following do not block the R2 walking skeleton:
 
-If included, each must meet the same concrete-adapter, integration, verification, and user-acceptance standards as other v1-required capabilities. A contract-only implementation is not enough.
+- speech input/output;
+- animated avatar/behavior integration;
+- labs/tool execution;
+- dynamic multi-provider routing/fallback;
+- remote-provider credentials/disclosure;
+- dedicated vector database;
+- final signed installer/update mechanism.
 
-## Post-v1 candidates
+They are reconsidered at their owning later roadmap gates.
 
-Unless explicitly promoted by the rebaseline:
+## System verification requirements
 
-- multi-provider dynamic routing;
-- automatic local-first fallback chains;
-- advanced cost/latency/task-complexity model routing;
-- streaming multimodal orchestration beyond the v1 interaction path;
-- advanced speech/VAD pipeline;
-- fully synchronized avatar/speech/gesture behavior;
-- generalized secure sandbox lab infrastructure;
-- rich authoring application;
-- plugin SDK/ecosystem;
-- external public API;
-- advanced analytics;
-- fleet/server deployment;
-- broad multi-platform distribution beyond the first supported target.
+Before v1 Release Ready, evidence must include:
+
+- automated primary learner E2E path;
+- durable restart/resume;
+- storage/model/retrieval/cancellation/recovery failure tests;
+- security/privacy review of actual data flows;
+- measured performance on the accepted release environment;
+- supported packaging/install/upgrade validation;
+- representative user acceptance.
 
 ## Explicit non-definition
 
 Nexa v1 is not complete merely because:
 
 - all current unit tests pass;
-- a phase traceability matrix is green;
-- every provider-neutral contract exists;
-- all planned crates/directories exist;
-- all ADRs are accepted;
-- the headless test composition proves deterministic behavior.
+- an old phase traceability matrix is green;
+- provider-neutral contracts exist;
+- every planned crate/directory exists;
+- every ADR is accepted;
+- a headless/scripted composition demonstrates deterministic behavior.
 
-Those are evidence inputs, not product acceptance.
+Those are evidence inputs at specific maturity levels, not product acceptance.
 
 ## v1 acceptance statement
 
-Nexa v1 is release ready only when a new user can install the supported build, complete the primary learner journey with real configured dependencies, exit, restart, resume with correct durable state, and complete the release acceptance suite with no unresolved critical security, privacy, data-integrity, or architecture findings.
+Nexa v1 is Release Ready only when a new user can use the supported build to complete the primary learner journey with real configured dependencies, exit, restart, resume correct durable state, and pass the release acceptance suite with no unresolved critical architecture, security, privacy, data-integrity, or system-quality finding.

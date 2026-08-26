@@ -1,36 +1,69 @@
-# Nexa Reconstructed Baseline
+# Nexa Governing Baseline
 
-## Decision
+Status date: 2026-08-26
 
-The documents added in commit `00cd04d` are the working source of truth for the complete Nexa tutor platform. The earlier conversation is provenance, not an independently enforceable specification.
+## Purpose
 
-## Interpretation order
+This document defines how Nexa authorities are interpreted after the 2026 tactical-pause rebaseline.
 
-When sources disagree, use this order until a later ADR changes it:
+The reconstructed design remains important provenance, but current v1 implementation is governed by the approved release architecture and R1 baseline rather than by reconstruction status alone.
 
-1. Approved ADRs and approved specifications
-2. Baseline Draft specifications listed in the registry
-3. NEXA-CBS-001 for character identity and semantic behavior principles
-4. Canonical visual reference sheets for visual identity
-5. Implemented and tested runtime contracts
-6. Architecture narrative documents
-7. Conversation exports and other provenance
+## Current authority order
 
-Conflicts between a higher-level design and verified implementation are not silently resolved. They are recorded and reviewed.
+When sources disagree, use this order unless a later accepted ADR explicitly resolves the conflict:
 
-## Preservation policy
+1. Approved current system architecture and approved current specifications/supplements.
+2. Accepted ADRs for their documented scope.
+3. Baseline Draft subsystem specifications where not superseded/supplemented for v1.
+4. NEXA-CBS-001 for character identity and semantic behavior principles within its owned scope.
+5. Canonical visual references for visual identity.
+6. Verified implementation contracts and traceability as evidence of what is actually implemented.
+7. Reconstructed architecture/design narratives and conversation exports as provenance and long-range context.
 
-Reconstructed documents remain intact while they are audited. Formatting corrections may be made independently, but semantic edits require traceability through review, an ADR, or specification history.
+Code does not silently amend a higher authority. A discovered conflict is recorded and resolved through architecture/specification/ADR review.
+
+## Current v1 governing set
+
+For v1/R2 work, begin with:
+
+- [`PROJECT-STATUS.md`](PROJECT-STATUS.md)
+- [`SPECIFICATION-REGISTRY.md`](SPECIFICATION-REGISTRY.md)
+- [`architecture/NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md`](architecture/NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md)
+- [`architecture/NEXA-R1-IMPLEMENTATION-BASELINE.md`](architecture/NEXA-R1-IMPLEMENTATION-BASELINE.md)
+- [`adr/0068-v1-r2-walking-skeleton-baseline.md`](adr/0068-v1-r2-walking-skeleton-baseline.md)
+- [`architecture/NEXA-COMPLETION-ROADMAP.md`](architecture/NEXA-COMPLETION-ROADMAP.md)
+- the applicable subsystem specification and accepted ADRs for the selected increment.
+
+`NEXA-ARCH-001` remains preserved as reconstructed architecture provenance and long-range design context but is superseded by `NEXA-ARCH-002` for v1 implementation selection.
 
 ## Immediate invariants
 
-- Nexa is a complete adaptive tutor platform, not merely a 3D avatar.
-- The avatar is an embodiment adapter behind semantic behavior contracts.
-- The LLM produces structured communicative intent and never controls animation primitives directly.
-- Core domain types and events are shared contracts rather than redefined per subsystem.
-- Student mastery changes only from governed evidence and knowledge-tracing rules.
+- Nexa is an adaptive tutor platform, not merely an avatar or chatbot.
+- The first v1 path is text-first and local-first.
+- Tutor/model output never directly controls animation primitives or host authority.
+- Core domain identifiers/events remain shared canonical contracts rather than being redefined by adapters.
+- Student mastery changes only from governed evidence and replayable policy.
 - The orchestrator coordinates subsystem work but does not absorb subsystem reasoning.
-- Renderer, model provider, speech provider, storage, and lab backends remain replaceable.
-- Local-first and offline-capable operation remain architectural goals where practical.
+- Storage, model provider, renderer, speech, and lab backends remain adapter concerns behind owned boundaries.
+- Provider/renderer neutrality is an architectural property; R2 still prioritizes one concrete real path.
+- Local correctness evidence and system/product maturity are separate.
 
-See [SPECIFICATION-REGISTRY.md](SPECIFICATION-REGISTRY.md) for the governed inventory.
+## Preservation policy
+
+Historical/reconstructed documents remain intact unless a deliberate reviewed change says otherwise. Git history preserves earlier registry/status/roadmap narratives.
+
+Semantic changes require traceability through an approved architecture/specification, accepted ADR, or explicit governance/status decision.
+
+## Capability maturity
+
+Use:
+
+`Concept -> Architecture Defined -> Specification Approved -> Contract Implemented -> Runtime Integrated -> Concrete Adapter Implemented -> System Verified -> User Accepted -> Release Ready`
+
+Do not use an unqualified `Complete` where it would hide the maturity level actually proven.
+
+## Architecture control
+
+At major roadmap boundaries, and whenever parent documentation, deferrals, horizontal depth, or release convergence materially diverge, the Chief Systems Architect performs an independent whole-system review and records Continue, Redirect, or Tactical Pause.
+
+A lower-level implementation gate cannot close a higher-level architecture maturity gap.

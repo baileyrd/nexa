@@ -1,110 +1,145 @@
 # Nexa Tactical-Pause Rebaseline Task Ledger
 
-Status: Active execution control for the owner-authorized tactical pause
-
+Status date: 2026-08-26
 Baseline: `e2345a1bb8825451ea079ff5e350b7765075038a` (PR #109)
+Rebaseline PR: #110
 
 ## Purpose
 
-This ledger is the execution control for the tactical pause. It prevents the assessment itself from becoming an open-ended documentation exercise and records the evidence required before normal implementation resumes.
-
-The ledger's active status authorizes only the pause and this review workflow. It does **not** approve the proposed v1 boundary, system architecture, completion roadmap, rebaseline gates or matrix, R1 plan, or R1 specification drafts. Existing accepted ADR and registry-listed specification authority is preserved until explicit owner decisions are recorded.
+This ledger records completion of the tactical-pause recovery work and the exact remaining condition before R2 implementation begins.
 
 ## Workstream A — Current-state assessment
 
-| Task | Status | Evidence / next gate |
+| Task | Status | Evidence |
 |---|---|---|
-| Establish authoritative baseline | Complete | PR #109 merge baseline recorded |
-| Inventory governing documents and maturity | Complete initial pass | `NEXA-CURRENT-STATE-ASSESSMENT.md`, `NEXA-REBASELINE-MATRIX.md` |
-| Distinguish contract, integration, concrete adapter and user capability | Complete initial pass | capability maturity matrix in assessment |
-| Audit historical divergence | Complete initial pass | `DEVELOPMENT-DIVERGENCE-ANALYSIS.md` |
-| Centralize inherited deferrals | Complete initial pass | `DEFERRAL-REGISTER.md` |
-| Verify documentation consistency gaps | In progress | README/roadmap/status/registry/traceability reconciliation required after architecture approval |
+| Establish authoritative baseline | Complete | PR #109 merge baseline |
+| Inventory governing docs/maturity | Complete | `NEXA-CURRENT-STATE-ASSESSMENT.md` |
+| Distinguish contract/integration/concrete/user maturity | Complete | assessment + testing maturity model |
+| Audit historical divergence | Complete | `DEVELOPMENT-DIVERGENCE-ANALYSIS.md` |
+| Centralize inherited deferrals | Complete | `DEFERRAL-REGISTER.md` |
+| Reconcile current authority/status view | Complete | rewritten `PROJECT-STATUS.md` and registry |
 
 ## Workstream B — Lessons learned and reusable process
 
-| Task | Status | Evidence / next gate |
+| Task | Status | Evidence |
 |---|---|---|
-| Nexa-specific lessons learned | Complete working draft | `DEVELOPMENT-LESSONS-LEARNED.md` |
-| Architecture rebaseline / stop gates | Complete working draft | `ARCHITECTURE-REBASELINE-GATES.md` |
-| Identify permanent cross-project home | Complete | Atlas Engineering Standards Library selected |
-| Capture generalized lessons in Atlas | In review | Atlas PR #19 |
-| Convert generalized lessons into normative Atlas requirements | Pending | perform only after non-normative lessons review; amend existing owning chapters rather than create parallel hierarchy |
+| Nexa lessons learned | Complete | `DEVELOPMENT-LESSONS-LEARNED.md` |
+| Architecture stop/rebaseline gates | Complete | `ARCHITECTURE-REBASELINE-GATES.md` |
+| Permanent cross-project home | Complete | Atlas Engineering Standards Library |
+| Generalized lessons captured | Complete | Atlas PR #19 merged |
+| Normative Atlas follow-up | Tracked, not R2 blocker | Atlas issue #20 |
 
 ## Workstream C — Define Nexa v1
 
-| Task | Status | Evidence / next gate |
+| Task | Status | Evidence |
 |---|---|---|
-| Define finite first-release learner outcome | Complete proposed baseline | `NEXA-V1-DEFINITION.md` |
-| Separate required / conditional / post-v1 capabilities | Complete proposed baseline | v1 definition + rebaseline matrix |
-| Define product-level acceptance statement | Complete proposed baseline | v1 acceptance statement |
-| Human/architecture approval of v1 boundary | Pending | required before v1 definition becomes governing authority |
+| Finite first-release learner outcome | Approved | `NEXA-V1-DEFINITION.md` adopted by `NEXA-ARCH-002` |
+| Required/conditional/post-R2 classification | Approved | `NEXA-ARCH-002`, ADR-0068 |
+| Product acceptance statement | Approved | v1 definition + R1 testing baseline |
+| Speech/avatar/labs R2 disposition | Resolved | speech/avatar retained but not R2 exit criteria; labs/tools post-R2 |
 
 ## Workstream D — Rebaseline system architecture
 
-| Task | Status | Evidence / next gate |
+| Task | Status | Evidence |
 |---|---|---|
-| Review reconstructed `NEXA-ARCH-001` against current system | In progress | original architecture and implementation matrix assessed |
-| Review proposed v1 system architecture | Proposed; owner review pending | `NEXA-V1-SYSTEM-ARCHITECTURE.md`; proposal is not authoritative or complete |
-| Review proposed v1 subsystem ownership and concrete adapter boundaries | Proposed; owner review pending | architecture proposal sections 4-10; no approval implied |
-| Review proposed primary learner sequence and data/state flows | Proposed; owner review pending | architecture proposal sections 11-13; reconcile during R0 review |
-| Reconcile existing ADRs with parent architecture | Pending | after architecture proposal |
-| Promote/revise/supersede `NEXA-ARCH-001` through governance | Pending | R0 exit requirement |
+| Review reconstructed NEXA-ARCH-001 | Complete | current-state/divergence/rebaseline analysis |
+| Establish v1 system architecture | Approved | `NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md` |
+| Define subsystem/adapter ownership | Approved for R2 | NEXA-ARCH-002 |
+| Define primary learner/data flow | Approved | NEXA-ARCH-002 primary R2 sequence |
+| Reconcile accepted ADR relationship | Complete for R2 | registry + ADR-0068 |
+| Supersede reconstructed architecture for v1 selection | Complete | NEXA-ARCH-002/registry |
 
 ## Workstream E — Mature v1 parent specifications
 
-| Specification family | Status | Required action |
+| Family | Status for R2 | Evidence |
 |---|---|---|
-| Domain / Events | Proposed R1 rebaseline draft | Non-authoritative review input; existing Baseline Draft statuses are unchanged |
-| Student / Lessons / Assessment / Pedagogy | Proposed R1 rebaseline draft | Non-authoritative review input; existing specification statuses are unchanged |
-| Knowledge / Tutor | Proposed R1 rebaseline draft | Non-authoritative review input; existing specification statuses are unchanged |
-| Orchestrator | Proposed R1 rebaseline draft | Non-authoritative review input; `NEXA-ORCH-001` remains Baseline Draft pending reconciliation and approval |
-| Speech / Avatar / Labs | Owner decision pending | explicit v1/post-v1 disposition required before implementation resumes; this ledger chooses neither |
+| Domain / Events | Approved supplement | R1 baseline |
+| Student / Pedagogy / Lessons / Assessment | Approved supplement | R1 baseline |
+| Tutor / Knowledge | Approved supplement | R1 baseline |
+| Orchestrator | Approved complete-workflow supplement | R1 baseline |
+| Speech / Avatar / Labs | Retained later capability | not R2 blocking |
 
 ## Workstream F — Critical cross-cutting specifications
 
-| Area | Status | v1 disposition |
+| Area | R2 disposition |
+|---|---|
+| Data / Persistence | Approved R1 requirements + SQLite decision |
+| Security | Approved local-model R2 trust boundary |
+| Privacy | Approved local-only R2 disclosure posture |
+| Observability | Approved content-safe correlation requirements |
+| Testing / Acceptance | Approved maturity model + R2 E2E gate |
+| Learner UX | Approved text-first desktop requirements |
+| Performance | Approved measurement-first requirements; final release budgets later |
+| Packaging / Deployment | Approved constraints; final installer/signing later |
+| Governed Content | Approved first-course scope |
+| Engineering / Governance | Approved project gates; Atlas normative follow-up tracked |
+
+## Workstream G — Technology and delivery convergence
+
+| Decision | Status | Authority |
 |---|---|---|
-| UX | Proposed R1 draft | Non-authoritative review input; required family remains unapproved |
-| R1 specification plan | Proposed review input | Does not start or close R1 and authorizes no implementation |
-| Data / Persistence | Proposed R1 draft | Non-authoritative review input; required family remains unapproved |
-| Security | Proposed R1 draft | Non-authoritative review input; required family remains unapproved |
-| Privacy | Proposed R1 draft | Non-authoritative review input; required family remains unapproved |
-| Observability | Proposed R1 draft | Non-authoritative review input; required family remains unapproved |
-| Testing / System Acceptance | Proposed R1 draft | Non-authoritative review input; required family remains unapproved |
-| Packaging / Deployment | Proposed R1 draft | Non-authoritative review input; required family remains unapproved |
-| Performance | Proposed R1 draft | Non-authoritative review input; required family remains unapproved |
-| Governed content / release | Proposed R1 draft | Non-authoritative review input; required family remains unapproved |
-| Engineering / Governance | Working controls exist | Required; project controls should reference Atlas once normative standards mature |
-| Authoring | Missing | Post-v1 by default |
-| Analytics | Missing | Post-v1 by default |
-| Plugins | Missing | Post-v1 |
-| Public API | Missing | Post-v1 by default |
+| Desktop app boundary | Approved | NEXA-ARCH-002 / ADR-0068 |
+| UI framework | Approved for bounded R2 spike | ADR-0068 (`eframe`/`egui`) |
+| Durable store | Approved | ADR-0068 (SQLite/`rusqlite`) |
+| Concrete model path | Approved | ADR-0068 (local `llama.cpp` server) |
+| First acceptance platform | Approved | ADR-0068 (Windows x86_64) |
+| First course | Approved | ADR-0068 (TCP Connection Establishment) |
+| Event broker/outbox | Not required for R2 | R1 baseline |
+| Remote provider | Post-R2 | R1 baseline |
 
-## Workstream G — Completion roadmap
+## Workstream H — Completion roadmap
 
-| Task | Status | Evidence / next gate |
+| Task | Status | Evidence |
 |---|---|---|
-| Replace open-ended narrow-increment path with release path | Complete proposed baseline | `NEXA-COMPLETION-ROADMAP.md` |
-| Define R0–R9 exit gates | Complete proposed baseline | completion roadmap |
-| Prioritize primary learner-journey blockers | Complete proposed rule | roadmap work-selection priority |
-| Bind every implementation task to a release blocker | Pending enforcement | begins only after R0/R1 authority work |
+| Replace open-ended increment path | Complete | `NEXA-COMPLETION-ROADMAP.md` |
+| Define R0–R9 gates | Complete | completion roadmap |
+| Prioritize vertical release blockers | Complete | architecture/roadmap selection rule |
+| Adopt capability maturity vocabulary | Complete | registry/status/testing baseline |
 
-## Workstream H — Resume implementation
+## R0 gate
 
-Status: **Blocked intentionally.**
+**PASS for R2**, subject only to PR #110 being green and merged on its exact final head.
 
-Implementation does not resume until at minimum:
+## R1 gate
 
-1. v1 boundary is approved;
-2. v1 system architecture is authoritative enough to govern implementation;
-3. the owner has explicitly classified speech, avatar/behavior, and labs/tools as v1 or post-v1;
-4. v1-required parent specifications have sufficient maturity;
-5. critical cross-cutting R1 specifications are reviewed and approved at the maturity required to govern implementation; draft presence is insufficient;
-6. inherited deferrals due at R0/R1 are dispositioned;
-7. repository status/registry/roadmap terminology is reconciled;
-8. the first R2 walking-skeleton increment can be traced to an explicit release blocker.
+**PASS for R2**, subject only to PR #110 being green and merged on its exact final head.
 
-## Current next action
+R1 is intentionally not “all possible Nexa specifications complete.” It is “all architecture/specification decisions needed to safely govern the R2 walking skeleton are mature enough.”
 
-Obtain owner review and explicit decisions on the proposed v1 boundary, architecture, conditional-capability disposition, roadmap, gates, matrix, and the scope of the R1 plan/drafts. In parallel, complete the remaining R0 reconciliation of `NEXA-ARCH-001`, existing ADRs, parent specifications, README, registry, roadmap, status, and traceability terminology. The data/persistence, security, privacy, observability, and orchestrator rebaseline drafts are review inputs only; they do not close R1, mature an existing specification, or authorize implementation. Do not add further R1 specification families in this correction, and do not dispatch product implementation while Workstream H is blocked.
+## R2 readiness
+
+Status: **Conditionally Ready — documentation merge gate only.**
+
+R2 implementation may begin when:
+
+1. PR #110 final exact head has required CI green;
+2. the complete final documentation diff is reviewed;
+3. PR #110 is merged unchanged;
+4. the first R2 increment cites `NEXA-ARCH-002`, `NEXA-R1-IMPLEMENTATION-BASELINE`, ADR-0068, and the relevant owned subsystem specifications.
+
+No additional owner product/technology decision is required before R2 begins.
+
+## First R2 work-selection rule
+
+The first R2 implementation must advance the vertical walking skeleton, not reopen horizontal Phase 5 work.
+
+Preferred first bounded increment:
+
+- activate the real `apps/nexa-desktop` application shell and the concrete `crates/nexa-storage` SQLite infrastructure boundary in a way that proves their architecture/dependency shape without attempting to finish the full learner flow in one PR;
+- immediately follow with the smallest integration increments that connect governed content, learning state, real model adapter, and restart/resume into the E2E path.
+
+Every R2 PR must state which E2E step it makes concrete and which maturity state it advances.
+
+## Remaining later-release work
+
+Not R2 blockers:
+
+- release model selection/quality threshold finalization;
+- speech/avatar final v1 inclusion;
+- labs/tools;
+- remote provider/credentials;
+- advanced routing/fallback/vector infrastructure;
+- final installer/signing/update mechanism;
+- plugin/API/analytics/authoring/server capabilities.
+
+These are owned by later roadmap gates and must not silently leak back into R2 scope.
