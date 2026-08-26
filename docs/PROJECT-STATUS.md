@@ -1,19 +1,19 @@
 # Nexa Project Status
 
 Status date: 2026-08-26
-Current `main` checkpoint: `4369a85410c3dcb5ffcb619ef1c2a04bed08978f` (PR #110)
+Current `main` checkpoint: `24e5b82d43e0d708fd8c21fe570d676da63d7d00` (PR #111, merged from head `133430b5f3a16c5ea493416662f5bfaae6a8ff03`)
 
 This document is the concise current-state authority for resuming Nexa work. Detailed historical increment evidence remains in Git history, accepted ADRs, and phase traceability matrices.
 
 ## Current program state
 
-**Architecture outcome: Continue — begin R2.**
+**Architecture outcome: Tactical Pause — owner decision required.**
 
-The tactical-pause assessment, R0 governance/architecture rebaseline, and R1 implementation-specification convergence are complete to the maturity required for the R2 walking skeleton.
+PR #110 merged documents that claim approval or acceptance of the v1 boundary, `NEXA-ARCH-002`, the R1 baseline and supplements, ADR-0068, and the R0–R9 delivery route. Those documents also claim or imply owner delegation for the resulting R2 scope and work selection. The required explicit owner review did not occur before the external merge, despite the tactical-pause requirement and the prior correction record identifying that authority expansion as unauthorized.
 
-PR #110 merged the reviewed rebaseline after required CI passed on exact head `ff47d01bcd5a94fffbdd01f2ed9150e66df05665`. Product implementation is no longer blocked by the tactical pause.
+Passing CI on exact head `ff47d01bcd5a94fffbdd01f2ed9150e66df05665` established document and build validity. It did not establish owner approval of the v1 boundary, architecture, implementation baseline, roadmap, capability disposition, or concrete R2 choices.
 
-The superseded open-ended Phase 5 increment sequence MUST NOT resume. New work is selected from the R2 vertical release path.
+Product implementation remains paused. No R2 work may be dispatched or selected until the owner explicitly decides whether to accept the merged v1/R2 baseline or authorize corrective authority changes. The superseded open-ended Phase 5 increment sequence also MUST NOT resume.
 
 ## Current governing route
 
@@ -24,60 +24,42 @@ Read in this order:
 3. this file
 4. [`BASELINE.md`](BASELINE.md)
 5. [`SPECIFICATION-REGISTRY.md`](SPECIFICATION-REGISTRY.md)
-6. [`architecture/NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md`](architecture/NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md)
-7. [`architecture/NEXA-R1-IMPLEMENTATION-BASELINE.md`](architecture/NEXA-R1-IMPLEMENTATION-BASELINE.md)
-8. [`adr/0068-v1-r2-walking-skeleton-baseline.md`](adr/0068-v1-r2-walking-skeleton-baseline.md)
-9. [`architecture/NEXA-COMPLETION-ROADMAP.md`](architecture/NEXA-COMPLETION-ROADMAP.md)
-10. the applicable parent specification, accepted ADRs, and traceability evidence for the selected increment.
+6. the merged candidate authorities listed in the owner-review route below.
 
-Assessment and lessons-learned artifacts remain evidence and governance input; they are not substitutes for implementation specifications.
+The merged documents are the current repository state, but their approval, acceptance, and implementation-selection claims are disputed pending owner review. They MUST NOT be treated as delegated product-development authority while this tactical pause is active. Assessment and lessons-learned artifacts remain evidence and governance input; they are not substitutes for owner decisions or implementation specifications.
 
 ## R0 — Governance and architecture rebaseline
 
-**Status: PASS / closed for R2.**
+**Status: owner acceptance unresolved; not closed for product implementation.**
 
-- Current-state/documentation-gap assessment completed.
-- Development divergence and lessons learned recorded.
-- Reusable lessons merged into the Atlas Engineering Standards Library; Atlas issue #20 tracks normative follow-up.
-- `NEXA-ARCH-002` is the approved v1 implementation architecture.
-- `NEXA-ARCH-001` is preserved as reconstructed provenance/long-range context and superseded for v1 implementation selection.
-- R0–R9 completion roadmap is the delivery authority.
-- Deferrals are centralized and stage-dispositioned.
-- Capability maturity terminology is established.
+The repository contains substantial R0 assessment and rebaseline work:
+
+- the current-state/documentation-gap assessment;
+- development-divergence and lessons-learned records;
+- reusable lessons contributed to the Atlas Engineering Standards Library, with Atlas issue #20 tracking normative follow-up;
+- a proposed v1 implementation architecture in `NEXA-ARCH-002`;
+- a proposed R0–R9 completion roadmap and centralized deferral disposition;
+- capability-maturity terminology.
+
+These are useful governance artifacts. Their presence and technical validity do not prove the explicit owner acceptance required to close R0 or supersede prior authority for implementation selection.
 
 ## R1 — Critical specification and technology baseline
 
-**Status: PASS / closed for R2.**
+**Status: owner acceptance unresolved; not closed for product implementation.**
 
-`NEXA-R1-IMPLEMENTATION-BASELINE.md` approves the R2-applicable parent/cross-cutting requirements for:
+The merged `NEXA-R1-IMPLEMENTATION-BASELINE.md` and supplements describe proposed R2-applicable requirements for data/persistence, security, privacy, observability, orchestration, domain/events, learning, tutor/knowledge, learner UX, testing/system acceptance, performance, packaging/deployment, and governed first-course content.
 
-- data/persistence;
-- security;
-- privacy;
-- observability;
-- complete session orchestration;
-- domain/events;
-- learning subsystems;
-- tutor/knowledge;
-- learner UX;
-- testing/system acceptance;
-- performance measurement;
-- packaging/deployment constraints;
-- governed first-course content.
-
-ADR-0068 resolves the R2 scope and technology baseline.
-
-R1 intentionally does not finish every long-term Nexa specification; later-release requirements mature at their owning R3–R9 gates.
+ADR-0068 records proposed R2 scope and technology choices. CI and merge history do not establish that the owner accepted those documents or choices as the implementation baseline.
 
 ## R2 — Thin production walking skeleton
 
-**Status: READY / next implementation stage.**
+**Status: candidate baseline under owner review; implementation paused.**
 
-R2 is text-first and builds one real vertical learner path:
+The merged candidate baseline describes a text-first vertical learner path:
 
 `learner text -> apps/nexa-desktop -> orchestrator -> SQLite durable state -> learning/pedagogy -> governed TCP knowledge -> local llama.cpp model adapter -> admitted tutor response -> assessment/practice -> atomic durable progress -> restart/resume`
 
-ADR-0068 selects:
+It proposes:
 
 - learner app: `apps/nexa-desktop`;
 - UI: `eframe`/`egui`, subject to a bounded suitability spike;
@@ -86,74 +68,49 @@ ADR-0068 selects:
 - first acceptance platform: Windows x86_64;
 - first governed course: Networking Fundamentals / TCP Connection Establishment.
 
-R2 exit requires actual UI, actual SQLite, actual governed course content, actual local model adapter, admitted tutor response, durable assessment/evidence/mastery/progress, restart/resume, and content-safe correlation.
+These details document the decision package requiring review; they are not current work-selection instructions. No item above may be implemented as R2 authority until the owner accepts it or approves corrected authority.
 
-Scripted model providers and in-memory persistence remain lower-level test tools and cannot close R2.
+## Factual capability maturity
 
-## Not R2 blockers
+Existing implementation and evidence are retained according to the maturity they actually demonstrate:
 
-Unless a concrete R2 failure promotes them:
-
-- speech input/output;
-- animated avatar/behavior integration;
-- labs/tool execution;
-- remote provider support/credentials;
-- dynamic multi-provider routing/fallback;
-- dedicated vector database;
-- durable event broker/outbox;
-- exact release GGUF model/quantization;
-- final Windows installer/signing/update mechanism;
-- plugins/public API/analytics/authoring/server/fleet deployment.
-
-These are owned by later roadmap stages.
-
-## Existing Phase 1–5 implementation
-
-Existing code is retained according to the maturity it actually demonstrates.
-
-- Contract/headless/conformance foundations remain reusable.
-- Phase 3/4 historical “complete” language means their documented deterministic technical gates, not product/release completion.
-- ADR-0051 through ADR-0067 remain reusable lifecycle/cancellation/runtime/speech/tool foundations, but only enter implementation work when the actual R2/R3 learner path needs them.
-
-## Capability maturity vocabulary
+- shared contracts and deterministic policy slices are **Contract Implemented** where their tests and traceability establish that state;
+- composed headless and runtime slices are **Runtime Integrated** only within the boundaries demonstrated by their evidence;
+- Phase 3/4 historical “complete” language means their documented deterministic technical gates, not product or release completion;
+- ADR-0051 through ADR-0067 and related implementations remain reusable lifecycle, cancellation, runtime, speech, and tool foundations, but do not independently authorize new product work;
+- scripted model providers and in-memory persistence remain lower-level test tools and do not demonstrate a concrete R2 product path;
+- the repository does not yet demonstrate the full candidate UI, SQLite, governed-course, local-model, durable-progress, and restart/resume system path.
 
 Use:
 
 `Concept -> Architecture Defined -> Specification Approved -> Contract Implemented -> Runtime Integrated -> Concrete Adapter Implemented -> System Verified -> User Accepted -> Release Ready`
 
-Do not report an unqualified `Complete` when a narrower maturity state is what the evidence proves.
+Do not report an unqualified `Complete` when a narrower maturity state is what the evidence proves. Historical deterministic, contract, and headless completion claims are qualified technical evidence, not product completion. Do not infer **System Verified**, **User Accepted**, or **Release Ready** from that evidence.
 
-## R2 work-selection rule
+## Owner-review route
 
-Every implementation increment must identify:
+The owner must explicitly decide whether to accept the merged v1/R2 baseline or authorize corrective authority changes. Review must cover, at minimum:
 
-1. the R2 release-path blocker it addresses;
-2. its governing parent architecture/specification/ADR;
-3. the E2E step it makes concrete;
-4. the maturity transition it advances;
-5. the evidence required to substantiate that transition.
+1. the v1 product and release boundary;
+2. `NEXA-ARCH-002` as the v1 implementation architecture;
+3. the R1 implementation baseline and its supplements;
+4. ADR-0068, including `eframe`/`egui`, SQLite/`rusqlite`, local `llama.cpp`, Windows x86_64, and the Networking Fundamentals / TCP Connection Establishment course;
+5. the R0–R9 roadmap as delivery authority;
+6. the release-stage disposition of speech, avatar/behavior embodiment, and labs/tools.
 
-Do not select work merely because another narrow ADR can be written.
+The owner decision must be recorded explicitly. If accepted, the status and affected authority records may then identify the precise resume gate and permitted work-selection route. If corrective changes are authorized, the owning architecture, specification, ADR, registry, roadmap, and status documents must be reconciled before product implementation resumes.
+
+## Work-selection rule while paused
+
+- Do not dispatch, select, or begin R2 product implementation.
+- Do not use the disputed merged approval language to infer delegation.
+- Do not restart the superseded open-ended Phase 5 sequence.
+- Documentation or review work needed to obtain and record the owner decision may proceed, provided it does not silently settle the disputed decisions.
+
+After an explicit owner decision authorizes implementation, each increment must identify the release-path blocker, governing parent authority, concrete E2E step, maturity transition, and required evidence.
 
 ## Chief Systems Architect control
 
-At every major stage boundary, and whenever parent maturity, deferrals, horizontal depth, status consistency, or product convergence materially diverge, the Chief Systems Architect performs a whole-system review and records:
+The active call is **Tactical Pause** because repository authority/status claims and the required owner-review history conflict. Local correctness and green CI are necessary but insufficient for continued program execution.
 
-- Continue;
-- Redirect;
-- Tactical Pause.
-
-Local correctness is necessary but not sufficient for continued program execution.
-
-## Current next action
-
-Begin R2 with the smallest vertical-enabling increment:
-
-- activate the real `apps/nexa-desktop` application shell;
-- activate the real `crates/nexa-storage` SQLite/`rusqlite` infrastructure boundary;
-- prove the egui async-safe application seam and SQLite open/migration/transaction architecture;
-- enforce UI/storage dependency boundaries;
-- add focused store/application startup tests;
-- add Windows release-critical validation proportional to the new surfaces.
-
-Then continue immediately down the vertical path: durable learning state -> governed content/retrieval -> local model adapter -> tutor/UI composition -> assessment/progress/restart E2E.
+The next action is owner review of the unresolved decision package above, not R2 implementation. Keep this PR unmerged pending re-review of its corrected exact head.
