@@ -1,7 +1,7 @@
 # Nexa Project Status
 
 Status date: 2026-08-26
-Current `main` checkpoint: `4369a85410c3dcb5ffcb619ef1c2a04bed08978f` (PR #110, merged from head `ff47d01bcd5a94fffbdd01f2ed9150e66df05665`)
+Current `main` checkpoint: `24e5b82d43e0d708fd8c21fe570d676da63d7d00` (PR #111, merged from head `133430b5f3a16c5ea493416662f5bfaae6a8ff03`)
 
 This document is the concise current-state authority for resuming Nexa work. Detailed historical increment evidence remains in Git history, accepted ADRs, and phase traceability matrices.
 
