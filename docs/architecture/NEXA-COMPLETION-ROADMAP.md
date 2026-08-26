@@ -1,284 +1,271 @@
 # Nexa Completion Roadmap
 
-Status: Proposed rebaseline roadmap; non-authoritative pending owner review
+Status: Approved delivery control
+Date: 2026-08-26
 
 ## Purpose
 
-This roadmap replaces an open-ended sequence of narrow technical increments with a dependency-driven path from the tactical-pause baseline to the Nexa v1 acceptance statement.
+This roadmap is the dependency-driven path from the tactical-pause baseline to Nexa v1 Release Ready. It replaces open-ended selection of the next narrow technical/ADR increment with product-maturity gates tied to the v1 acceptance statement.
 
-The roadmap is organized around product maturity and vertical integration. It does not discard the existing Phase 1-5 implementation; it reclassifies that work as foundation evidence and uses it where it accelerates the shortest credible route to release.
+Existing Phase 1–5 implementation is retained as reusable foundation evidence. New work is selected only when it advances a current release-path blocker.
 
 ## Governing rule
 
-No work enters implementation merely because it is the next unresolved ADR-sized topic. Every implementation increment must trace to a v1-required capability, an explicit release risk, or a blocking architecture/specification gap.
-
-## Stage R0 — Rebaseline governance and architecture
+Every implementation increment must trace to:
 
-Objective: restore the documentation hierarchy so that parent architecture and specifications lead implementation.
+1. a v1-required capability or explicit release risk;
+2. a governing parent architecture/specification/ADR;
+3. one or more concrete E2E steps;
+4. a capability maturity transition;
+5. evidence sufficient for that maturity claim.
 
-Required work:
+No implementation enters the queue merely because another narrow contract/ADR can be added.
 
-- complete the current-state/documentation-gap assessment;
-- approve the v1 definition and release boundary;
-- review `NEXA-ARCH-001` against current intent and implementation;
-- promote, revise, or supersede the architecture rather than leaving it Reconstructed;
-- review all active Baseline Draft subsystem specifications needed by v1;
-- reconcile README, registry, roadmap, status, and traceability terminology;
-- establish the capability maturity model and architecture rebaseline gates;
-- create a deferral register for inherited Phase 1-5 deferrals;
-- classify reserved namespaces as v1-required, conditional, or post-v1.
-- obtain an explicit owner decision classifying speech, avatar/behavior, and labs/tools as v1 or post-v1 before implementation resumes.
+## R0 — Governance and architecture rebaseline
 
-Exit gate:
+Status: **PASS for R2 after the rebaseline PR is green and merged.**
 
-Every v1-required capability has an authoritative parent architecture/specification, current maturity state, implementation boundary, acceptance criteria, and known deferrals.
+Completed:
 
-## Stage R1 — Critical cross-cutting specifications
+- current-state/documentation-gap assessment;
+- divergence analysis and lessons learned;
+- architecture rebaseline/program-integrity gates;
+- finite v1 product definition;
+- approved `NEXA-ARCH-002` v1 release architecture;
+- consolidated deferral review;
+- current registry/status/README/roadmap authority reconciliation;
+- R1 specification plan and implementation baseline.
 
-Objective: specify the concerns that have entered the v1 critical path.
+Exit: parent architecture and v1 release boundary are sufficiently authoritative to govern R2.
 
-Minimum required specifications/decisions:
+## R1 — Critical specification and technology baseline
 
-1. **Data and persistence**
-   - authoritative state and replay model;
-   - storage technology decision boundary;
-   - transactions/concurrency;
-   - migration/versioning;
-   - retention/deletion;
-   - backup/recovery;
-   - outbox/event publication if required.
+Status: **PASS for R2 after the rebaseline PR is green and merged.**
 
-2. **Security**
-   - threat model and trust boundaries;
-   - credential/secrets handling;
-   - local file/network privileges;
-   - remote provider trust boundary;
-   - lab/tool privilege model if labs enter v1.
+Approved R2-governing areas:
 
-3. **Privacy**
-   - learner-data classification;
-   - local/remote disclosure rules;
-   - retention/deletion;
-   - diagnostic redaction;
-   - model-provider disclosure policy.
+- data/persistence;
+- security;
+- privacy;
+- observability;
+- complete session orchestration;
+- domain/events;
+- learning subsystems;
+- tutor/knowledge;
+- learner UX;
+- testing/system acceptance;
+- performance measurement;
+- packaging/deployment constraints;
+- governed first-course content.
 
-4. **Observability**
-   - event/log/metric ownership;
-   - correlation model;
-   - content-safe diagnostics;
-   - operational health and failure evidence.
+ADR-0068 resolves the R2 technology/scope decisions.
 
-5. **Testing and acceptance**
-   - maturity-specific evidence expectations;
-   - integration/system/E2E test strategy;
-   - production-representative adapter requirements;
-   - user acceptance criteria.
+R1 intentionally does not finish all post-v1 specifications. The exit criterion is enough mature authority to implement the R2 walking skeleton safely.
 
-6. **UX/application**
-   - primary learner journey;
-   - core screens/states;
-   - interaction/error/recovery behavior;
-   - accessibility baseline.
+## R2 — Thin production walking skeleton
 
-7. **Packaging/deployment**
-   - first supported platform;
-   - install/configure/update/uninstall;
-   - persisted-data migration;
-   - release artifact provenance.
+Status: **Next implementation stage.**
 
-Exit gate:
+Objective: prove one real learner lesson through one composition root and concrete dependencies.
 
-No v1-critical cross-cutting concern remains only a reserved namespace or implicit assumption.
+Required path:
 
-## Stage R2 — Thin production walking skeleton
+```text
+learner text
+ -> apps/nexa-desktop
+ -> session orchestrator
+ -> SQLite durable state
+ -> learning/pedagogy
+ -> governed TCP course knowledge
+ -> local llama.cpp model adapter
+ -> admitted/quality-checked tutor response
+ -> assessment/practice
+ -> atomic evidence/mastery/progress commit
+ -> exit/restart/resume
+```
 
-Objective: create the first real end-to-end Nexa path using concrete dependencies.
+Required concrete elements:
 
-Scope intentionally minimal:
+- `apps/nexa-desktop` learner application shell;
+- `eframe`/`egui` suitability proven by bounded spike;
+- active `crates/nexa-storage` SQLite/`rusqlite` adapter;
+- governed Networking Fundamentals/TCP content package;
+- concrete local llama.cpp adapter;
+- existing learning/tutor/knowledge contracts composed where applicable;
+- content-safe operational correlation.
 
-- learner-facing application shell;
-- one authored course and lesson fixture suitable for production-style use;
-- durable learner/lesson persistence;
-- existing learning-core policies;
-- governed knowledge content and retrieval;
-- one concrete model provider;
-- structured tutor response admission;
-- text output in the application;
-- durable progress commit and restart/resume;
-- correlation-safe logging.
+R2 exit:
 
-Do not require speech, avatar, labs, dynamic routing, plugins, or advanced authoring to close this stage.
+A learner can complete the bounded TCP lesson through the actual desktop boundary with the real local model and durable state, then restart/resume without lost or duplicated accepted progress.
 
-Exit gate:
+Scripted provider outcomes and in-memory persistence do not close R2.
 
-A learner can complete one primitive real lesson through one composition root with a real model and durable state, then restart and resume correctly.
+### R2 implementation sequence guidance
 
-## Stage R3 — Complete session orchestration
+Prefer small vertical increments:
 
-Objective: turn the walking skeleton into a robust learner session.
+1. Desktop + storage architecture activation.
+2. Durable learning state and restart/resume foundation.
+3. Governed first-course/content persistence/retrieval path.
+4. Concrete local model adapter.
+5. Compose tutor/knowledge/model into desktop interaction.
+6. Compose assessment/evidence/progress commit.
+7. Close the R2 E2E acceptance scenario.
 
-Required work:
+The exact PR boundaries may change with evidence, but each must make the vertical path more concrete.
 
-- compose current lifecycle/cancellation foundations into the actual learner workflow;
-- define and implement timeout policy;
-- define bounded retry/recovery behavior;
-- ensure cancellation/interruption cannot corrupt state;
-- integrate retrieval/model/persistence failures into explicit user-visible outcomes;
-- establish workflow-level observability;
-- verify shutdown and restart behavior.
+## R3 — Robust complete session orchestration
 
-Existing ADR-0051 through ADR-0067 work should be reused only where it directly supports this session path.
+Status: Not started.
 
-Exit gate:
+Objective: turn the R2 skeleton into a resilient learner session.
 
-The primary learner journey survives expected dependency failures, cancellation, shutdown, and restart without state corruption.
+Required maturity:
 
-## Stage R4 — Grounding and tutor quality gate
+- actual lifecycle/cancellation foundations composed into the learner workflow;
+- finite timeout policy;
+- bounded retry/recovery policy;
+- learner-visible dependency failures;
+- cancellation/shutdown without state corruption;
+- startup/recovery behavior;
+- workflow-level observability.
 
-Objective: ensure a structurally valid tutor response is also acceptable for the released educational experience.
+Reuse ADR-0051 through ADR-0067 only where they directly support the actual session path.
 
-Required work:
+Exit: the primary learner journey survives expected model/retrieval/storage failures, cancellation, shutdown, and restart without corrupting accepted state.
 
-- define semantic grounding/entailment expectations for v1;
-- establish citation fidelity checks appropriate to the released corpus;
-- define instructional-quality acceptance criteria;
-- define prompt-injection/content-boundary handling relevant to governed knowledge;
-- create evaluation fixtures and a repeatable model-quality test suite;
-- separate deterministic structural tests from probabilistic/evaluation evidence.
+## R4 — Grounding and tutor quality
 
-Exit gate:
+Status: Not started.
 
-The configured v1 model path meets explicit grounding, citation, and instructional-quality acceptance criteria on the release evaluation set.
-
-## Stage R5 — Required UX and any approved conditional capabilities
-
-Objective: make the primary learner journey usable and complete any richer interfaces that the owner explicitly included in v1 at R0 before implementation resumed.
-
-Required:
-
-- course/lesson selection and resume;
-- conversation/input presentation;
-- lesson/progress feedback;
-- assessment interaction;
-- errors/recovery states;
-- accessibility checks.
-
-Capabilities whose R0 disposition may conditionally add work here:
-
-- speech input;
-- TTS/speech output;
-- animated avatar integration;
-- labs/tool execution.
-
-Decision rule:
-
-A conditional capability may enter v1 only by explicit owner decision before implementation resumes and only if it can reach concrete adapter + runtime integration + system verification + user acceptance without jeopardizing the core release path. R5 does not defer or reopen that scope decision.
-
-Exit gate:
-
-The primary UX is user-testable, and every conditional capability has an explicit v1/post-v1 disposition.
-
-## Stage R6 — Security, privacy, and data-integrity verification
-
-Objective: verify the cross-cutting specifications against the assembled system.
-
-Required work:
-
-- threat-model review of actual data flows;
-- credential/secret storage verification;
-- remote disclosure testing;
-- retention/deletion tests;
-- persistence corruption/failure injection;
-- migration tests;
-- diagnostic redaction review;
-- least-privilege verification;
-- supply-chain/dependency review proportional to release.
-
-Exit gate:
-
-No unresolved critical security, privacy, or data-integrity finding remains.
-
-## Stage R7 — Operational and performance hardening
-
-Objective: make Nexa diagnosable and sufficiently performant on the supported target.
-
-Required work:
-
-- explicit startup/interaction/model/retrieval/persistence latency budgets;
-- memory/resource budget;
-- representative corpus/course benchmarks;
-- structured logging/correlation verification;
-- failure/recovery diagnostics;
-- soak/restart tests where appropriate.
-
-Exit gate:
-
-Measured release candidate meets approved budgets and can be diagnosed without unsafe content exposure.
-
-## Stage R8 — Packaging and release candidate
-
-Objective: produce a distributable release candidate.
-
-Required work:
-
-- supported platform declaration;
-- reproducible build;
-- installer/package;
-- configuration workflow;
-- data migration on upgrade;
-- version/reporting;
-- third-party license and asset provenance;
-- release notes and known limitations;
-- clean install / upgrade / uninstall test matrix.
-
-Exit gate:
-
-A fresh supported machine can install, configure, run, upgrade, and remove Nexa according to the release specification.
-
-## Stage R9 — System verification and user acceptance
-
-Objective: prove the system rather than its individual contracts.
+Objective: prove the tutor is not merely structurally valid but acceptable for released instruction.
 
 Required evidence:
 
-- primary learner journey E2E pass;
-- restart/resume pass;
-- model/storage/retrieval failure paths;
-- interruption/cancellation pass;
-- security/privacy/data-integrity gates;
-- performance gates;
-- accessibility gate;
-- user acceptance session(s);
-- all v1-required capability maturity states at their release thresholds;
-- all remaining deferrals explicitly classified post-v1.
+- governed first-course evaluation set;
+- factual grounding against supplied sources;
+- citation fidelity/support;
+- instructional correctness/usefulness;
+- assessment-answer protection;
+- relevant prompt-injection/hostile-source cases;
+- exact model/configuration/version evidence;
+- repeatable quality thresholds and known nondeterminism.
 
-Exit gate:
+This stage also selects the release model/quantization from evidence rather than architecture preference.
 
-The Nexa v1 acceptance statement is satisfied and a release decision can be made from evidence.
+Exit: the exact release-intended model/configuration meets the approved first-course quality gate.
 
-## Work-selection priority after rebaseline
+## R5 — Speech/avatar product decision and optional integration
 
-When multiple tasks are available, select in this order:
+Status: Not started; not R2 blocking.
 
-1. blocks the primary learner journey;
-2. blocks durable correctness/state integrity;
-3. blocks security/privacy of the primary journey;
-4. blocks observability/recovery of the primary journey;
-5. blocks packaging/release;
-6. improves accepted v1 user experience;
-7. optional v1 capability;
-8. post-v1 architectural generalization.
+Objective: decide from the functioning text tutor whether speech and/or animated embodiment are required for the first public v1 release or should ship later.
 
-This ordering intentionally prevents another drift into technically valid but release-low-leverage horizontal work.
+If promoted, a capability must advance beyond existing contracts to concrete adapters and system verification:
 
-## Definition of roadmap health
+- real microphone/STT and/or TTS/audio for speech;
+- semantic behavior synchronization;
+- actual avatar asset/runtime integration through NBP/avatar boundaries;
+- interruption/synchronization/privacy/accessibility evidence.
 
-At every architecture rebaseline, the Chief Systems Architect must be able to answer:
+If not promoted, retain the existing foundations for post-v1 without blocking release.
 
-- What stage are we in?
-- What exact exit evidence is missing?
-- What is the next blocker to the primary learner journey?
-- Which inherited deferrals have reached their review point?
-- Can the remaining path to v1 be stated finitely?
+## R6 — Labs/tools if promoted
 
-If any answer is unclear, implementation pauses until the roadmap is revalidated.
+Status: Post-R2 by default.
+
+Only enter this stage before v1 if the accepted course/release outcome requires actual tool/lab practice.
+
+Promotion requires:
+
+- real tool execution;
+- actual sandbox/enforcement;
+- authorization/confirmation UX;
+- resource/network/filesystem restrictions;
+- observation/evidence;
+- timeout/cancellation/orphan cleanup;
+- security testing.
+
+Contract declarations/cancellation controls alone are insufficient.
+
+## R7 — Performance and operational hardening
+
+Status: Not started.
+
+Objective: measure and harden the exact release path.
+
+Measure on an approved Windows reference environment:
+
+- startup/readiness;
+- UI responsiveness under model work;
+- storage load/commit;
+- retrieval/context assembly;
+- model learner-visible latency;
+- memory/disk/resource use;
+- restart/resume;
+- failure/recovery behavior.
+
+Optimization is selected from measured failures against accepted budgets, not assumptions.
+
+Exit: no unresolved release-blocking performance/operational finding.
+
+## R8 — Packaging, install, update, and distribution
+
+Status: Not started.
+
+Required outcomes:
+
+- reproducible Windows x86_64 release build;
+- final package/installer decision;
+- model/runtime distribution/configuration decision;
+- application/data/config/log locations;
+- upgrade and schema migration;
+- rollback/recovery where applicable;
+- uninstall/data-retention behavior;
+- artifact provenance/signing/attestation policy;
+- third-party dependency/model/runtime/license/asset provenance.
+
+`cargo-dist` may be evaluated as release-artifact orchestration; final packaging technology is evidence-driven.
+
+Exit: a release candidate can be installed/upgraded/uninstalled according to the supported v1 policy.
+
+## R9 — System verification, user acceptance, release
+
+Status: Not started.
+
+Required gates:
+
+- complete primary learner E2E test with release-equivalent adapters;
+- migration/restart/recovery tests;
+- security/privacy review of actual flows;
+- performance budgets passed;
+- package/install/upgrade acceptance;
+- accessibility acceptance for the supported UI;
+- representative user acceptance;
+- no unresolved critical architecture, security, privacy, data-integrity, or system-quality finding.
+
+Exit: Nexa v1 satisfies the approved v1 acceptance statement and may be declared Release Ready.
+
+## Capability maturity vocabulary
+
+Use:
+
+`Concept -> Architecture Defined -> Specification Approved -> Contract Implemented -> Runtime Integrated -> Concrete Adapter Implemented -> System Verified -> User Accepted -> Release Ready`
+
+Each status claim must name its scope and evidence.
+
+## Rebaseline checkpoints
+
+A whole-system architecture/program-integrity review occurs:
+
+- at R2 exit;
+- before material R3 broadening;
+- before promoting speech/avatar/labs into the release critical path;
+- before R8 release engineering;
+- whenever material drift signals appear.
+
+The outcome is explicitly Continue, Redirect, or Tactical Pause.
+
+## Current next action
+
+After the rebaseline PR is green on the exact final head and merged, begin R2. Do not resume the superseded horizontal Phase 5 sequence.
