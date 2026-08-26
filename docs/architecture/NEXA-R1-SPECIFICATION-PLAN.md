@@ -1,6 +1,6 @@
 # Nexa R1 Critical Specification Plan
 
-Status: Proposed rebaseline execution plan
+Status: Proposed rebaseline execution plan; non-authoritative review input
 
 ## Purpose
 
@@ -201,7 +201,7 @@ Must define:
 
 ## Conditional specification decisions
 
-Before R1 closes, the architecture review must decide whether these are **v1 release capabilities** or explicitly **post-v1**:
+Before implementation resumes (and therefore before R0 exits or R1 can close), the owner must decide whether these are **v1 release capabilities** or explicitly **post-v1**:
 
 - Speech input;
 - Speech output/TTS;

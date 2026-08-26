@@ -1,6 +1,6 @@
 # Nexa v1 Product Definition and Release Boundary
 
-Status: Proposed rebaseline baseline
+Status: Proposed product boundary; non-authoritative pending owner review
 
 ## Purpose
 

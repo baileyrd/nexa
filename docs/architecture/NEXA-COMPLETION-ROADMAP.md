@@ -1,6 +1,6 @@
 # Nexa Completion Roadmap
 
-Status: Proposed rebaseline roadmap
+Status: Proposed rebaseline roadmap; non-authoritative pending owner review
 
 ## Purpose
 
@@ -27,6 +27,7 @@ Required work:
 - establish the capability maturity model and architecture rebaseline gates;
 - create a deferral register for inherited Phase 1-5 deferrals;
 - classify reserved namespaces as v1-required, conditional, or post-v1.
+- obtain an explicit owner decision classifying speech, avatar/behavior, and labs/tools as v1 or post-v1 before implementation resumes.
 
 Exit gate:
 
@@ -149,9 +150,9 @@ Exit gate:
 
 The configured v1 model path meets explicit grounding, citation, and instructional-quality acceptance criteria on the release evaluation set.
 
-## Stage R5 — Required UX and optional embodiment decision
+## Stage R5 — Required UX and any approved conditional capabilities
 
-Objective: make the primary learner journey usable and decide which richer interfaces are release-critical.
+Objective: make the primary learner journey usable and complete any richer interfaces that the owner explicitly included in v1 at R0 before implementation resumed.
 
 Required:
 
@@ -162,7 +163,7 @@ Required:
 - errors/recovery states;
 - accessibility checks.
 
-Conditional release candidates:
+Capabilities whose R0 disposition may conditionally add work here:
 
 - speech input;
 - TTS/speech output;
@@ -171,7 +172,7 @@ Conditional release candidates:
 
 Decision rule:
 
-A conditional capability enters v1 only if it can reach concrete adapter + runtime integration + system verification + user acceptance without jeopardizing the core release path.
+A conditional capability may enter v1 only by explicit owner decision before implementation resumes and only if it can reach concrete adapter + runtime integration + system verification + user acceptance without jeopardizing the core release path. R5 does not defer or reopen that scope decision.
 
 Exit gate:
 

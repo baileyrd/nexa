@@ -1,6 +1,26 @@
 # Nexa project status
 
-Updated from the verified predecessor checkpoint at merge commit `7c8de456e51cd4031e26ff33fe8011e7cbec7989` (PR #41). This is a checkpoint, not an additional specification or ADR. The change containing this status update adds the narrow ADR-0040 capability without assuming a future merge SHA.
+Updated from the tactical-pause baseline at merge commit `e2345a1bb8825451ea079ff5e350b7765075038a` (PR #109). This is the factual checkpoint and authoritative resume route, not an additional specification or ADR.
+
+## Active tactical pause
+
+Product implementation is intentionally paused by owner direction. The current assessment finds substantial, locally verified contract-first foundations, but not equivalent product maturity: parent architecture and specifications trail implementation, and concrete adapters, durable state, end-to-end integration, system verification, user acceptance, and release readiness remain incomplete for the primary learner journey. The Phase 5 headless/control work below is foundation evidence, not permission to continue the superseded open-ended Phase 5 increment loop.
+
+The pause is administered by the active [rebaseline task ledger](governance/REBASELINE-TASK-LEDGER.md). Product implementation MUST NOT resume until the ledger's resume gates are satisfied, including explicit owner decisions on the v1 boundary, proposed system architecture, and conditional speech/avatar/labs disposition. The pause and ledger are active execution controls; the proposed product definition, architecture, roadmap, gates, matrix, R1 plan, and R1 drafts are review inputs and are not approved authority.
+
+Resume and review routing:
+
+- factual state: [current-state assessment](architecture/NEXA-CURRENT-STATE-ASSESSMENT.md);
+- proposed product boundary: [v1 definition](architecture/NEXA-V1-DEFINITION.md);
+- proposed architecture: [v1 system architecture](architecture/NEXA-V1-SYSTEM-ARCHITECTURE.md);
+- proposed delivery sequence: [completion roadmap](architecture/NEXA-COMPLETION-ROADMAP.md);
+- proposed classification: [rebaseline matrix](architecture/NEXA-REBASELINE-MATRIX.md);
+- inherited issues: [deferral register](governance/DEFERRAL-REGISTER.md);
+- execution control and resume gates: [rebaseline task ledger](governance/REBASELINE-TASK-LEDGER.md);
+- review-only R1 scope and drafts: [R1 specification plan](architecture/NEXA-R1-SPECIFICATION-PLAN.md) and the complete [R1 draft directory](architecture/r1-drafts/), whose individual authority relationships are listed in the registry;
+- proposed implementation technology choices: [v1 technology recommendations](architecture/NEXA-V1-TECHNOLOGY-RECOMMENDATIONS.md), each requiring an owning ADR/specification decision before use.
+
+Until explicit review decisions are recorded in the registry, `NEXA-ARCH-001`, NEXA-CBS-001, the registry-listed Baseline Draft specifications, and accepted ADRs retain their existing authority. No rebaseline proposal in this change silently approves, promotes, revises, or supersedes them.
 
 ## Verified checkpoint
 

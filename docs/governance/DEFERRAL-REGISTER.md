@@ -1,6 +1,6 @@
 # Nexa Architectural Deferral Register
 
-Status: Tactical-pause initial register
+Status: Proposed tactical-pause register; non-authoritative consolidation
 
 ## Purpose
 

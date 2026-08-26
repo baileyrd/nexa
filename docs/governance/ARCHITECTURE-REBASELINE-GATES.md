@@ -1,10 +1,10 @@
 # Nexa Architecture Rebaseline and Program-Integrity Gates
 
-Status: Tactical-pause proposed governance
+Status: Proposed governance; non-authoritative pending owner review
 
 ## Purpose
 
-These gates prevent local implementation correctness from being mistaken for system-level architectural progress. They apply to Nexa immediately and are intended to seed reusable engineering standards.
+These gates propose how to prevent local implementation correctness from being mistaken for system-level architectural progress. The owner-authorized tactical pause applies immediately, and its active ledger uses these gates as a conservative review checklist. The gates themselves are not approved governance and do not alter existing specification or ADR authority until an explicit owner and registry decision.
 
 ## Gate model
 

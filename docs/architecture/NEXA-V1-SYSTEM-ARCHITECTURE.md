@@ -387,7 +387,7 @@ The v1 architecture is considered exercised only when tests prove at least:
 9. security/privacy controls at the actual remote/local boundaries;
 10. user acceptance of the primary journey.
 
-## 19. Architecture decisions still required before R0/R1 exit
+## 19. Architecture decisions still required before implementation resumes
 
 This proposal deliberately does not silently choose:
 
@@ -402,7 +402,7 @@ This proposal deliberately does not silently choose:
 - semantic-quality evaluation implementation/thresholds;
 - exact performance budgets.
 
-Those decisions must be made from the v1 product boundary and recorded in the owning specifications/ADRs.
+Those decisions must be made from the v1 product boundary and recorded in the owning specifications/ADRs. In particular, the owner must decide the v1/post-v1 disposition of speech, avatar/behavior, and labs/tools before R0 exits and any product implementation resumes; this proposal does not choose that disposition.
 
 ## 20. Rebaseline effect on existing implementation
 

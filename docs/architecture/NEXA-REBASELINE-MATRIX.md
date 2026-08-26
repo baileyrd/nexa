@@ -1,6 +1,6 @@
 # Nexa Specification and Capability Rebaseline Matrix
 
-Status: Tactical-pause working baseline
+Status: Proposed rebaseline matrix; non-authoritative pending owner review
 
 ## Purpose
 

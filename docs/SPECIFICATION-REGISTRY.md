@@ -11,8 +11,13 @@ This registry is the navigation and governance authority for Nexa system specifi
 | Approved | Reviewed and accepted for implementation |
 | Implemented | The governed contract has a verified implementation |
 | Superseded | Replaced by an identified later specification |
+| Active Control | Owner-authorized execution constraint; does not approve the proposals it controls |
+| Assessment | Factual review evidence; not product or architecture authority |
+| Proposal | Review input only; non-authoritative until an explicit approval/status decision |
 
 ## Governing documents
+
+The owner-authorized tactical pause and its task ledger are active execution controls. They do not change the authority of the governing documents below. The rebaseline product, architecture, roadmap, governance, matrix, plan, and specification documents are proposals until explicit owner review and a registry decision records otherwise.
 
 | ID | Document | Status | Scope |
 |---|---|---|---|
@@ -85,6 +90,36 @@ This registry is the navigation and governance authority for Nexa system specifi
 | ADR-0067 | [Provider-neutral asynchronous Speech input port foundation](adr/0067-provider-neutral-asynchronous-speech-input-port-foundation.md) | Accepted | Exact bounded Speech input operation, cooperative cancellation, and content-safe evidence; no concrete input or headless binding |
 | ADR-0014 | [Learning-core composition and atomicity](adr/0014-learning-core-composition-and-atomicity.md) | Accepted | Phase 3 policy composition, unit of work, idempotency, and deferred durable adapters |
 | ADR-0008 | [Controlled 3D workspace migration and ownership](adr/0008-controlled-3d-workspace-migration.md) | Accepted | 3D library, viewer, and validator ownership after migration |
+
+## Tactical-pause and rebaseline artifacts
+
+| Artifact | Document | Status | Authority relationship |
+|---|---|---|---|
+| Current-state assessment | [Nexa Current-State and Documentation-Gap Assessment](architecture/NEXA-CURRENT-STATE-ASSESSMENT.md) | Assessment | Factual evidence at baseline `e2345a1`; does not govern product design |
+| Divergence analysis | [Nexa Development Divergence Analysis](governance/DEVELOPMENT-DIVERGENCE-ANALYSIS.md) | Assessment | Forensic evidence and lessons input; does not supersede existing authority |
+| Lessons learned | [Nexa Development Lessons Learned](governance/DEVELOPMENT-LESSONS-LEARNED.md) | Assessment | Project review input; any normative adoption requires separate approval |
+| Rebaseline task ledger | [Nexa Tactical-Pause Rebaseline Task Ledger](governance/REBASELINE-TASK-LEDGER.md) | Active Control | Owner-authorized pause/resume control; does not approve referenced proposals |
+| v1 product definition | [Nexa v1 Product Definition and Release Boundary](architecture/NEXA-V1-DEFINITION.md) | Proposal | Proposed product boundary pending owner decision |
+| v1 system architecture | [Nexa v1 System Architecture](architecture/NEXA-V1-SYSTEM-ARCHITECTURE.md) | Proposal | Does not replace Reconstructed `NEXA-ARCH-001` without explicit review/status action |
+| Completion roadmap | [Nexa Completion Roadmap](architecture/NEXA-COMPLETION-ROADMAP.md) | Proposal | Proposed R0-R9 sequence; does not replace the current implementation roadmap yet |
+| Rebaseline matrix | [Nexa Specification and Capability Rebaseline Matrix](architecture/NEXA-REBASELINE-MATRIX.md) | Proposal | Proposed classifications only; existing specification statuses remain unchanged |
+| Rebaseline gates | [Nexa Architecture Rebaseline and Program-Integrity Gates](governance/ARCHITECTURE-REBASELINE-GATES.md) | Proposal | Review checklist used by the active pause; not approved governance policy |
+| Deferral register | [Nexa Architectural Deferral Register](governance/DEFERRAL-REGISTER.md) | Proposal | Consolidated review input; originating ADR/specification remains authoritative |
+| R1 specification plan | [Nexa R1 Critical Specification Plan](architecture/NEXA-R1-SPECIFICATION-PLAN.md) | Proposal | Review input only; neither starts nor closes R1 and authorizes no implementation |
+| Data/persistence R1 draft | [Nexa v1 Data and Persistence Specification — Draft](architecture/r1-drafts/NEXA-DATA-PERSISTENCE-V1-DRAFT.md) | Proposal | Non-authoritative R1 review input; no requirements are approved by inclusion |
+| Security R1 draft | [Nexa v1 Security Architecture Specification — Draft](architecture/r1-drafts/NEXA-SECURITY-V1-DRAFT.md) | Proposal | Non-authoritative R1 review input; no requirements are approved by inclusion |
+| Privacy R1 draft | [Nexa v1 Privacy and Data Handling Specification — Draft](architecture/r1-drafts/NEXA-PRIVACY-V1-DRAFT.md) | Proposal | Non-authoritative R1 review input; no requirements are approved by inclusion |
+| Observability R1 draft | [Nexa v1 Observability Specification — Draft](architecture/r1-drafts/NEXA-OBSERVABILITY-V1-DRAFT.md) | Proposal | Non-authoritative R1 review input; no requirements are approved by inclusion |
+| Orchestrator R1 rebaseline draft | [NEXA-ORCH-001 v1 Rebaseline Requirements — Draft](architecture/r1-drafts/NEXA-ORCH-V1-REBASELINE-DRAFT.md) | Proposal | Review input for reconciling the Baseline Draft; does not supersede or mature `NEXA-ORCH-001` |
+| Domain/events R1 rebaseline draft | [Nexa Domain and Events v1 Rebaseline Requirements — Draft](architecture/r1-drafts/NEXA-DOM-EVT-V1-REBASELINE-DRAFT.md) | Proposal | Review input only; does not mature `NEXA-DOM-001` or `NEXA-EVT-001` |
+| Learning R1 rebaseline draft | [Nexa Learning Subsystems v1 Rebaseline Requirements — Draft](architecture/r1-drafts/NEXA-LEARNING-V1-REBASELINE-DRAFT.md) | Proposal | Review input only; does not mature the student, pedagogy, lesson, or assessment specifications |
+| Tutor/knowledge R1 rebaseline draft | [Nexa Tutor and Knowledge v1 Rebaseline Requirements — Draft](architecture/r1-drafts/NEXA-TUTOR-KNOWLEDGE-V1-REBASELINE-DRAFT.md) | Proposal | Review input only; does not mature `NEXA-TUTOR-001` or `NEXA-KNOW-001` |
+| UX R1 draft | [Nexa v1 Learner UX Specification — Draft](architecture/r1-drafts/NEXA-UX-V1-DRAFT.md) | Proposal | Non-authoritative R1 review input; no requirements are approved by inclusion |
+| Testing/acceptance R1 draft | [Nexa v1 Testing and System Acceptance Specification — Draft](architecture/r1-drafts/NEXA-TESTING-ACCEPTANCE-V1-DRAFT.md) | Proposal | Non-authoritative R1 review input; does not establish R1 closure |
+| Performance R1 draft | [Nexa v1 Performance Specification — Draft](architecture/r1-drafts/NEXA-PERFORMANCE-V1-DRAFT.md) | Proposal | Non-authoritative R1 review input; no budget is approved by inclusion |
+| Packaging/deployment R1 draft | [Nexa v1 Packaging and Deployment Specification — Draft](architecture/r1-drafts/NEXA-PACKAGING-DEPLOYMENT-V1-DRAFT.md) | Proposal | Non-authoritative R1 review input; no platform decision is approved by inclusion |
+| Governed content R1 draft | [Nexa v1 Governed Content and Release Specification — Draft](architecture/r1-drafts/NEXA-CONTENT-RELEASE-V1-DRAFT.md) | Proposal | Non-authoritative R1 review input; does not authorize content release |
+| Technology recommendations | [Nexa v1 Technology Recommendations](architecture/NEXA-V1-TECHNOLOGY-RECOMMENDATIONS.md) | Proposal | Architecture review input; each selection requires its owning ADR/specification approval |
 
 ## Subsystem specifications
 

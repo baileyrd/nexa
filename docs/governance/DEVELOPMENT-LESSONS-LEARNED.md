@@ -1,6 +1,6 @@
 # Nexa Development Lessons Learned
 
-Status: Tactical-pause working baseline
+Status: Tactical-pause assessment input; non-authoritative
 
 ## Purpose
 
