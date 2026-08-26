@@ -1,239 +1,114 @@
 # Nexa Implementation Roadmap
 
-This roadmap converts the reconstructed design baseline into verifiable increments. Phase boundaries are architectural gates, not calendar promises.
+Status date: 2026-08-26
 
-## Phase 0 — Govern the baseline
+The pre-tactical-pause Phase 0–6 roadmap is preserved in Git history and phase traceability, but it no longer selects new implementation work.
 
-- Maintain the canonical specification registry.
-- Audit dependency declarations, identifiers, duplicates, and reconstruction formatting.
-- Define ownership, status transitions, and conformance evidence.
-- Repair repository navigation and CI documentation.
-- Preserve the working 3D runtime while the workspace is established.
+The current delivery authority is:
 
-Exit: every active specification has an ID, status, authority, dependencies, and intended implementation boundary.
+- [`NEXA-COMPLETION-ROADMAP.md`](NEXA-COMPLETION-ROADMAP.md)
+- [`NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md`](NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md)
+- [`NEXA-R1-IMPLEMENTATION-BASELINE.md`](NEXA-R1-IMPLEMENTATION-BASELINE.md)
+- [`../adr/0068-v1-r2-walking-skeleton-baseline.md`](../adr/0068-v1-r2-walking-skeleton-baseline.md)
 
-## Phase 1 — Establish the contract kernel
+## Why the roadmap changed
 
-Implement and test:
+The tactical-pause assessment found that qualified deterministic/headless contract gates had become program-progress signals while parent architecture/specification maturity and vertical product integration lagged. The new roadmap is organized around capability maturity and a finite release outcome.
 
-- `nexa-domain`
-- `nexa-events`
-- `nexa-nbp`
-- shared error, identifier, time, version, and confidence types
+Historical Phase 1–5 work remains valid evidence and reusable implementation. It is not discarded; it is reclassified according to what it actually proves.
 
-Exit: downstream subsystems consume one canonical set of serialized contracts with schema compatibility tests.
+## Current stage summary
 
-## Phase 2 — Migrate embodiment
+| Stage | Purpose | Status |
+|---|---|---|
+| R0 | Rebaseline governance and architecture | PASS for R2, pending PR #110 merge |
+| R1 | Critical specification/technology baseline | PASS for R2, pending PR #110 merge |
+| R2 | Thin real production walking skeleton | Next implementation stage |
+| R3 | Robust complete session orchestration | Not started |
+| R4 | Grounding/tutor quality gate | Not started |
+| R5 | Speech/avatar integration decision and optional capability hardening | Not started |
+| R6 | Labs/tools only if promoted by release scope | Not started |
+| R7 | Measured performance/operational hardening | Not started |
+| R8 | Packaging/install/update/release engineering | Not started |
+| R9 | System verification, user acceptance, release | Not started |
 
-**Status:** Complete. The ownership migration and governed embodiment acceptance flow are verified.
+## R2 objective
 
-- [x] Split the former root package into `crates/nexa-3d`, `apps/nexa-3d-viewer`, and `tools/nexa-3d-validate`.
-- [x] Add `nexa-avatar` as the renderer-neutral embodiment port.
-- [x] Preserve headless validation, animation, skinning, gaze, and viseme behavior.
-- [x] Validate runtime assets and manifests through headless CI gates.
-- [x] Complete NBP capability negotiation, governed outputs, typed lifecycle events, and deterministic headless conformance.
+Create the first real end-to-end Nexa learner path using concrete dependencies:
 
-The ownership move is recorded in [ADR-0008](../adr/0008-controlled-3d-workspace-migration.md); acceptance and lifecycle semantics are recorded in [ADR-0009](../adr/0009-embodiment-acceptance-and-lifecycle.md).
+```text
+learner text
+ -> apps/nexa-desktop
+ -> orchestrator
+ -> SQLite durable state
+ -> learning/pedagogy
+ -> governed knowledge
+ -> local llama.cpp model adapter
+ -> admitted tutor response
+ -> assessment/practice
+ -> atomic evidence/mastery/progress commit
+ -> restart/resume
+```
 
-Exit: the 3D implementation consumes NBP/avatar contracts and all existing tests pass from the workspace root.
+R2 uses the bounded TCP Connection Establishment course as its first acceptance package.
 
-## Phase 3 — Build the learning core
+## R2 exit gate
 
-**Status:** Complete for the headless deterministic exit gate. Durable production adapters remain a
-later infrastructure increment and are not implied by this status.
+A learner can complete one primitive real lesson through one composition root using:
 
-Implement:
+- actual learner desktop UI boundary;
+- actual SQLite persistence;
+- actual governed course/knowledge data;
+- actual local model server adapter;
+- existing domain/tutor/knowledge contracts where appropriate;
+- atomic durable progress;
+- restart/resume;
+- content-safe correlated diagnostics.
 
-- [x] governed student model, immutable evidence ledger, versioned replay policy, and persistence ports
-- [x] pure, versioned, explainable pedagogy policy over read-only mastery projections
-- [x] governed curriculum contracts and pure, versioned headless lesson transitions
-- [x] dependency-light assessment contracts, deterministic scoring, lifecycle, and evidence creation
-- [x] synchronous learning-core composition and explicit atomic unit-of-work port
+Scripted provider outcomes, in-memory persistence, or headless contract tests alone do not close R2.
 
-Exit: **demonstrated** by the `nexa-learning-core` end-to-end conformance and failure-injection tests: a headless deterministic lesson adapts, assesses, appends evidence, replays mastery, routes governed progress, and commits atomically without an LLM or avatar.
+## Work-selection rule
 
-See [ADR-0010](../adr/0010-learning-state-evidence-and-persistence.md),
-[ADR-0011](../adr/0011-pedagogy-policy-ownership-and-versioning.md),
-[ADR-0012](../adr/0012-governed-curriculum-and-lesson-transitions.md),
-[ADR-0013](../adr/0013-assessment-contract-scoring-and-evidence.md),
-[ADR-0014](../adr/0014-learning-core-composition-and-atomicity.md), and the
-[Phase 3 traceability matrix](PHASE-3-TRACEABILITY.md). Durable adapter semantics remain unresolved and are recorded rather than silently selected.
+Every implementation increment must identify:
 
-## Phase 4 — Add knowledge and tutor intelligence
+1. the R2/R3 release blocker it addresses;
+2. its governing parent architecture/specification/ADR;
+3. the E2E step it makes more concrete;
+4. the capability maturity transition it demonstrates;
+5. the evidence required for that maturity transition.
 
-**Status:** Complete for the deterministic headless contract gate. The Phase 4 evidence demonstrates governed ingestion/provenance, retrieval, deterministic context assembly and citation resolution; canonical confidence; structured tutor planning with citation-bound semantic behavior intent; strict machine admission; and deterministic provider-neutral invocation, selection, filtering, exact-tokenization, and usage-validation contracts through ADR-0050. This qualified closure does not claim semantic truth/entailment or hallucination control, concrete inference/providers/tokenizers, dynamic routing or automatic local-first policy, privacy-policy correctness or semantic minimization, retry/repair, networking, persistence/durable adapters, tools, async/streaming, telemetry, or vector-database integration.
+Do not select work merely because another narrow ADR-sized contract can be added.
 
-- [x] Source ingestion and provenance (ADR-0015)
-- [x] deterministic governed lexical and vector retrieval and exact hybrid fusion (ADRs 0016–0018)
-- [x] context assembly and token budgeting (ADR-0019)
-- [x] deterministic citation resolution (ADR-0020)
-- [x] confidence-bearing canonical contracts and structured tutor/behavior output (ADR-0021)
-- [x] strict machine validation and admission (ADR-0024)
-- [x] deterministic provider-neutral invocation, selection, filtering, exact-tokenization, and usage validation through ADR-0050
+## Deferred from the R2 critical path
 
-Exit: grounded responses carry citations, confidence, and machine-validated tutor/behavior output. **Demonstrated for the deterministic headless contract gate** by the [Phase 4 traceability matrix](PHASE-4-TRACEABILITY.md).
+Unless a concrete R2 blocker proves otherwise:
 
-## Phase 5 — Orchestrate a complete session
+- speech input/output;
+- animated avatar embodiment;
+- labs/tool execution;
+- dynamic multi-provider routing/fallback;
+- remote-provider privacy/credential support;
+- dedicated vector database;
+- durable event broker/outbox;
+- final installer/signing/update mechanism;
+- plugins/public API/analytics/authoring/server deployment.
 
-**Status:** In progress. ADR-0051 through ADR-0056 establish lifecycle, planning, port, Tokio ownership, target association, and atomic exact-plan execution; ADR-0057 adds the Behavior cancellation binding; ADR-0058 adds the Tutor Generation cancellation-control contract; ADR-0059 adds its separate headless control binding; ADR-0060 adds the separate async cooperative Retrieval service foundation; ADR-0061 binds it cooperatively in the headless composition root; ADR-0062 adds asynchronous provider-neutral Speech cancellation control; ADR-0063 adds its four-surface composite coordinator; ADR-0064 binds its complete evidence with correlated existing Behavior evidence in one headless two-target execution; ADR-0065 activates `nexa-labs` with contract-only structural security/admission and Tool Execution cancellation control; ADR-0066 binds that admitted control as the fifth bounded headless target with explicit non-cancellable reporting; ADR-0067 adds only the provider-neutral asynchronous Speech input-port foundation.
+These capabilities remain part of Nexa’s broader architecture where applicable, but are owned by later roadmap gates.
 
-- [x] deterministic session/workflow lifecycle and lifecycle cancellation foundation (ADR-0051)
-- [ ] cancellation-safe execution and propagation
+## Cross-stage quality gates
 
-ADR-0057 composes the existing exact-plan runtime with renderer-neutral `AvatarPort` cancellation for Behavior only, with side-effect-free preflight, cooperative token waiting, one exact adapter call, joining, observed immutable evidence, exact preview/actual agreement, and terminalized success, failure, or caller drop. Retrieval, speech, tools/labs, real renderer/provider/network cancellation, and policy/recovery concerns remain deferred, so the broader checklist item stays incomplete.
+Every increment still requires proportionate:
 
-ADR-0058 adds the synchronous dependency-light `nexa-tutor` control boundary. ADR-0059 separately binds it in `apps/nexa-headless` through one canonical Tutor Generation target task. Exact acceptance acknowledgement plus completion/join of that owned control task does not change or wrap generation, prove `LanguageModelProvider::generate` or provider work stopped, or add concrete provider cancellation. Behavior, Tutor Generation control, and Retrieval now have separate headless bindings; speech, tool/lab, and all existing deferrals remain unchanged, and the broad checklist item stays incomplete. NEXA-TUTOR-001 and NEXA-ORCH-001 remain Baseline Draft.
+- formatting/build/lint/test checks;
+- contract/dependency-boundary verification;
+- architecture/specification traceability;
+- security/privacy review for the changed boundary;
+- deterministic evidence where the behavior is deterministic;
+- concrete-adapter/system evidence when claiming higher maturity;
+- documentation/status updates that do not overstate capability maturity.
 
-ADR-0060 keeps `nexa-knowledge` synchronous and runtime-independent while adding `nexa-knowledge-runtime` as an object-safe asynchronous service boundary. Cooperative cancellation completion proves only that the service future observed cancellation and terminated. The Retrieval headless cancellation-plan binding is implemented by ADR-0061, while concrete dependencies, retry, timeout, persistence, and recovery remain deferred, so the broad checklist item stays incomplete.
+## Architecture rebaseline checkpoints
 
-ADR-0062 adds canonical `SpeechId` and an object-safe standard-future cancellation-control boundary in dependency-light `nexa-speech`. Exact acknowledgement proves only dependency acceptance, not that synthesis, queued audio, playback, visemes, gestures, provider/device work, or external work stopped. ADR-0063 coordinates synthesis, queued audio, playback, and viseme-timeline control evidence without claiming provider/device stop. Speech is bound only at the bounded application-control level in `apps/nexa-headless`; concrete external cancellation remains deferred. ADR-0065 adds structural bounded-sandbox declarations, exact externally supplied authorization/confirmation admission, risk, and cancellation-control contracts without execution, enforcement, or policy evaluation. ADR-0066 adds only the fifth bounded application-control binding, including non-cancellable reporting. The broad cancellation-safe execution/propagation item and end-to-end lesson exit gate remain incomplete.
-- [ ] speech input/output ports
+At R2 exit, before R3 broadening, and at each later major stage boundary, the Chief Systems Architect must independently evaluate the whole program and record Continue, Redirect, or Tactical Pause.
 
-ADR-0067 implements only one bounded provider-neutral asynchronous speech-input operation with exact content-safe evidence and cooperative cancellation. It adds no microphone, audio/STT provider, output/synthesis port, or headless binding, so this combined item remains incomplete.
-- [ ] behavior synchronization
-- [ ] tool/lab execution
-- [ ] interruption, retry, timeout, and recovery policies
-- [ ] event-driven observability
-
-Exit: a user completes an end-to-end lesson through one composition root.
-
-## Phase 6 — Authoring, packaging, and operations
-
-- course, assessment, lab, and asset compilers
-- authoring application
-- plugin SDK and capability permissions
-- local-first packaging and update strategy
-- analytics, privacy, security, and performance gates
-
-Exit: a signed release can be authored, validated, installed, upgraded, observed, and recovered.
-
-## Cross-phase quality gates
-
-Every increment includes:
-
-- unit, contract, integration, and conformance tests
-- threat/privacy review proportional to scope
-- accessibility checks for user-facing work
-- deterministic fixtures where practical
-- schema and content versioning
-- documentation and traceability updates
-
-### Phase 4 narrow increment: tutor response planning
-
-ADR-0021 adds provider-neutral caller-supplied structured responses, deterministic citation/pedagogy/safety validation, and standalone replay evidence. It does **not** complete Phase 4 or tutor intelligence; semantic safety, semantic entailment, generation, providers, networking, persistence, and durable adapters remain deferred.
-
-### Phase 4 narrow increment: model invocation
-
-ADR-0022 adds a synchronous provider-neutral invocation port, bounded untrusted request/response contracts, capability validation, normalized errors, and a deterministic scripted adapter. It does **not** call a model or connect raw output to response planning; concrete providers, routing, async/streaming execution, and semantic safety remain deferred. Its prompt-compilation deferral is addressed only by the separate ADR-0023 increment below.
-
-### Phase 4 narrow increment: prompt compilation
-
-ADR-0023 adds closed classified prompt layers, canonical version-bound compilation into ADR-0022 `ModelInput`, byte accounting, redaction, and standalone replay evidence. It does **not** invoke a model, route providers, tokenize, decode or admit output, connect raw output to ADR-0021, establish semantic safety/grounding/entailment, repair responses, stream, network, or persist data.
-
-### Phase 4 narrow increment: model-output admission
-
-ADR-0024 adds a caller-owned planning-authority envelope, a closed candidate-section schema, exact descriptor/request/response/prompt binding, fail-closed output-limit handling, and redacted deterministic admission evidence before delegating to ADR-0021. It validates syntax, schema, identity, provenance, policy references, capabilities, citation references, and existing planner structure only. Inference and concrete providers; routing and tokenization; semantic safety and prompt-injection detection; factual correctness, entailment, and hallucination control; repair/regeneration; tool execution; async/streaming; networking; and persistence remain deferred.
-
-### Phase 4 narrow increment: invocation-to-admission composition
-
-ADR-0025 adds shared host-input preflight, exactly one synchronous call to a caller-supplied provider, and reuse of ADR-0024 admission with closed preflight, invocation, and admission failures. It does not complete the Phase 4 exit gate. Actual inference and concrete providers; selection, routing, fallback, provider tokenization, and privacy filtering/authorization; semantic safety, correctness, entailment, and prompt-injection resistance; repair/regeneration; async/streaming; networking; and persistence remain deferred.
-
-### Phase 4 narrow increment: model registry mechanics
-
-ADR-0026 adds atomic validated construction of an immutable in-memory registry, canonical provider-then-model inventory, and exact shared-provider resolution with no invocation. ADR-0025 still accepts an explicitly supplied provider. Static selection is addressed separately by ADR-0027. Dynamic routing, automatic local-first policy, fallback, privacy authorization, concrete provider integration, inference, partial truncation, and the other Phase 4 deferrals remain unimplemented; NEXA-TUTOR-001 remains Baseline Draft.
-
-### Phase 4 narrow increment: deterministic model selection
-
-ADR-0027 adds static descriptor eligibility and deterministic single-choice selection over ADR-0026. Caller-supplied privacy order precedes canonical provider/model identity tie-breaking, and the original registered `Arc` is returned without invocation. ADR-0025 remains unchanged and explicitly supplied. Dynamic availability, latency/cost/task-complexity routing, automatic local-first policy, fallback/retry, concrete providers/inference, provider tokenization, privacy filtering/remote authorization, semantic validation, tools, streaming, networking, persistence, and partial truncation remain deferred; NEXA-TUTOR-001 remains Baseline Draft.
-
-### Phase 4 narrow increment: explicit local-only selection and admission
-
-ADR-0028 adds deterministic explicit `LocalOnly` selection, exact ADR-0022 request construction, and reuse of ADR-0025's single-attempt invocation/admission operation. ADR-0025's original API remains explicitly supplied and ADR-0027 remains independently non-invoking. This is not automatic local-first routing. Remote authorization and privacy filtering; dynamic health/availability, latency, cost, and task-complexity routing; fallback/capability degradation; retry/repair/regeneration; concrete providers/inference; provider tokenization; semantic validation/safety; tools; async/streaming; networking; telemetry export; persistence/durable adapters; and partial truncation remain deferred. NEXA-TUTOR-001 remains Baseline Draft.
-
-### Phase 4 narrow increment: availability-gated model selection
-
-ADR-0029 adds a bounded caller-supplied availability snapshot that gates ADR-0027 eligibility while preserving its privacy and canonical ordering. Missing and explicitly unavailable models are excluded, unknown registry identities fail closed, and selection remains non-invoking. It does not establish health probing, freshness/authenticity, monitoring, recovery, general routing, fallback/retry, automatic local-first policy, remote authorization/privacy filtering, or any previously deferred provider, inference, networking, async/streaming, telemetry, persistence, tokenization, semantic-validation, or partial-truncation capability. ADR-0028 remains unchanged and does not consume the snapshot; NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment.
-
-### Phase 4 narrow increment: available explicit local-only selection and admission
-
-ADR-0030 composes caller-supplied ADR-0029 availability gating with exact ADR-0022 request construction and ADR-0025's single-attempt invocation/admission, while requiring exactly `LocalOnly`. Initial exclusion of unavailable models is deterministic eligibility, not fallback; after one selection there is no recovery chain. ADR-0028 remains unchanged without implicit availability, ADR-0029 remains non-invoking, and ADR-0025 remains explicitly supplied. Health probing, remote authorization, general/automatic routing, fallback/retry/repair, and all prior deferrals including partial truncation remain unimplemented. NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment.
-
-### Phase 4 narrow increment: caller-authorized available remote selection
-
-ADR-0031 adds bounded caller-supplied remote authorization bound to exact ADR-0023 replay evidence, then intersects it with ADR-0029 availability and unchanged ADR-0027 deterministic eligibility and ordering. Selection is non-invoking; omission denies authorization. It adds no filtering, minimization, remote execution, authenticity/freshness proof, local-first routing, fallback/recovery, or other previously deferred capability. `partial truncation` remains deferred and NEXA-TUTOR-001 remains Baseline Draft.
-
-### Phase 4 narrow increment: authorized available remote selection and admission
-
-ADR-0032 composes unchanged ADR-0031 with exact ADR-0022 request construction and ADR-0025's single-attempt invocation and strict admission. Caller authorization of the exact compiled prompt is the permission boundary. There is no second selection, fallback, retry, filtering/minimization proof, concrete provider, inference, networking, endpoint, credential, or authenticity/freshness proof. Existing deferrals including `partial truncation` remain; NEXA-TUTOR-001 remains Baseline Draft.
-
-### Phase 4 narrow increment: remote prompt whole-layer disclosure filtering
-
-ADR-0033 adds deterministic caller-directed whole-layer disclosure filtering and filtered ADR-0023 compilation after ADR-0032. Mandatory ADR-0023 layers fail closed; optional layers are included byte-for-byte or omitted in full. This is non-invoking and does not change ADR-0031 or ADR-0032. General privacy policy/enforcement, semantic minimization or sensitivity inference, content redaction, and `partial truncation` remain unimplemented. NEXA-TUTOR-001 remains Baseline Draft, the privacy specification namespace remains reserved, and the then-known ingestion/context roadmap inconsistency was preserved at that increment.
-
-### Phase 4 narrow increment: filtered authorized available remote selection
-
-ADR-0034 validates complete ADR-0033 evidence, requires exact singleton target-privacy agreement, and delegates the exact filtered compilation to unchanged ADR-0031 selection. It does not invoke ADR-0032. General privacy policy and correctness, sensitivity inference, semantic/content minimization, field/sub-string redaction, anonymization, partial truncation, and all concrete provider, routing, recovery, semantic-validation, tool, async/networking, telemetry, and persistence capabilities remain deferred. NEXA-TUTOR-001 remains Baseline Draft; the privacy namespace remains reserved; the then-known ingestion/context checklist inconsistency was preserved at that increment.
-
-### Phase 4 narrow increment: filtered authorized available remote invocation and admission
-
-ADR-0035 composes unchanged ADR-0034 as the only selection with the existing exact ADR-0022 request construction and unchanged ADR-0025 preflight, one invocation, and strict ADR-0024 admission. The request input and successful admission replay binding are the exact filtered ADR-0033 compilation. ADR-0034 remains independently non-invoking and ADR-0032 remains independently callable without ADR-0033 evidence. This is not general or automatic routing and adds no fallback, retry, repair, recovery, concrete provider/inference, networking, semantic privacy proof, content redaction, anonymization, partial truncation, tools, async/streaming, telemetry, or persistence. NEXA-TUTOR-001 remains Baseline Draft, the privacy namespace remains reserved, and Phase 4 was still in progress at that increment.
-
-### Phase 4 narrow increment: provider-neutral model-input tokenization boundary
-
-ADR-0036 adds a synchronous exact-model token-counting port, strict content-free replay evidence, and deterministic scripted testing infrastructure. ADR-0036 itself did not integrate that evidence, and ADR-0022 and ADR-0027 conservative UTF-8 byte capacity accounting remains authoritative. ADR-0037 later implements the separate existing-request capacity gate and ADR-0038 opt-in composes it with one invocation and strict admission; concrete/provider tokenizer algorithms and token-count integration into selection, authorization, availability, routing, or provider execution, or into invocation/admission other than the opt-in ADR-0038, ADR-0040, ADR-0041, ADR-0042, ADR-0043, ADR-0044, ADR-0046, ADR-0047, ADR-0048, ADR-0049, and ADR-0050 compositions remain unimplemented. No inference, provider, network, endpoint, credential, fallback, retry, repair, semantic-validation, privacy-policy, partial-truncation, async/streaming, telemetry, or persistence capability is added. NEXA-TUTOR-001 remains Baseline Draft, the privacy namespace remains reserved, and Phase 4 was still in progress at that increment.
-
-### Phase 4 narrow increment: exact model-request token-capacity validation
-
-ADR-0037 adds a separate synchronous gate for an already-constructed ADR-0022 request and existing ADR-0036 evidence. Unchanged conservative UTF-8 byte validation remains mandatory before exact checked token-capacity validation; the operation invokes neither tokenizer nor provider and existing selection and invocation APIs do not consume the evidence. No concrete tokenizer/provider or integration into selection, authorization, availability, routing, or provider execution, or invocation/admission beyond the opt-in ADR-0038, ADR-0040, ADR-0041, ADR-0042, ADR-0043, ADR-0044, ADR-0046, ADR-0047, ADR-0048, ADR-0049, and ADR-0050 compositions is added. Partial truncation and all existing privacy, inference, networking, recovery, semantic-validation, async/streaming, telemetry, and persistence deferrals remain. NEXA-TUTOR-001 remains Baseline Draft, the privacy namespace remains reserved, the known ingestion/context inconsistency is preserved, and Phase 4 was still in progress at that increment.
-
-### Phase 4 narrow increment: token-capacity-gated invocation and admission
-
-ADR-0038 adds an opt-in synchronous composition that completes shared ADR-0025 preflight and unchanged ADR-0037 exact token-capacity validation before exactly one supplied-provider invocation, then reuses strict admission. It accepts only existing evidence, calls no tokenizer, creates no replacement evidence, and preserves ADR-0022 conservative byte validation and the independent ADR-0025/0037 APIs. No concrete tokenizer/provider, selection/routing/fallback, inference, transport, repair, semantic validation, general privacy policy, async/streaming, telemetry, or persistence is added.
-
-### Phase 4 narrow increment: exact tokenization and request-capacity composition
-
-ADR-0039 adds an opt-in synchronous non-invoking composition that completes unchanged ADR-0022 request preflight, delegates exactly one tokenization outcome and evidence construction to ADR-0036, and immediately delegates the exact request and generated evidence to ADR-0037. Success returns that evidence; existing APIs and every concrete-tokenizer, provider, selection/routing, inference, networking, semantic-validation, privacy-policy, recovery, async/streaming, telemetry, and persistence deferral remain unchanged.
-
-### Phase 4 narrow increment: exact tokenization, single-attempt invocation, and admission
-
-ADR-0040 adds an opt-in synchronous composition that completes unchanged shared admission preflight before delegating evidence creation and request-capacity validation to unchanged ADR-0039. It then invokes the explicitly supplied provider exactly once and applies unchanged strict admission, returning both exact generated tokenization evidence and the existing admission result. No selection/routing/fallback, concrete tokenizer/provider, inference, transport, retry/repair/regeneration, truncation/rewriting/summarization, usage reconciliation, semantic validation, privacy policy, async/streaming, telemetry, or persistence is added. NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment.
-
-### Phase 4 narrow increment: local-only selection with exact tokenization and admission
-
-ADR-0041 adds an opt-in synchronous composition that enforces ADR-0028's exact local-only requirements, delegates unchanged conservative-byte ADR-0027 selection, constructs the existing request, and delegates exact tokenization, capacity validation, one selected-provider invocation, and strict admission to unchanged ADR-0040. It adds no token-aware selection, dynamic/automatic routing, availability, fallback, retry, concrete tokenizer/provider, inference, networking, semantic validation, privacy policy, async/streaming, telemetry, or persistence. NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment.
-
-ADR-0042 adds an opt-in synchronous composition that enforces the existing explicit-local gate, delegates exact caller-supplied availability-gated selection, constructs the existing request, and delegates exact tokenization, capacity validation, one selected-provider invocation, and strict admission to unchanged ADR-0040. It adds no probing, token-aware selection, fallback, retry, concrete dependency, inference, networking, or semantic validation. NEXA-TUTOR-001 remains Baseline Draft and Phase 4 was still in progress at that increment.
-
-
-### Phase 4 narrow increment: authorized available remote selection with exact tokenization and admission
-
-ADR-0043 delegates unchanged prompt-bound authorization and available remote selection to ADR-0031 as the sole permission boundary, constructs the existing request, and delegates exact tokenization, capacity validation, one selected-provider invocation, and strict admission to unchanged ADR-0040. It reuses existing caller authorization and adds no authentication, authorization-policy change, secrets, filtering/minimization proof, concrete remote execution, networking, retry, fallback, or token-aware selection. NEXA-TUTOR-001 remains Baseline Draft, Phase 4 was still in progress at that increment, and the then-known ingestion/context checklist inconsistency was preserved at that increment.
-
-### Phase 4 narrow increment: filtered authorized remote selection with exact tokenization and admission
-
-ADR-0044 delegates complete ADR-0033 evidence and the exact selection inputs to unchanged ADR-0034, constructs the existing request only from its selected descriptor and exact filtered compilation, and delegates exact tokenization, capacity validation, one selected-provider invocation, and strict admission to unchanged ADR-0040. It reuses structural whole-layer filtering and caller authorization and adds no general privacy-policy correctness, semantic filtering/minimization, authentication, authorization-policy change, secret handling, concrete remote execution, networking, retry, fallback, or token-aware selection. NEXA-TUTOR-001 remains Baseline Draft, Phase 4 was still in progress at that increment, and the then-known ingestion/context checklist inconsistency was preserved at that increment.
-
-### Phase 4 narrow increment: reported input-usage reconciliation
-
-ADR-0045 adds a standalone synchronous, non-invoking validator that preserves unchanged request, response, and exact tokenization-evidence validation before comparing optional provider-reported input usage. Absent usage remains valid; present usage must equal the exact evidence count. Equality establishes agreement only—not tokenizer correctness, provider truth, billing/cost accuracy, output-token correctness, authenticity/freshness, or telemetry authority. No existing API or deferred provider, tokenizer, invocation, routing, persistence, or semantic capability changes. NEXA-TUTOR-001 remains Baseline Draft, Phase 4 was still in progress at that increment, and the then-known ingestion/context checklist inconsistency was preserved at that increment.
-
-### Phase 4 narrow increment: reported-usage-validated exact-tokenization invocation and admission
-
-ADR-0046 adds an opt-in synchronous composition of unchanged full admission preflight, exact tokenization and capacity validation, one supplied-provider invocation, unchanged ADR-0045 reported-usage validation, and unchanged strict admission. Usage validation precedes admission; absent usage remains valid and present input usage must equal the generated evidence. This establishes structural association and equality only, not provider truth, billing/cost, output-token evidence, authenticity/freshness, telemetry authority, or semantic correctness. Existing APIs and deferrals remain unchanged; NEXA-TUTOR-001 remains Baseline Draft, Phase 4 was still in progress at that increment, and the then-known ingestion/context checklist inconsistency was preserved at that increment.
-
-### Phase 4 narrow increment: local-only selection with reported-usage-validated exact tokenization
-
-ADR-0047 adds one opt-in synchronous composition of unchanged explicit local-only selection and exact request construction with unchanged ADR-0046 reported-usage-validated exact-tokenization invocation/admission. Selection remains conservative-byte based and precedes exact tokenization. The composition establishes only structural association and equality for optional reported input usage; it grants no tokenizer/provider truth, billing/cost, output-token, authenticity/freshness, telemetry, or semantic authority. Existing APIs and deferrals remain unchanged; NEXA-TUTOR-001 remains Baseline Draft, Phase 4 was still in progress at that increment, and the then-known ingestion/context checklist inconsistency was preserved at that increment.
-
-### Phase 4 narrow increment: available local selection with reported-usage-validated exact tokenization
-
-ADR-0048 composes unchanged ADR-0042 caller-availability-gated explicit local selection and exact request construction with unchanged ADR-0046. Caller availability is eligibility evidence only, without freshness/authenticity, health-monitoring, recovery, or authorization authority. Optional reported input usage establishes structural association and equality only, without tokenizer/provider truth, billing/cost, output-token, telemetry, or semantic authority. No acquisition, routing, retry, fallback, concrete dependency, networking, telemetry, persistence, or other prior deferral changes; NEXA-TUTOR-001 remains Baseline Draft, Phase 4 was still in progress at that increment, and the then-known ingestion/context checklist inconsistency was preserved at that increment.
-
-
-### Phase 4 narrow increment: authorized available remote selection with reported-usage-validated exact tokenization
-
-ADR-0049 composes unchanged ADR-0031 as the sole permission boundary and ADR-0043 exact request construction with unchanged ADR-0046. Authorization and availability remain caller-supplied evidence without authenticity/freshness or monitoring/recovery authority. Optional reported input usage establishes structural association and equality only, without tokenizer/provider truth, billing/cost, output-token, telemetry, or semantic authority. No authentication or authorization-policy change, filtering, token-aware selection, routing, retry, fallback, concrete dependency, networking, telemetry, persistence, or other prior deferral changes; NEXA-TUTOR-001 remains Baseline Draft, Phase 4 was still in progress at that increment, and the then-known ingestion/context checklist inconsistency was preserved at that increment.
-
-### Phase 4 narrow increment: filtered authorized available remote selection with reported-usage-validated exact tokenization
-
-ADR-0050 composes unchanged ADR-0034 filtered selection and ADR-0044 exact filtered request construction with unchanged ADR-0046. ADR-0034 remains the filtered-selection boundary and ADR-0031 remains the sole permission boundary; no authentication or authorization-policy change is introduced. ADR-0033 supplies structural whole-layer filtering/replay evidence only, not general privacy correctness or semantic/content minimization. Caller authorization and availability grant no authenticity/freshness or monitoring/recovery authority. Optional reported input usage establishes structural association and equality only, without tokenizer/provider truth, billing/cost, output-token, telemetry, or semantic authority. Existing deferrals remain unchanged; NEXA-TUTOR-001 remains Baseline Draft, Phase 4 was still in progress at that increment, and the then-known ingestion/context checklist inconsistency was preserved at that increment.
+See [`../governance/ARCHITECTURE-REBASELINE-GATES.md`](../governance/ARCHITECTURE-REBASELINE-GATES.md).
