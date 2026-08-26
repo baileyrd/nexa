@@ -1,16 +1,19 @@
 # Nexa Project Status
 
 Status date: 2026-08-26
-Tactical-pause implementation baseline: `e2345a1bb8825451ea079ff5e350b7765075038a` (PR #109)
-Rebaseline work: PR #110
+Current `main` checkpoint: `4369a85410c3dcb5ffcb619ef1c2a04bed08978f` (PR #110)
 
 This document is the concise current-state authority for resuming Nexa work. Detailed historical increment evidence remains in Git history, accepted ADRs, and phase traceability matrices.
 
 ## Current program state
 
-The tactical-pause assessment and architecture convergence are complete to the level required to govern the R2 walking skeleton.
+**Architecture outcome: Continue — begin R2.**
 
-Normal product implementation remains paused **only until PR #110 is green on its exact final head and merged**. After that merge, R2 may begin. The old open-ended Phase 5 increment sequence must not resume.
+The tactical-pause assessment, R0 governance/architecture rebaseline, and R1 implementation-specification convergence are complete to the maturity required for the R2 walking skeleton.
+
+PR #110 merged the reviewed rebaseline after required CI passed on exact head `ff47d01bcd5a94fffbdd01f2ed9150e66df05665`. Product implementation is no longer blocked by the tactical pause.
+
+The superseded open-ended Phase 5 increment sequence MUST NOT resume. New work is selected from the R2 vertical release path.
 
 ## Current governing route
 
@@ -27,59 +30,26 @@ Read in this order:
 9. [`architecture/NEXA-COMPLETION-ROADMAP.md`](architecture/NEXA-COMPLETION-ROADMAP.md)
 10. the applicable parent specification, accepted ADRs, and traceability evidence for the selected increment.
 
-Assessment/lessons artifacts remain important evidence but are not implementation specifications.
+Assessment and lessons-learned artifacts remain evidence and governance input; they are not substitutes for implementation specifications.
 
-## Rebaseline decisions
+## R0 — Governance and architecture rebaseline
 
-### Product boundary
-
-Nexa v1 is a local-first adaptive tutor whose first release is proven by one complete learner journey, not by contract count or phase labels.
-
-The first vertical path is:
-
-`learner text -> desktop app -> orchestrator -> learning state/pedagogy -> governed knowledge -> real local model -> admitted tutor response -> assessment/practice -> atomic durable progress -> restart/resume`
-
-### R2 concrete baseline
-
-ADR-0068 selects:
-
-- learner app: `apps/nexa-desktop`;
-- UI: `eframe`/`egui`, subject to a bounded suitability spike;
-- durable store: SQLite through `rusqlite` behind `crates/nexa-storage`;
-- first model path: local `llama.cpp` server through a narrow Nexa HTTP adapter;
-- first acceptance platform: Windows x86_64;
-- first governed course: Networking Fundamentals / TCP Connection Establishment;
-- text-first learner interaction;
-- no R2 requirement for speech, avatar, labs/tools, dynamic multi-provider routing, vector database, or durable event broker.
-
-### Conditional capabilities
-
-Speech and avatar/behavior remain retained architectural capabilities but are deferred from the R2 exit gate. They are reconsidered after the walking skeleton at the later embodiment/speech integration stage.
-
-Labs/tool execution and dynamic multi-provider routing are post-R2 by default.
-
-This is scope control, not abandonment.
-
-## Architecture maturity
-
-### R0 — Rebaseline governance and architecture
-
-**Status: Complete for R2.**
+**Status: PASS / closed for R2.**
 
 - Current-state/documentation-gap assessment completed.
 - Development divergence and lessons learned recorded.
-- Reusable lessons captured in the Atlas Engineering Standards Library; Atlas issue #20 tracks normative follow-up.
+- Reusable lessons merged into the Atlas Engineering Standards Library; Atlas issue #20 tracks normative follow-up.
 - `NEXA-ARCH-002` is the approved v1 implementation architecture.
 - `NEXA-ARCH-001` is preserved as reconstructed provenance/long-range context and superseded for v1 implementation selection.
-- A finite R0–R9 completion roadmap exists.
-- Deferrals are centralized and reviewed by release stage.
+- R0–R9 completion roadmap is the delivery authority.
+- Deferrals are centralized and stage-dispositioned.
 - Capability maturity terminology is established.
 
-### R1 — Critical specification baseline
+## R1 — Critical specification and technology baseline
 
-**Status: Complete to the maturity required to begin R2.**
+**Status: PASS / closed for R2.**
 
-`NEXA-R1-IMPLEMENTATION-BASELINE.md` approves the tactical-pause R1 supplements for the R2 path and resolves the blocking decisions for:
+`NEXA-R1-IMPLEMENTATION-BASELINE.md` approves the R2-applicable parent/cross-cutting requirements for:
 
 - data/persistence;
 - security;
@@ -95,79 +65,79 @@ This is scope control, not abandonment.
 - packaging/deployment constraints;
 - governed first-course content.
 
-The R1 baseline intentionally leaves later-release details open where they do not govern R2.
+ADR-0068 resolves the R2 scope and technology baseline.
 
-### R2 — Thin production walking skeleton
+R1 intentionally does not finish every long-term Nexa specification; later-release requirements mature at their owning R3–R9 gates.
 
-**Status: Ready to start after PR #110 is green on its final exact head and merged.**
+## R2 — Thin production walking skeleton
 
-R2 exit requires one real end-to-end learner lesson using:
+**Status: READY / next implementation stage.**
 
-- actual desktop UI boundary;
-- actual SQLite persistence;
-- actual governed TCP lesson content;
-- actual local llama.cpp model adapter;
-- existing learning/tutor/knowledge contracts where applicable;
-- atomic progress commit;
-- restart/resume;
-- content-safe correlated diagnostics.
+R2 is text-first and builds one real vertical learner path:
 
-Scripted model providers and in-memory persistence do not satisfy the R2 exit gate.
+`learner text -> apps/nexa-desktop -> orchestrator -> SQLite durable state -> learning/pedagogy -> governed TCP knowledge -> local llama.cpp model adapter -> admitted tutor response -> assessment/practice -> atomic durable progress -> restart/resume`
 
-## Reclassification of existing implementation
+ADR-0068 selects:
 
-The existing Phase 1–5 code is retained. Its maturity is interpreted by what the evidence actually proves.
+- learner app: `apps/nexa-desktop`;
+- UI: `eframe`/`egui`, subject to a bounded suitability spike;
+- durable store: SQLite through `rusqlite` behind `crates/nexa-storage`;
+- first model path: local `llama.cpp` server through a narrow Nexa HTTP adapter;
+- first acceptance platform: Windows x86_64;
+- first governed course: Networking Fundamentals / TCP Connection Establishment.
 
-### Contract kernel / embodiment / learning / knowledge / tutor
+R2 exit requires actual UI, actual SQLite, actual governed course content, actual local model adapter, admitted tutor response, durable assessment/evidence/mastery/progress, restart/resume, and content-safe correlation.
 
-Substantial contract, deterministic, headless, and conformance foundations exist and remain valuable. Phase traceability matrices document them.
+Scripted model providers and in-memory persistence remain lower-level test tools and cannot close R2.
 
-Earlier statements such as “Phase 3 complete” or “Phase 4 complete” are understood as qualified technical-gate statements, not product-completion claims.
+## Not R2 blockers
 
-### Phase 5 cancellation/control work
+Unless a concrete R2 failure promotes them:
 
-ADR-0051 through ADR-0067 provide reusable lifecycle, structured concurrency, cancellation/control, retrieval, speech-control, tool-control, and headless binding foundations.
+- speech input/output;
+- animated avatar/behavior integration;
+- labs/tool execution;
+- remote provider support/credentials;
+- dynamic multi-provider routing/fallback;
+- dedicated vector database;
+- durable event broker/outbox;
+- exact release GGUF model/quantization;
+- final Windows installer/signing/update mechanism;
+- plugins/public API/analytics/authoring/server/fleet deployment.
 
-They do not define the work-selection sequence after the rebaseline. Reuse them only where the R2/R3 learner workflow requires them.
+These are owned by later roadmap stages.
+
+## Existing Phase 1–5 implementation
+
+Existing code is retained according to the maturity it actually demonstrates.
+
+- Contract/headless/conformance foundations remain reusable.
+- Phase 3/4 historical “complete” language means their documented deterministic technical gates, not product/release completion.
+- ADR-0051 through ADR-0067 remain reusable lifecycle/cancellation/runtime/speech/tool foundations, but only enter implementation work when the actual R2/R3 learner path needs them.
 
 ## Capability maturity vocabulary
 
-Use the following status vocabulary for new work:
+Use:
 
 `Concept -> Architecture Defined -> Specification Approved -> Contract Implemented -> Runtime Integrated -> Concrete Adapter Implemented -> System Verified -> User Accepted -> Release Ready`
 
-Do not report an unqualified `Complete` when the demonstrated evidence is one of these narrower states.
+Do not report an unqualified `Complete` when a narrower maturity state is what the evidence proves.
 
-## Current non-R2 blockers / later decisions
+## R2 work-selection rule
 
-The following are intentionally unresolved without blocking R2 start:
+Every implementation increment must identify:
 
-- exact release GGUF model/quantization;
-- final llama.cpp bundling/distribution policy;
-- final Windows installer/signing/update mechanism;
-- remote provider support and credential mechanism;
-- speech/avatar final v1 inclusion decision;
-- lab/tool sandbox implementation;
-- durable asynchronous event/outbox architecture;
-- advanced vector infrastructure;
-- multi-provider routing/fallback;
-- plugins, public API, analytics, authoring, server/fleet deployment.
-
-Each becomes blocking only at the roadmap stage that owns its release outcome.
-
-## Development selection rule
-
-After PR #110 merges, every implementation increment must trace to:
-
-1. an R2 release-path blocker;
-2. an explicit requirement in `NEXA-ARCH-002` / the R1 baseline / ADR-0068; and
-3. a concrete maturity advance toward the R2 E2E acceptance scenario.
+1. the R2 release-path blocker it addresses;
+2. its governing parent architecture/specification/ADR;
+3. the E2E step it makes concrete;
+4. the maturity transition it advances;
+5. the evidence required to substantiate that transition.
 
 Do not select work merely because another narrow ADR can be written.
 
 ## Chief Systems Architect control
 
-At every major stage boundary, and whenever documentation maturity, deferrals, horizontal depth, or product convergence materially diverge, the Chief Systems Architect must perform a whole-system rebaseline review and record one outcome:
+At every major stage boundary, and whenever parent maturity, deferrals, horizontal depth, status consistency, or product convergence materially diverge, the Chief Systems Architect performs a whole-system review and records:
 
 - Continue;
 - Redirect;
@@ -177,7 +147,13 @@ Local correctness is necessary but not sufficient for continued program executio
 
 ## Current next action
 
-1. Finalize/review PR #110 exact diff.
-2. Require Rust CI green on the exact final PR head.
-3. Merge PR #110 unchanged.
-4. Begin R2 with the smallest vertical increment that establishes the `apps/nexa-desktop` application shell plus concrete `nexa-storage`/SQLite foundation needed by the walking skeleton, without re-entering unrelated Phase 5 horizontal work.
+Begin R2 with the smallest vertical-enabling increment:
+
+- activate the real `apps/nexa-desktop` application shell;
+- activate the real `crates/nexa-storage` SQLite/`rusqlite` infrastructure boundary;
+- prove the egui async-safe application seam and SQLite open/migration/transaction architecture;
+- enforce UI/storage dependency boundaries;
+- add focused store/application startup tests;
+- add Windows release-critical validation proportional to the new surfaces.
+
+Then continue immediately down the vertical path: durable learning state -> governed content/retrieval -> local model adapter -> tutor/UI composition -> assessment/progress/restart E2E.
