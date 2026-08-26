@@ -2,110 +2,56 @@
 
 ## Authority and preservation
 
-Always begin with [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md), then follow the authority route in [`docs/BASELINE.md`](docs/BASELINE.md) and [`docs/SPECIFICATION-REGISTRY.md`](docs/SPECIFICATION-REGISTRY.md).
+Always begin with [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md), then follow [`docs/BASELINE.md`](docs/BASELINE.md) and [`docs/SPECIFICATION-REGISTRY.md`](docs/SPECIFICATION-REGISTRY.md).
 
-For v1 work, the current parent authorities are:
+The current v1 parents are:
 
 - [`docs/architecture/NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md`](docs/architecture/NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md)
 - [`docs/architecture/NEXA-R1-IMPLEMENTATION-BASELINE.md`](docs/architecture/NEXA-R1-IMPLEMENTATION-BASELINE.md)
-- [`docs/adr/0068-v1-r2-walking-skeleton-baseline.md`](docs/adr/0068-v1-r2-walking-skeleton-baseline.md)
+- [`docs/adr/0069-owner-approved-v1-delivery-baseline.md`](docs/adr/0069-owner-approved-v1-delivery-baseline.md)
 - [`docs/architecture/IMPLEMENTATION-ROADMAP.md`](docs/architecture/IMPLEMENTATION-ROADMAP.md)
 - the applicable subsystem specifications and accepted ADRs.
 
-`NEXA-ARCH-001` and reconstructed documents are preserved provenance/long-range design context. They do not override `NEXA-ARCH-002` for v1 implementation selection.
+ADR-0068 is preserved historical authority and remains applicable only where ADR-0069 does not conflict. `NEXA-ARCH-001` and reconstructed documents are provenance/long-range context, not v1 selection authority. Report conflicts; never silently reconcile them.
 
-Do not silently reconcile a conflict between documents or between documentation and implementation. Stop at the boundary, report the conflict, and resolve it through the owning architecture/specification/ADR before implementation continues.
+## Program integrity and current gate
 
-## Program-integrity rule
+Use `Concept -> Architecture Defined -> Specification Approved -> Contract Implemented -> Runtime Integrated -> Concrete Adapter Implemented -> System Verified -> User Accepted -> Release Ready`. Existing contract/headless evidence retains its factual maturity; do not infer system, user, or release maturity.
 
-Local correctness is necessary but not sufficient.
+The owner-approved route is recorded in ADR-0069. General product implementation is under **Tactical Pause**. After this reconciliation is reviewed and merged, only the separately dispatched G1 shared React/TypeScript/Vite + Tauri 2 and versioned loopback HTTP/WebSocket suitability spike may receive **Continue**. These technologies, Sherpa-ONNX, and Rive remain candidates until their gates pass; spike evidence cannot silently select production architecture.
 
-Every implementation increment must state:
+Every implementation increment must state its release blocker, governing authority, concrete E2E step, maturity before/after, and required evidence. The Chief Systems Architect records Continue, Redirect, or Tactical Pause whenever authority, deferrals, maturity, or the finite release route diverges.
 
-1. the current release/E2E blocker it addresses;
-2. the governing parent architecture/specification/ADR;
-3. the E2E step it makes concrete;
-4. the capability maturity state before/after;
-5. the evidence required to support that maturity change.
+## Owner-approved v1 route
 
-Use the maturity vocabulary:
+One local learner uses identical Windows desktop and same-machine browser clients, backed by one local Rust runtime and authoritative SQLite state, to complete Networking Fundamentals / TCP Connection Establishment through LM Studio, bundled speech, and a synchronized animated 2D tutor. Both clients use one shared frontend and one versioned loopback HTTP/WebSocket business API; Tauri commands never form a second API.
 
-`Concept -> Architecture Defined -> Specification Approved -> Contract Implemented -> Runtime Integrated -> Concrete Adapter Implemented -> System Verified -> User Accepted -> Release Ready`
-
-Do not use an unqualified `Complete` when it would hide the actual maturity demonstrated.
-
-The Chief Systems Architect must call Continue, Redirect, or Tactical Pause when parent documentation trails implementation, inherited deferrals cross required gates, repeated horizontal work does not advance the vertical release path, authority/status documents disagree, or the roadmap no longer presents a finite credible route to release.
-
-## Current R2 scope
-
-After the rebaseline PR is green and merged, R2 is the only normal product-development stage.
-
-The R2 walking skeleton is text-first:
-
-```text
-learner text
- -> apps/nexa-desktop
- -> orchestrator
- -> SQLite durable state
- -> learning/pedagogy
- -> governed TCP course knowledge
- -> local llama.cpp model adapter
- -> admitted tutor response
- -> assessment/practice
- -> atomic durable progress
- -> restart/resume
-```
-
-R2 concrete baseline:
-
-- `apps/nexa-desktop` learner composition root;
-- `eframe`/`egui` after bounded suitability spike;
-- SQLite/`rusqlite` behind `crates/nexa-storage`;
-- local `llama.cpp` server through a narrow provider adapter;
-- Windows x86_64 first acceptance environment;
-- Networking Fundamentals / TCP Connection Establishment first course.
-
-Do not restart the superseded open-ended Phase 5 sequence.
-
-Speech, avatar/behavior embodiment, labs/tools, dynamic multi-provider routing/fallback, dedicated vector infrastructure, and durable event broker work are not R2 exit criteria unless an actual R2 blocker proves otherwise.
-
-## ChatGPT–Codex coordination
-
-When development uses the human-coordinated or automated ChatGPT/Codex workflow, follow [`CHATGPT_WORKFLOW.md`](CHATGPT_WORKFLOW.md).
-
-ChatGPT/Chief Systems Architect selects work from current repository authority and the release path, reviews exact PR heads, requests corrections on the existing PR branch, and merges only the exact reviewed green head.
-
-Codex implements and validates bounded tasks; it does not independently redefine architecture, product scope, or authority status.
+Nexa bundles no LLM weights or inference runtime. LAN/remote access, hosted deployment, cloud sync, accounts/multi-user administration, labs/tools, broad model-server support, dynamic routing/fallback, dedicated vector infrastructure unless proven necessary, durable event brokerage, and 3D release integration are deferred.
 
 ## Repository map and boundaries
 
-- `crates/nexa-domain`, `nexa-events`, `nexa-nbp`: shared contract kernel. `nexa-domain` remains the dependency-light leaf.
+- `crates/nexa-domain`, `nexa-events`, `nexa-nbp`: dependency-light shared contract kernel.
 - `crates/nexa-student`, `nexa-pedagogy`, `nexa-lessons`, `nexa-assessment`: owned learning policies.
-- `crates/nexa-learning-core`: atomic learning composition; it does not absorb owned subsystem reasoning.
-- `crates/nexa-knowledge`: governed ingestion/retrieval/context/citation contracts.
-- `crates/nexa-knowledge-runtime`: runtime-owned async knowledge service boundaries.
-- `crates/nexa-tutor`: provider-neutral prompt/model/admission/tutor contracts.
-- `crates/nexa-orchestrator`: dependency-light session/workflow contracts.
-- `crates/nexa-orchestrator-runtime`: Tokio-backed workflow task/cancellation ownership.
-- `crates/nexa-storage`: approved R2 concrete persistence adapter boundary; database/runtime dependencies belong here, not in domain crates.
-- `crates/nexa-avatar`: renderer-neutral embodiment ports.
-- `crates/nexa-3d`: 3D runtime/adapter; GPU/window composition belongs in `apps/nexa-3d-viewer`.
-- `crates/nexa-speech`, `crates/nexa-labs`: retained later-capability foundations; not R2 critical path by default.
-- `apps/nexa-desktop`: approved R2 learner-facing composition root.
-- `apps/nexa-headless`: test/integration composition, not the released learner application.
-- `tools/`: compilers/validators.
-- `content/` and `assets/`: governed inputs/assets.
-- `docs/`: specifications, ADRs, architecture, governance, traceability, and provenance.
+- `crates/nexa-learning-core`: atomic learning composition; it does not absorb owned reasoning.
+- `crates/nexa-knowledge` and `nexa-knowledge-runtime`: governed knowledge contracts and async runtime boundary.
+- `crates/nexa-tutor`: provider-neutral prompt/model/admission contracts; concrete LM Studio integration remains a narrow adapter.
+- `crates/nexa-orchestrator` and `nexa-orchestrator-runtime`: workflow contracts and runtime task/cancellation ownership.
+- `crates/nexa-storage`: the SQLite adapter boundary; database dependencies do not enter domain crates.
+- `crates/nexa-speech`: provider-neutral speech foundations; the required bundled v1 adapter remains evidence-gated.
+- `crates/nexa-avatar`: renderer-neutral semantic embodiment ports; required 2D integration remains evidence-gated.
+- `crates/nexa-3d`: retained non-v1 renderer/runtime foundation.
+- `crates/nexa-labs`: retained later-capability foundation, not a v1 gate.
+- `apps/nexa-headless`: test/integration composition, not either released learner client.
+- the shared frontend, desktop shell, and local runtime composition locations are selected only after G1 evidence and an authority update.
+- `tools/`, `content/`, `assets/`, and `docs/`: validators, governed inputs, assets, and authority/evidence.
 
-A `.gitkeep`-only boundary is planned, not implemented.
+A `.gitkeep`-only boundary is planned, not implemented. Domain-facing crates remain independent of UI, OS, async runtime, databases, networking, renderers, and concrete providers. Tutor/model output is untrusted until admission and never selects renderer primitives or host authority.
 
-Keep domain-facing crates independent of UI, renderer, OS, async runtime, storage/database, networking, and concrete model-provider implementations. Concrete integrations implement ports owned by domain-facing layers.
+## Coordination, validation, and review
 
-Tutor/model output is untrusted semantic content until admission; it must not select renderer primitives or host authority.
+Follow [`CHATGPT_WORKFLOW.md`](CHATGPT_WORKFLOW.md). Codex implements bounded dispatched tasks and does not redefine scope or authority. Preserve exact reviewed heads.
 
-## Required validation
-
-Run from the repository root for ordinary Rust implementation PRs:
+Documentation-only governance changes require Markdown-link validation, active-authority stale-claim auditing, Markdown-only scope checking, repository documentation checks, and `git diff --check`. Ordinary Rust changes additionally run:
 
 ```text
 cargo fmt --all --check
@@ -114,46 +60,6 @@ cargo check -p nexa-3d --no-default-features
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ./scripts/check-contract-boundaries.sh
-git diff --check
 ```
 
-As R2 activates Windows/UI/storage/model adapters, add focused concrete-adapter and Windows validation required by the owning R1 specifications. Passing the existing Linux/headless suite does not prove higher maturity.
-
-## Change and review rules
-
-- Make bounded, independently reviewable changes; do not bundle unrelated cleanup or speculative architecture.
-- Prefer a vertical maturity advance over another horizontal abstraction when both are possible.
-- Contract/architecture changes require explicit authority/impact notes; consequential cross-cutting decisions require an ADR; authority/status changes require a registry update.
-- Review wire changes for stable names, validation, compatibility, replay, and deterministic fixtures.
-- Review dependency changes against the inward DAG and renderer/provider/storage boundaries.
-- Review evidence/state changes for ownership, immutability/idempotency, policy versions, concurrency, and atomic failure behavior.
-- A PR is done only when implementation, tests, governing docs, status/registry/traceability, and applicable ADRs agree; all required checks pass on the exact reviewed head; the diff is focused; and deferrals/conflicts are explicit.
-- User-facing work requires proportionate accessibility checks.
-- Security/privacy review must match the actual changed trust/data boundary.
-- Do not claim `System Verified`, `User Accepted`, or `Release Ready` from unit/contract/headless evidence.
-
----
-
-## 2026-08-26 owner-authority reconciliation (controlling addendum)
-
-ADR-0069 records the explicit owner decisions from Issue #114. This addendum supersedes earlier text in this document only where it conflicts. Earlier `eframe`/`egui`, `llama.cpp`, text-first release, desktop-only, speech/avatar deferral, owner-delegation, or general R2-Continue/readiness language is preserved as historical evidence and is not active selection authority.
-
-## Authority and preservation
-
-Begin with [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md), then follow [`docs/BASELINE.md`](docs/BASELINE.md) and [`docs/SPECIFICATION-REGISTRY.md`](docs/SPECIFICATION-REGISTRY.md). The current v1 parents are NEXA-ARCH-002, NEXA-R1, ADR-0069, and the implementation roadmap. ADR-0068 is historical and applies only where ADR-0069 does not conflict. Reconstructed documents are provenance, not v1 selection authority. Report conflicts; never silently reconcile them.
-
-### Program integrity and current gate
-
-Use `Concept -> Architecture Defined -> Specification Approved -> Contract Implemented -> Runtime Integrated -> Concrete Adapter Implemented -> System Verified -> User Accepted -> Release Ready`. Existing contract/headless evidence retains its factual maturity. Do not infer system, user, or release maturity.
-
-The owner-approved v1 route is documented in ADR-0069. Product implementation remains under **Tactical Pause** except for separately dispatched, bounded evidence spikes. The first permitted follow-on increment is the shared React/TypeScript/Vite + Tauri 2 and versioned loopback HTTP/WebSocket suitability spike. These technologies, Sherpa-ONNX, and Rive remain candidates until their gates pass; a spike must not silently become production architecture.
-
-The release path requires identical Windows desktop and same-machine browser clients, one local learner, SQLite durability, the governed TCP lesson, LM Studio, bundled speech, and a synchronized animated 2D tutor. LAN/remote access, hosted deployment, cloud sync, labs/tools, broad providers, dynamic routing/fallback, and 3D release integration are deferred.
-
-### Boundaries
-
-Domain-facing crates remain independent of UI, OS, async runtime, databases, networking, renderers, and concrete providers. `crates/nexa-storage` owns SQLite; provider adapters remain narrow; one shared frontend uses one versioned loopback business API and Tauri commands never form another. Tutor output is untrusted until admission and never selects renderer primitives. See the registry for the complete repository map and subsystem route.
-
-### Validation and review
-
-For documentation-only governance changes, validate Markdown links, scan active authority for stale conflicts, run `git diff --check`, and run the repository documentation checks. Ordinary Rust PRs additionally run the complete Cargo and contract-boundary suite recorded in project status. Keep increments bounded; reconcile architecture/specification/ADR/registry/status together; preserve historical evidence; and state blocker, governing authority, E2E step, maturity transition, and required evidence for every implementation increment.
+Keep changes bounded. Reconcile architecture/specification/ADR/registry/status together. Review wire, dependency, evidence, security/privacy, and accessibility impacts proportionately. Do not claim `System Verified`, `User Accepted`, or `Release Ready` from unit, contract, headless, research, or spike evidence.
