@@ -952,7 +952,12 @@ pub enum SpeechInputFailure {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "kind", content = "evidence", rename_all = "snake_case")]
+#[serde(
+    tag = "kind",
+    content = "evidence",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
 pub enum SpeechInputOutcome {
     Success(SpeechInputEvidence),
     Cancelled(SpeechInputCancellationEvidence),
@@ -1019,10 +1024,10 @@ pub async fn request_speech_input(
             }
         }
         SpeechInputOutcome::Cancelled(e) => {
-            if e.contract_version != SPEECH_INPUT_V1
-                || e.speech_id != speech_id
-                || e.operation_id != operation_id
-            {
+            if e.contract_version != SPEECH_INPUT_V1 {
+                return Err(SpeechInputError::UnsupportedVersion);
+            }
+            if e.speech_id != speech_id || e.operation_id != operation_id {
                 return Err(SpeechInputError::AssociationMismatch);
             }
         }
