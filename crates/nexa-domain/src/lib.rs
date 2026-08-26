@@ -99,6 +99,7 @@ uuid_id!(
     ModelId,
     ModelInvocationId,
     SpeechId,
+    SpeechInputOperationId,
     LabSessionId,
     ToolRequestId,
     ToolExecutionId,
@@ -303,6 +304,7 @@ mod tests {
                 .is_err()
         );
         assert!(SpeechId::new(Uuid::nil()).is_err());
+        assert!(SpeechInputOperationId::new(Uuid::nil()).is_err());
         assert!(
             serde_json::from_str::<SpeechId>(r#""00000000-0000-0000-0000-000000000000""#).is_err()
         );

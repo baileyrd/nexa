@@ -771,3 +771,423 @@ impl SpeechCancellationParticipant for ScriptedSpeechCancellationParticipant {
         self.capability
     }
 }
+
+// ---------------------------------------------------------------------------
+// Speech input service foundation (ADR-0067)
+
+use nexa_domain::SpeechInputOperationId;
+use std::task::{Context, Poll, Waker};
+
+pub const SPEECH_INPUT_V1: ProtocolVersion = ProtocolVersion::new(1, 0);
+pub const MAX_SPEECH_INPUT_TEXT_BYTES: usize = 16 * 1024;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SpeechInputRequest {
+    pub contract_version: ProtocolVersion,
+    pub speech_id: SpeechId,
+    pub operation_id: SpeechInputOperationId,
+}
+
+impl SpeechInputRequest {
+    pub const fn new(speech_id: SpeechId, operation_id: SpeechInputOperationId) -> Self {
+        Self {
+            contract_version: SPEECH_INPUT_V1,
+            speech_id,
+            operation_id,
+        }
+    }
+    fn validate(&self) -> Result<(), SpeechInputError> {
+        if self.contract_version == SPEECH_INPUT_V1 {
+            Ok(())
+        } else {
+            Err(SpeechInputError::UnsupportedVersion)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for SpeechInputRequest {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Wire {
+            contract_version: ProtocolVersion,
+            speech_id: SpeechId,
+            operation_id: SpeechInputOperationId,
+        }
+        let wire = Wire::deserialize(deserializer)?;
+        let value = Self {
+            contract_version: wire.contract_version,
+            speech_id: wire.speech_id,
+            operation_id: wire.operation_id,
+        };
+        value.validate().map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
+}
+
+/// Successful, bounded input evidence. Transcript content is intentionally
+/// omitted from `Debug` and `Display`; callers may access it explicitly.
+#[derive(Clone, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SpeechInputEvidence {
+    pub contract_version: ProtocolVersion,
+    pub speech_id: SpeechId,
+    pub operation_id: SpeechInputOperationId,
+    transcript: String,
+}
+
+impl SpeechInputEvidence {
+    pub fn new(
+        request: &SpeechInputRequest,
+        transcript: impl Into<String>,
+    ) -> Result<Self, SpeechInputError> {
+        request.validate()?;
+        let transcript = transcript.into();
+        if transcript.is_empty() || transcript.len() > MAX_SPEECH_INPUT_TEXT_BYTES {
+            return Err(SpeechInputError::InvalidEvidence);
+        }
+        Ok(Self {
+            contract_version: SPEECH_INPUT_V1,
+            speech_id: request.speech_id,
+            operation_id: request.operation_id,
+            transcript,
+        })
+    }
+    pub fn transcript(&self) -> &str {
+        &self.transcript
+    }
+    fn validate(&self) -> Result<(), SpeechInputError> {
+        if self.contract_version != SPEECH_INPUT_V1 {
+            Err(SpeechInputError::UnsupportedVersion)
+        } else if self.transcript.is_empty() || self.transcript.len() > MAX_SPEECH_INPUT_TEXT_BYTES
+        {
+            Err(SpeechInputError::InvalidEvidence)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl fmt::Debug for SpeechInputEvidence {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SpeechInputEvidence")
+            .field("contract_version", &self.contract_version)
+            .field("speech_id", &self.speech_id)
+            .field("operation_id", &self.operation_id)
+            .field("transcript", &"[REDACTED]")
+            .finish()
+    }
+}
+impl fmt::Display for SpeechInputEvidence {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("bounded speech input evidence")
+    }
+}
+
+impl<'de> Deserialize<'de> for SpeechInputEvidence {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Wire {
+            contract_version: ProtocolVersion,
+            speech_id: SpeechId,
+            operation_id: SpeechInputOperationId,
+            transcript: String,
+        }
+        let wire = Wire::deserialize(deserializer)?;
+        let value = Self {
+            contract_version: wire.contract_version,
+            speech_id: wire.speech_id,
+            operation_id: wire.operation_id,
+            transcript: wire.transcript,
+        };
+        value.validate().map_err(serde::de::Error::custom)?;
+        Ok(value)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SpeechInputCancellationEvidence {
+    pub contract_version: ProtocolVersion,
+    pub speech_id: SpeechId,
+    pub operation_id: SpeechInputOperationId,
+}
+impl SpeechInputCancellationEvidence {
+    pub const fn for_request(r: &SpeechInputRequest) -> Self {
+        Self {
+            contract_version: SPEECH_INPUT_V1,
+            speech_id: r.speech_id,
+            operation_id: r.operation_id,
+        }
+    }
+}
+impl<'de> Deserialize<'de> for SpeechInputCancellationEvidence {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct W {
+            contract_version: ProtocolVersion,
+            speech_id: SpeechId,
+            operation_id: SpeechInputOperationId,
+        }
+        let w = W::deserialize(d)?;
+        if w.contract_version != SPEECH_INPUT_V1 {
+            return Err(serde::de::Error::custom("unsupported speech input version"));
+        }
+        Ok(Self {
+            contract_version: w.contract_version,
+            speech_id: w.speech_id,
+            operation_id: w.operation_id,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpeechInputFailure {
+    Unavailable,
+    DependencyFailure,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(
+    tag = "kind",
+    content = "evidence",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum SpeechInputOutcome {
+    Success(SpeechInputEvidence),
+    Cancelled(SpeechInputCancellationEvidence),
+    Failure(SpeechInputFailure),
+}
+impl fmt::Display for SpeechInputOutcome {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Success(_) => "speech input succeeded",
+            Self::Cancelled(_) => "speech input cancelled",
+            Self::Failure(_) => "speech input failed",
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SpeechInputError {
+    UnsupportedVersion,
+    AssociationMismatch,
+    InvalidEvidence,
+}
+impl fmt::Display for SpeechInputError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::UnsupportedVersion => "unsupported speech input version",
+            Self::AssociationMismatch => "speech input association mismatch",
+            Self::InvalidEvidence => "invalid speech input evidence",
+        })
+    }
+}
+impl std::error::Error for SpeechInputError {}
+
+pub type SpeechInputFuture<'a> = Pin<Box<dyn Future<Output = SpeechInputOutcome> + Send + 'a>>;
+pub type SpeechInputCancellationFuture<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
+pub trait SpeechInputCancellationSignal: Send + Sync {
+    fn is_cancelled(&self) -> bool;
+    fn cancelled(&self) -> SpeechInputCancellationFuture<'_>;
+}
+pub trait SpeechInputService: Send + Sync {
+    fn input(
+        &self,
+        request: SpeechInputRequest,
+        cancellation: Arc<dyn SpeechInputCancellationSignal>,
+    ) -> SpeechInputFuture<'_>;
+}
+
+pub async fn request_speech_input(
+    service: &dyn SpeechInputService,
+    request: SpeechInputRequest,
+    speech_id: SpeechId,
+    operation_id: SpeechInputOperationId,
+    cancellation: Arc<dyn SpeechInputCancellationSignal>,
+) -> Result<SpeechInputOutcome, SpeechInputError> {
+    request.validate()?;
+    if request.speech_id != speech_id || request.operation_id != operation_id {
+        return Err(SpeechInputError::AssociationMismatch);
+    }
+    let outcome = service.input(request, cancellation).await;
+    match &outcome {
+        SpeechInputOutcome::Success(e) => {
+            e.validate()?;
+            if e.speech_id != speech_id || e.operation_id != operation_id {
+                return Err(SpeechInputError::AssociationMismatch);
+            }
+        }
+        SpeechInputOutcome::Cancelled(e) => {
+            if e.contract_version != SPEECH_INPUT_V1 {
+                return Err(SpeechInputError::UnsupportedVersion);
+            }
+            if e.speech_id != speech_id || e.operation_id != operation_id {
+                return Err(SpeechInputError::AssociationMismatch);
+            }
+        }
+        SpeechInputOutcome::Failure(_) => {}
+    }
+    Ok(outcome)
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ScriptedSpeechInputOutcome {
+    Success(SpeechInputEvidence),
+    Unavailable,
+    DependencyFailure,
+    WaitForCancellation,
+}
+#[derive(Default)]
+struct SpeechInputScriptState {
+    outcomes: VecDeque<ScriptedSpeechInputOutcome>,
+    received: Vec<SpeechInputRequest>,
+    consumed: usize,
+    active: usize,
+}
+#[derive(Clone, Default)]
+pub struct ScriptedSpeechInputService {
+    state: Arc<Mutex<SpeechInputScriptState>>,
+}
+impl ScriptedSpeechInputService {
+    pub fn new(outcomes: impl IntoIterator<Item = ScriptedSpeechInputOutcome>) -> Self {
+        Self {
+            state: Arc::new(Mutex::new(SpeechInputScriptState {
+                outcomes: outcomes.into_iter().collect(),
+                ..Default::default()
+            })),
+        }
+    }
+    pub fn received_requests(&self) -> Vec<SpeechInputRequest> {
+        self.state
+            .lock()
+            .expect("speech input script poisoned")
+            .received
+            .clone()
+    }
+    pub fn consumed_outcome_count(&self) -> usize {
+        self.state
+            .lock()
+            .expect("speech input script poisoned")
+            .consumed
+    }
+    pub fn remaining_outcome_count(&self) -> usize {
+        self.state
+            .lock()
+            .expect("speech input script poisoned")
+            .outcomes
+            .len()
+    }
+    pub fn active_future_count(&self) -> usize {
+        self.state
+            .lock()
+            .expect("speech input script poisoned")
+            .active
+    }
+}
+struct ActiveSpeechInput(Arc<Mutex<SpeechInputScriptState>>);
+impl Drop for ActiveSpeechInput {
+    fn drop(&mut self) {
+        self.0.lock().expect("speech input script poisoned").active -= 1;
+    }
+}
+impl SpeechInputService for ScriptedSpeechInputService {
+    fn input(
+        &self,
+        request: SpeechInputRequest,
+        cancellation: Arc<dyn SpeechInputCancellationSignal>,
+    ) -> SpeechInputFuture<'_> {
+        let state = Arc::clone(&self.state);
+        Box::pin(async move {
+            {
+                let mut s = state.lock().expect("speech input script poisoned");
+                s.received.push(request);
+                s.active += 1;
+            }
+            let _active = ActiveSpeechInput(Arc::clone(&state));
+            if cancellation.is_cancelled() {
+                return SpeechInputOutcome::Cancelled(
+                    SpeechInputCancellationEvidence::for_request(&request),
+                );
+            }
+            let outcome = {
+                let mut s = state.lock().expect("speech input script poisoned");
+                let o = s.outcomes.pop_front();
+                if o.is_some() {
+                    s.consumed += 1;
+                }
+                o
+            };
+            match outcome {
+                Some(ScriptedSpeechInputOutcome::Success(e)) => SpeechInputOutcome::Success(e),
+                Some(ScriptedSpeechInputOutcome::Unavailable) => {
+                    SpeechInputOutcome::Failure(SpeechInputFailure::Unavailable)
+                }
+                Some(ScriptedSpeechInputOutcome::DependencyFailure) | None => {
+                    SpeechInputOutcome::Failure(SpeechInputFailure::DependencyFailure)
+                }
+                Some(ScriptedSpeechInputOutcome::WaitForCancellation) => {
+                    cancellation.cancelled().await;
+                    SpeechInputOutcome::Cancelled(SpeechInputCancellationEvidence::for_request(
+                        &request,
+                    ))
+                }
+            }
+        })
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct ManualSpeechInputCancellation {
+    inner: Arc<Mutex<ManualCancellationState>>,
+}
+#[derive(Default)]
+struct ManualCancellationState {
+    cancelled: bool,
+    wakers: Vec<Waker>,
+}
+impl ManualSpeechInputCancellation {
+    pub fn cancel(&self) {
+        let wakers = {
+            let mut s = self.inner.lock().expect("cancellation signal poisoned");
+            s.cancelled = true;
+            std::mem::take(&mut s.wakers)
+        };
+        for w in wakers {
+            w.wake();
+        }
+    }
+}
+struct WaitCancellation {
+    inner: Arc<Mutex<ManualCancellationState>>,
+}
+impl Future for WaitCancellation {
+    type Output = ();
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        let mut s = self.inner.lock().expect("cancellation signal poisoned");
+        if s.cancelled {
+            Poll::Ready(())
+        } else {
+            s.wakers.push(cx.waker().clone());
+            Poll::Pending
+        }
+    }
+}
+impl SpeechInputCancellationSignal for ManualSpeechInputCancellation {
+    fn is_cancelled(&self) -> bool {
+        self.inner
+            .lock()
+            .expect("cancellation signal poisoned")
+            .cancelled
+    }
+    fn cancelled(&self) -> SpeechInputCancellationFuture<'_> {
+        Box::pin(WaitCancellation {
+            inner: Arc::clone(&self.inner),
+        })
+    }
+}
