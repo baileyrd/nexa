@@ -6,6 +6,8 @@ Status: Tactical-pause working baseline
 
 This document records development lessons from Nexa so that project-specific mistakes become reusable process improvements. The purpose is not blame. It is to identify mechanisms that allowed drift and define controls that prevent recurrence.
 
+The evidence chronology behind these lessons is recorded in [`DEVELOPMENT-DIVERGENCE-ANALYSIS.md`](DEVELOPMENT-DIVERGENCE-ANALYSIS.md). That analysis identifies the first material divergence at the Phase 0-to-Phase 1 transition, the PR #20 missed rebaseline opportunity, the qualified Phase 4 contract-gate closure at PR #74, and the repeated horizontal-depth pattern through PR #109.
+
 ## What worked
 
 - Contract-first decomposition produced clear ownership boundaries.
