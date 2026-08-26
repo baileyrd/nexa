@@ -1,92 +1,133 @@
 # Nexa
 
-Nexa is a local-first, adaptive AI training tutor platform. It combines structured tutor intelligence, pedagogy, student modeling, governed knowledge retrieval, curriculum, assessment, interactive labs, speech, and an expressive renderer-independent avatar.
+Nexa is a local-first adaptive AI training tutor platform. Its architecture combines governed tutor intelligence, pedagogy, student modeling, curriculum, assessment, knowledge retrieval, persistence, observability, and optional speech/avatar/lab adapters.
 
-Nexa is not an avatar attached to a chatbot. The avatar is the human-facing embodiment of a larger learning system designed to develop demonstrable competency.
+Nexa is not an avatar attached to a chatbot. The first v1 release is defined by a complete learner journey with durable progress and grounded instruction.
 
-## Architectural rule
+## Current development state
 
-Tutor intelligence produces semantic communicative intent. The behavior and avatar layers decide how that intent is physically expressed.
+Nexa completed a tactical architecture/documentation rebaseline in August 2026 after identifying that strong local contract/conformance progress had outpaced parent architecture maturity and vertical product integration.
 
-The LLM does not select animation clips, manipulate bones, set blendshape weights, or issue renderer commands.
+The current delivery path is **R0–R9**, not the older open-ended Phase 5 increment loop.
+
+- R0 — governance/architecture rebaseline: complete for R2 once the rebaseline PR is merged.
+- R1 — release-critical specification/technology baseline: complete for R2 once the rebaseline PR is merged.
+- R2 — thin real production walking skeleton: next implementation stage.
+
+See [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md) for the exact current gate.
+
+## Governing architecture
+
+The v1 implementation authority is [`NEXA-ARCH-002`](docs/architecture/NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md).
+
+The reconstructed Tutor System Architecture remains preserved as historical/long-range design provenance, but it is superseded by NEXA-ARCH-002 for v1 implementation selection.
+
+### Central rule
+
+Tutor intelligence produces semantic instructional/communicative intent. It does not directly manipulate animation clips, bones, blendshape weights, renderer operations, host authorization, or other infrastructure authority.
 
 ```text
-Student interaction
-        |
-Session orchestrator
-        |
-Tutor + pedagogy + knowledge + student state
-        |
-Structured tutor response and BehaviorIntent
-        |
-Nexa Behavior Protocol
-        |
-Speech, canvas, tools, and avatar adapters
+Learner
+   |
+   v
+Nexa Desktop App
+   |
+   v
+Session Orchestrator
+   |-------------------|-------------------|
+   v                   v                   v
+Learning Core      Tutor / Knowledge   Observability
+   |                   |
+   |                   v
+   |              Model Adapter
+   |                   |
+   |                   v
+   |             local model runtime
+   |
+   +-------------> Durable Data
 ```
+
+Speech, avatar/behavior embodiment, and labs/tools remain optional/later adapters outside the R2 critical path.
+
+## R2 walking skeleton
+
+ADR-0068 establishes the first concrete vertical path:
+
+- learner app: `apps/nexa-desktop`;
+- UI: `eframe`/`egui`, subject to a bounded suitability spike;
+- persistence: SQLite through `rusqlite` behind `crates/nexa-storage`;
+- model: local `llama.cpp` server behind a narrow Nexa adapter;
+- first acceptance target: Windows x86_64;
+- first course: Networking Fundamentals / TCP Connection Establishment;
+- text-first interaction.
+
+R2 must prove:
+
+```text
+learner text
+ -> desktop UI
+ -> orchestrator
+ -> SQLite state
+ -> learning/pedagogy
+ -> governed knowledge
+ -> real local model
+ -> admitted tutor response
+ -> assessment/practice
+ -> atomic durable progress
+ -> restart/resume
+```
+
+Scripted providers and in-memory storage remain useful test tools but cannot close the R2 system gate.
 
 ## Repository layout
 
 | Path | Purpose |
 |---|---|
-| `apps/` | Desktop, authoring, CLI, and viewer composition roots |
-| `crates/` | Reusable domain and subsystem implementations |
-| `tools/` | Content, assessment, lab, and asset compilers and validators |
-| `content/` | Courses, knowledge, assessments, and labs |
-| `assets/` | Avatars, scenes, and speech assets |
-| `docs/` | Architecture, specifications, ADRs, governance, and provenance |
-| `crates/nexa-3d/` | Renderer-independent 3D runtime, validation, and avatar adapter |
-| `crates/nexa-student/` | Headless student model, immutable evidence ledger, and replayable mastery policy |
-| `crates/nexa-pedagogy/` | Pure, versioned, explainable policy over read-only mastery projections |
-| `crates/nexa-lessons/` | Validated authored curriculum and pure, versioned headless lesson transitions |
-| `crates/nexa-assessment/` | Validated assessment contracts, deterministic scoring, attempt lifecycle, and evidence creation |
-| `crates/nexa-learning-core/` | Synchronous atomic composition of the Phase 3 learning-core policies |
-| `apps/nexa-3d-viewer/` | `wgpu`/`winit` interactive viewer composition root |
-| `apps/nexa-headless/` | Minimal headless Behavior-cancellation composition root |
-| `tools/nexa-3d-validate/` | GPU-free asset and manifest validation CLI |
+| `apps/` | Application composition roots |
+| `crates/` | Reusable domain, subsystem, runtime, and adapter boundaries |
+| `tools/` | Validators/compilers and engineering tools |
+| `content/` | Governed course, knowledge, assessment, and lab content |
+| `assets/` | Avatar, scene, and speech assets |
+| `docs/` | Architecture, specifications, ADRs, governance, traceability, and provenance |
 
-A directory containing only `.gitkeep` reserves a planned boundary; it does not indicate that the capability is implemented.
+Notable implemented foundations include:
+
+- `nexa-domain`, `nexa-events`, `nexa-nbp` — canonical contract kernel;
+- `nexa-student`, `nexa-pedagogy`, `nexa-lessons`, `nexa-assessment`, `nexa-learning-core` — deterministic learning policies/composition;
+- `nexa-knowledge`, `nexa-knowledge-runtime` — governed ingestion/retrieval/context/citation foundations;
+- `nexa-tutor` — provider-neutral prompt/model/admission foundations;
+- `nexa-orchestrator`, `nexa-orchestrator-runtime` — lifecycle/structured-concurrency/cancellation foundations;
+- `nexa-avatar`, `nexa-3d`, `nexa-3d-viewer` — renderer-neutral embodiment and concrete 3D/viewer foundations;
+- `nexa-speech`, `nexa-labs` — retained contract/control foundations for later gates.
+
+A directory containing only `.gitkeep` is a reserved boundary, not an implemented capability.
+
+## Capability maturity
+
+Nexa reports maturity explicitly:
+
+`Concept -> Architecture Defined -> Specification Approved -> Contract Implemented -> Runtime Integrated -> Concrete Adapter Implemented -> System Verified -> User Accepted -> Release Ready`
+
+Historical statements such as “Phase 3 complete” and “Phase 4 complete” refer to their documented deterministic/headless technical gates. They are not claims that those subsystems were product/release complete.
 
 ## Start here
 
-- [Reconstructed baseline policy](docs/BASELINE.md)
-- [Canonical specification registry](docs/SPECIFICATION-REGISTRY.md)
-- [Tutor system architecture](docs/Nexa%20Tutor%20System%20%E2%80%94%20Architecture%20v0.1.md)
-- [Character and behavior specification](docs/Nexa%20Character%20&%20Behavior%20Specification%20v1.0.md)
-- [Implementation roadmap](docs/architecture/IMPLEMENTATION-ROADMAP.md)
-- [Architecture decisions](docs/adr/)
-- [Contributing](CONTRIBUTING.md)
+For development or review, read:
 
-## Current implementation
+1. [`CHATGPT_WORKFLOW.md`](CHATGPT_WORKFLOW.md)
+2. [`AGENTS.md`](AGENTS.md)
+3. [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md)
+4. [`docs/BASELINE.md`](docs/BASELINE.md)
+5. [`docs/SPECIFICATION-REGISTRY.md`](docs/SPECIFICATION-REGISTRY.md)
+6. [`docs/architecture/NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md`](docs/architecture/NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md)
+7. [`docs/architecture/NEXA-R1-IMPLEMENTATION-BASELINE.md`](docs/architecture/NEXA-R1-IMPLEMENTATION-BASELINE.md)
+8. [`docs/adr/0068-v1-r2-walking-skeleton-baseline.md`](docs/adr/0068-v1-r2-walking-skeleton-baseline.md)
+9. [`docs/architecture/IMPLEMENTATION-ROADMAP.md`](docs/architecture/IMPLEMENTATION-ROADMAP.md)
+10. the applicable subsystem specifications/ADRs/traceability for the selected increment.
 
-The first implemented slice is split across `nexa-3d`, `nexa-3d-validate`, and `nexa-3d-viewer`: a renderer-independent GLB validation library, headless acceptance tool, and minimal `wgpu`/`winit` debug viewer. The library retains the `nexa_3d_runtime` Rust import name for migration compatibility. See [ADR-0008](docs/adr/0008-controlled-3d-workspace-migration.md) for ownership and the complete old-to-new path map.
+## Existing 3D slice
 
-It currently validates and exercises:
-
-- renderable GLB scene geometry
-- skeleton hierarchy and GPU skinning
-- morph targets and animation timelines
-- gaze and viseme control hooks
-- semantic runtime manifests
-- headless CI-safe asset acceptance
-
-Renderer-neutral contracts remain in `nexa-avatar`; GPU, window, and OS input composition exists only in the viewer application.
-
-Phase 3 includes dependency-light `nexa-student` and `nexa-pedagogy` slices. Canonical evidence is append-only,
-duplicate ingestion is idempotent, and mastery is a derived projection replayed with an explicit policy
-version. The pure pedagogy policy reads projections without mutation and returns only available routing
-options with stable rationale codes. Only ports and deterministic test adapters exist; no database or async
-runtime has been selected. The lesson slice validates immutable authored graphs and consumes only
-explicitly authored pedagogy routes into atomic progress transitions. The `nexa-learning-core` boundary now proves the Phase 3 headless path and atomic rollback contract
-with a deterministic in-memory unit of work. Durable database, authorization, retention, concurrency,
-and outbox adapter decisions remain explicitly deferred.
-See [ADR-0010](docs/adr/0010-learning-state-evidence-and-persistence.md),
-[ADR-0011](docs/adr/0011-pedagogy-policy-ownership-and-versioning.md),
-[ADR-0012](docs/adr/0012-governed-curriculum-and-lesson-transitions.md),
-[ADR-0013](docs/adr/0013-assessment-contract-scoring-and-evidence.md),
-[ADR-0014](docs/adr/0014-learning-core-composition-and-atomicity.md), and the
-[Phase 3 traceability matrix](docs/architecture/PHASE-3-TRACEABILITY.md).
-
-## Run the implemented 3D slice
+The existing 3D foundation remains independently runnable and testable:
 
 ```powershell
 cargo test --workspace
@@ -95,42 +136,27 @@ cargo run --bin nexa-3d-validate -- path\to\Nexa.glb path\to\nexa.runtime.json
 cargo run --bin nexa-3d-viewer -- path\to\Nexa.glb path\to\nexa.runtime.json
 ```
 
-The viewer supports skeleton/node inspection, morph inspection, animation playback and scrubbing, orbit/zoom, gaze targeting, and viseme hooks. See [NEXA-3D-RUNTIME-001](docs/specifications/11-avatar-3d/NEXA-3D-RUNTIME-001.md) for its contracts.
+The avatar/3D work is retained but does not block the text-first R2 walking skeleton.
 
-## Development status
+## Development selection rule
 
-The reconstructed specifications are the working design baseline, not a claim that every subsystem is implemented. Development proceeds in governed phases:
+New work is selected because it advances a concrete release-path blocker and capability maturity—not merely because another narrow contract or ADR can be added.
 
-1. baseline governance
-2. shared domain, event, and behavior contracts
-3. embodiment migration
-4. learning core
-5. knowledge and tutor intelligence
-6. complete session orchestration
-7. authoring, packaging, and operations
+Every implementation PR must identify:
 
-See the roadmap for phase gates and acceptance outcomes.
+- its governing parent architecture/specification;
+- the release/E2E step it advances;
+- the maturity state before and after;
+- the evidence required to support that maturity claim.
+
+## Quality and architecture control
+
+Local PR correctness remains mandatory: format, build, lint, tests, contract/dependency boundaries, and traceability.
+
+In addition, the Chief Systems Architect performs independent whole-system reviews at major gates or when drift signals appear. The result is explicitly Continue, Redirect, or Tactical Pause.
+
+Local correctness never substitutes for system-level progress.
 
 ## License
 
-The current Rust package declares MIT or Apache-2.0 licensing. Repository-wide licensing and third-party asset provenance will be formalized before distribution.
-
-## Phase 2 embodiment acceptance
-
-The headless composition now accepts a complete NBP command, evaluates renderer-neutral capabilities, dispatches through `AvatarPort`, and returns correlated NBP acknowledgements/state/errors plus typed lifecycle events. A successful synchronous fake execution emits `accepted`, `started`, then `completed`; acceptance never implies completion. Optional unsupported facilities and unresolved semantic canvas targets degrade explicitly, cancellation is terminal, and rejection/failure remain distinct.
-
-```rust
-let report = adapter.handle(nexa_avatar::AvatarRequest::try_from(&nbp_message)?);
-let outputs = report.to_nbp_messages(
-    &nbp_message,
-    "nexa.avatar".parse()?,
-    nexa_domain::Sequence::new(1),
-    caller_supplied_message_ids,
-)?;
-```
-
-The caller supplies output identities and sequences. The core is synchronous and contains no renderer, GPU, window, audio provider, network, persistence, or async-runtime dependency. See [ADR-0009](docs/adr/0009-embodiment-acceptance-and-lifecycle.md) and the [Phase 2 traceability matrix](docs/architecture/PHASE-2-TRACEABILITY.md).
-
-## Phase 4 status
-
-Phase 4 is **in progress**. The first governed slice is `nexa-knowledge`: exact UTF-8 Markdown/plain-text artifacts, versioned SHA-256 integrity, metadata provenance, deterministic structural ranges, lifecycle/visibility policy, and an atomic synchronous persistence port. It does not implement lexical retrieval, embeddings, vector or hybrid search, reranking, context packing, citation resolution, tutor intelligence, model providers, networking, or durable storage. See [ADR-0015](docs/adr/0015-governed-knowledge-ingestion.md) and the [Phase 4 traceability matrix](docs/architecture/PHASE-4-TRACEABILITY.md).
+The Rust workspace currently declares MIT OR Apache-2.0 licensing. Repository-wide distribution, third-party model/runtime dependencies, and asset provenance must satisfy the release packaging gate before v1 distribution.
