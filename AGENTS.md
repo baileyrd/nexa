@@ -2,32 +2,110 @@
 
 ## Authority and preservation
 
-Work from a requirement, accepted ADR, approved/baseline specification, or focused maintenance objective. For repository design questions, follow the interpretation order in [`docs/BASELINE.md`](docs/BASELINE.md): accepted ADRs and approved specifications; registry-listed Baseline Draft specifications; NEXA-CBS-001; canonical visual references; verified runtime contracts; architecture narratives; then provenance. The [`specification registry`](docs/SPECIFICATION-REGISTRY.md) is the navigation/status authority, and the [`implementation roadmap`](docs/architecture/IMPLEMENTATION-ROADMAP.md) and phase traceability matrices record delivery gates and evidence.
+Always begin with [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md), then follow the authority route in [`docs/BASELINE.md`](docs/BASELINE.md) and [`docs/SPECIFICATION-REGISTRY.md`](docs/SPECIFICATION-REGISTRY.md).
 
-Do not silently reconcile a conflict between documents or between documentation and implementation: report it and obtain review. Preserve reconstructed documents as source evidence. Do not rewrite, delete, or supersede their meaning without traceability through review, an ADR, or specification history.
+For v1 work, the current parent authorities are:
+
+- [`docs/architecture/NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md`](docs/architecture/NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md)
+- [`docs/architecture/NEXA-R1-IMPLEMENTATION-BASELINE.md`](docs/architecture/NEXA-R1-IMPLEMENTATION-BASELINE.md)
+- [`docs/adr/0068-v1-r2-walking-skeleton-baseline.md`](docs/adr/0068-v1-r2-walking-skeleton-baseline.md)
+- [`docs/architecture/IMPLEMENTATION-ROADMAP.md`](docs/architecture/IMPLEMENTATION-ROADMAP.md)
+- the applicable subsystem specifications and accepted ADRs.
+
+`NEXA-ARCH-001` and reconstructed documents are preserved provenance/long-range design context. They do not override `NEXA-ARCH-002` for v1 implementation selection.
+
+Do not silently reconcile a conflict between documents or between documentation and implementation. Stop at the boundary, report the conflict, and resolve it through the owning architecture/specification/ADR before implementation continues.
+
+## Program-integrity rule
+
+Local correctness is necessary but not sufficient.
+
+Every implementation increment must state:
+
+1. the current release/E2E blocker it addresses;
+2. the governing parent architecture/specification/ADR;
+3. the E2E step it makes concrete;
+4. the capability maturity state before/after;
+5. the evidence required to support that maturity change.
+
+Use the maturity vocabulary:
+
+`Concept -> Architecture Defined -> Specification Approved -> Contract Implemented -> Runtime Integrated -> Concrete Adapter Implemented -> System Verified -> User Accepted -> Release Ready`
+
+Do not use an unqualified `Complete` when it would hide the actual maturity demonstrated.
+
+The Chief Systems Architect must call Continue, Redirect, or Tactical Pause when parent documentation trails implementation, inherited deferrals cross required gates, repeated horizontal work does not advance the vertical release path, authority/status documents disagree, or the roadmap no longer presents a finite credible route to release.
+
+## Current R2 scope
+
+After the rebaseline PR is green and merged, R2 is the only normal product-development stage.
+
+The R2 walking skeleton is text-first:
+
+```text
+learner text
+ -> apps/nexa-desktop
+ -> orchestrator
+ -> SQLite durable state
+ -> learning/pedagogy
+ -> governed TCP course knowledge
+ -> local llama.cpp model adapter
+ -> admitted tutor response
+ -> assessment/practice
+ -> atomic durable progress
+ -> restart/resume
+```
+
+R2 concrete baseline:
+
+- `apps/nexa-desktop` learner composition root;
+- `eframe`/`egui` after bounded suitability spike;
+- SQLite/`rusqlite` behind `crates/nexa-storage`;
+- local `llama.cpp` server through a narrow provider adapter;
+- Windows x86_64 first acceptance environment;
+- Networking Fundamentals / TCP Connection Establishment first course.
+
+Do not restart the superseded open-ended Phase 5 sequence.
+
+Speech, avatar/behavior embodiment, labs/tools, dynamic multi-provider routing/fallback, dedicated vector infrastructure, and durable event broker work are not R2 exit criteria unless an actual R2 blocker proves otherwise.
 
 ## ChatGPT–Codex coordination
 
-When development uses the human-coordinated ChatGPT and Codex workflow, follow [`CHATGPT_WORKFLOW.md`](CHATGPT_WORKFLOW.md).
+When development uses the human-coordinated or automated ChatGPT/Codex workflow, follow [`CHATGPT_WORKFLOW.md`](CHATGPT_WORKFLOW.md).
 
-`CHATGPT_WORKFLOW.md` governs task handoffs, pull-request review, correction cycles, and workflow trigger messages. It does not supersede the repository authorities, engineering constraints, validation requirements, or completion rules in this file.
+ChatGPT/Chief Systems Architect selects work from current repository authority and the release path, reviews exact PR heads, requests corrections on the existing PR branch, and merges only the exact reviewed green head.
 
-Do not duplicate the complete workflow elsewhere in `AGENTS.md`.
+Codex implements and validates bounded tasks; it does not independently redefine architecture, product scope, or authority status.
 
 ## Repository map and boundaries
 
-- `crates/nexa-domain`, `nexa-events`, and `nexa-nbp` are the shared contract kernel. `nexa-domain` is the dependency-light leaf; events and NBP may depend on it, never on each other.
-- `crates/nexa-avatar` owns renderer-neutral embodiment ports; `crates/nexa-3d` implements the headless 3D runtime/adapter. GPU, window, and OS-input composition belongs in `apps/nexa-3d-viewer`; `tools/nexa-3d-validate` stays headless.
-- `crates/nexa-student`, `nexa-pedagogy`, `nexa-lessons`, and `nexa-assessment` own their Phase 3 policies; `nexa-learning-core` composes them atomically without absorbing their reasoning.
-- `crates/nexa-knowledge` owns governed knowledge/retrieval/context/citation contracts. `crates/nexa-tutor` owns provider-neutral response planning and consumes knowledge by reference.
-- `crates/nexa-orchestrator` owns dependency-light, synchronous session/workflow lifecycle and lifecycle-cancellation contracts. `crates/nexa-orchestrator-runtime` is the Tokio-backed adapter that owns workflow tasks and cancellation tokens; subsystem adapters, networking, and persistence remain outside both boundaries unless a later accepted decision assigns them.
-- `apps/` contains composition roots; `tools/` contains compilers/validators; `content/` and `assets/` contain governed inputs; `docs/` contains specifications, ADRs, architecture, governance, and provenance. A `.gitkeep`-only boundary is planned, not implemented.
+- `crates/nexa-domain`, `nexa-events`, `nexa-nbp`: shared contract kernel. `nexa-domain` remains the dependency-light leaf.
+- `crates/nexa-student`, `nexa-pedagogy`, `nexa-lessons`, `nexa-assessment`: owned learning policies.
+- `crates/nexa-learning-core`: atomic learning composition; it does not absorb owned subsystem reasoning.
+- `crates/nexa-knowledge`: governed ingestion/retrieval/context/citation contracts.
+- `crates/nexa-knowledge-runtime`: runtime-owned async knowledge service boundaries.
+- `crates/nexa-tutor`: provider-neutral prompt/model/admission/tutor contracts.
+- `crates/nexa-orchestrator`: dependency-light session/workflow contracts.
+- `crates/nexa-orchestrator-runtime`: Tokio-backed workflow task/cancellation ownership.
+- `crates/nexa-storage`: approved R2 concrete persistence adapter boundary; database/runtime dependencies belong here, not in domain crates.
+- `crates/nexa-avatar`: renderer-neutral embodiment ports.
+- `crates/nexa-3d`: 3D runtime/adapter; GPU/window composition belongs in `apps/nexa-3d-viewer`.
+- `crates/nexa-speech`, `crates/nexa-labs`: retained later-capability foundations; not R2 critical path by default.
+- `apps/nexa-desktop`: approved R2 learner-facing composition root.
+- `apps/nexa-headless`: test/integration composition, not the released learner application.
+- `tools/`: compilers/validators.
+- `content/` and `assets/`: governed inputs/assets.
+- `docs/`: specifications, ADRs, architecture, governance, traceability, and provenance.
 
-Keep domain-facing crates independent of UI, renderer, OS, async runtime, storage/database, networking, and model-provider implementations. Integrations implement ports owned by the domain-facing layer; no subsystem manipulates another subsystem's persistence. Tutor output is semantic intent: LLM/tutor code must not select clips, bones, blendshape weights, or renderer commands. See [ADR-0001](docs/adr/0001-monorepo-and-contract-first-architecture.md), [ADR-0002](docs/adr/0002-contract-kernel-dependency-boundaries.md), and the accepted ADRs indexed by the registry rather than duplicating their decisions here.
+A `.gitkeep`-only boundary is planned, not implemented.
+
+Keep domain-facing crates independent of UI, renderer, OS, async runtime, storage/database, networking, and concrete model-provider implementations. Concrete integrations implement ports owned by domain-facing layers.
+
+Tutor/model output is untrusted semantic content until admission; it must not select renderer primitives or host authority.
 
 ## Required validation
 
-Run from the repository root:
+Run from the repository root for ordinary Rust implementation PRs:
 
 ```text
 cargo fmt --all --check
@@ -39,9 +117,17 @@ cargo test --workspace
 git diff --check
 ```
 
+As R2 activates Windows/UI/storage/model adapters, add focused concrete-adapter and Windows validation required by the owning R1 specifications. Passing the existing Linux/headless suite does not prove higher maturity.
+
 ## Change and review rules
 
-- Make bounded, independently reviewable changes; do not combine unrelated cleanup or speculative architecture.
-- Identify affected specifications and boundaries. Contract/architecture changes require explicit PR impact notes; cross-cutting decisions require an ADR; authority/status changes require a registry update.
-- Review wire changes for stable names, validation, compatibility, replay, and deterministic fixtures. Review dependencies against the enforced inward DAG and renderer/provider/storage exclusions. Review evidence/state changes for subsystem ownership, immutability/idempotency, explicit policy versions, and atomic failure behavior where the accepted ADRs require them.
-- A PR is done only when implementation, tests, specifications, registry/traceability, and affected ADRs agree; all applicable commands above pass; the diff is focused; and deferrals or conflicts are explicit. User-facing work also requires proportionate accessibility checks, and threat/privacy review must match the scope.
+- Make bounded, independently reviewable changes; do not bundle unrelated cleanup or speculative architecture.
+- Prefer a vertical maturity advance over another horizontal abstraction when both are possible.
+- Contract/architecture changes require explicit authority/impact notes; consequential cross-cutting decisions require an ADR; authority/status changes require a registry update.
+- Review wire changes for stable names, validation, compatibility, replay, and deterministic fixtures.
+- Review dependency changes against the inward DAG and renderer/provider/storage boundaries.
+- Review evidence/state changes for ownership, immutability/idempotency, policy versions, concurrency, and atomic failure behavior.
+- A PR is done only when implementation, tests, governing docs, status/registry/traceability, and applicable ADRs agree; all required checks pass on the exact reviewed head; the diff is focused; and deferrals/conflicts are explicit.
+- User-facing work requires proportionate accessibility checks.
+- Security/privacy review must match the actual changed trust/data boundary.
+- Do not claim `System Verified`, `User Accepted`, or `Release Ready` from unit/contract/headless evidence.
