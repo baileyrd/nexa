@@ -3,6 +3,7 @@
 Status date: 2026-08-26
 Baseline: `e2345a1bb8825451ea079ff5e350b7765075038a` (PR #109)
 Rebaseline PR: #110
+Status: Historical recovery ledger; superseded for current work selection by ADR-0069 and the G0–G9 roadmaps
 
 ## Purpose
 

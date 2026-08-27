@@ -8,9 +8,9 @@ Define the minimum learner-facing experience required to make the Nexa v1 system
 
 ## 2. v1 UX objective
 
-A learner can install/launch Nexa, configure the required tutor model path, select or resume a course, complete one adaptive lesson through text interaction and assessment, understand progress and errors, exit, restart, and resume correctly.
+A learner can launch either identical Windows desktop or same-machine browser client, configure the separately installed LM Studio reference server, select or resume a course, complete one adaptive lesson through accessible text, bundled speech, synchronized animated 2D embodiment, and assessment, understand progress and errors, exit, restart, and resume correctly.
 
-The core v1 experience is text-capable. Speech/avatar/labs are additive unless explicitly promoted into the required release path.
+Accessible text, bundled speech, and synchronized animated 2D embodiment are all required parts of the v1 experience. Text remains available as the accessible interaction and degradation path; labs/tools are post-v1 unless new owner and architecture authority changes scope.
 
 ## 3. Required application states
 
@@ -41,9 +41,9 @@ The UI may combine visual layouts, but these semantic states must be distinguish
 The application must:
 
 - identify whether required local data/schema initialization is needed;
-- identify whether a v1 model provider/configuration is ready;
-- guide the user to required configuration without exposing credentials after entry;
-- distinguish local-only and remote-provider posture clearly enough to support privacy expectations;
+- identify whether the separately installed graphical LM Studio server and configured model are ready;
+- guide the user through the local endpoint/model configuration without requesting provider credentials;
+- identify whether bundled speech and synchronized 2D dependencies are ready;
 - report unsupported/missing configuration with actionable next steps;
 - not require knowledge of internal crate/ADR/provider-neutral architecture.
 
@@ -61,7 +61,7 @@ The UX must not invent lesson availability or progress rules; it renders the own
 
 ## 6. Tutor interaction
 
-Minimum text interaction requirements:
+Minimum accessible text interaction requirements, shared identically by both clients:
 
 - clear learner input control;
 - submit/send action;
@@ -112,7 +112,8 @@ Errors must map from bounded application/orchestrator classifications into usefu
 At minimum distinguish:
 
 - provider not configured;
-- provider authentication/configuration failure;
+- LM Studio endpoint/model configuration or availability failure;
+- post-v1 remote-provider authentication failure only if a remote path later receives new explicit owner and architecture authority;
 - provider temporarily unavailable/timeout;
 - course/content unavailable or invalid;
 - local data migration/recovery required;
@@ -126,10 +127,10 @@ Messages should explain what the learner can do next without revealing secrets o
 
 ## 11. Offline/local behavior
 
-The UI must accurately represent the configured capability:
+The UI must accurately represent the local v1 capability:
 
-- if the v1 tutor path is local, remote-connectivity language must not be shown unnecessarily;
-- if the provider is remote and network is unavailable, distinguish that from corrupted local learner/course state;
+- LM Studio unavailability must be distinguished from corrupted local learner/course state;
+- remote-provider or credential setup must not be presented as a v1 path;
 - course/progress state that is safely usable offline should remain accessible according to product policy;
 - do not claim full offline tutoring if the configured required model path cannot operate offline.
 
@@ -147,11 +148,11 @@ After normal or supported unclean restart:
 
 For the required learner UI, v1 must provide at minimum:
 
-- keyboard operation for primary controls where the desktop framework supports it;
+- keyboard operation for primary controls in both clients;
 - visible focus and actionable-state indication;
 - readable text contrast and scaling according to the selected platform/framework guidelines;
 - error/status information not conveyed solely by color, animation, or sound;
-- textual access to instructional content even if avatar/speech is enabled;
+- textual access to instructional content alongside required avatar/speech behavior;
 - labels/names for interactive controls sufficient for platform accessibility APIs where supported;
 - predictable navigation order;
 - learner control to stop/cancel long-running interactions where supported.
@@ -160,11 +161,11 @@ A later UX technology decision should map these requirements to concrete platfor
 
 ## 14. Privacy transparency
 
-When remote provider use is configured, the setup/UX must communicate at a product-appropriate level:
+The setup/UX must communicate at a product-appropriate level:
 
-- that tutor interaction data may be sent to the configured provider;
-- provider identity;
-- whether local-only operation is available/selected;
+- that the v1 tutor path communicates only with the separately installed same-machine LM Studio server;
+- the configured LM Studio endpoint and model identity;
+- that no remote inference or provider-credential flow is a v1 deliverable;
 - where learner-data reset/delete controls are located if provided in v1.
 
 Do not expose every internal prompt layer or implementation detail; transparency should be accurate and understandable.
@@ -181,9 +182,9 @@ The application should provide a safe way to identify:
 
 Do not present raw prompt/model/learner content as default diagnostic details.
 
-## 16. Conditional speech
+## 16. Required speech
 
-If speech is promoted to v1:
+Required bundled speech must provide all of the following:
 
 - microphone-active state is visible;
 - learner can stop capture;
@@ -192,9 +193,9 @@ If speech is promoted to v1:
 - TTS/audio can be stopped/interrupted;
 - essential content is available in text.
 
-## 17. Conditional avatar
+## 17. Required animated 2D embodiment
 
-If avatar embodiment is promoted:
+Required synchronized animated 2D embodiment must provide all of the following:
 
 - animation may enhance but not be the sole carrier of required instructional/status information;
 - the avatar reflects admitted semantic behavior rather than direct model renderer control;
@@ -216,23 +217,27 @@ A representative learner must be able to, without developer intervention beyond 
 1. launch/setup Nexa;
 2. select/resume the released course;
 3. understand the current lesson objective;
-4. ask/respond through text tutor interaction;
+4. ask/respond through accessible text and bundled speech interaction;
 5. inspect a grounded/cited response where citations are provided;
 6. complete the released assessment/practice interaction;
 7. understand whether progress was saved;
 8. recover from at least one simulated provider failure using the provided UX;
 9. exit/relaunch and resume the correct durable state;
-10. complete the lesson.
+10. observe synchronized admitted 2D tutor behavior through the interaction and complete the lesson in both clients.
 
 Blocking confusion, inaccessible primary actions, false save/completion state, or inability to recover from documented recoverable failures blocks User Accepted maturity.
 
 ## 20. Decisions required for approval
 
-- concrete desktop UI framework/application shell;
+- concrete shared UI framework/application shell, selected only after G1 evidence and an authority update;
 - first supported OS/platform;
-- exact v1 provider setup/config flow;
+- exact LM Studio endpoint/model setup flow;
 - amount of mastery/progress detail exposed;
 - citation/source presentation design;
 - reset/delete/export controls included in v1;
-- speech/avatar/labs v1 disposition;
+- concrete bundled-speech and animated-2D adapter technologies after G2/G3 evidence; labs/tools remain post-v1;
 - concrete accessibility standard/platform mapping.
+
+## 2026-08-26 ADR-0069 reconciliation
+
+For v1, speech and animated 2D embodiment are required rather than conditional; text remains an accessible equivalent. The learner surface is one identical shared interface in Windows desktop and same-machine browser clients. React/TypeScript/Vite with Tauri 2 remains evidence-gated. Both clients use one versioned loopback HTTP/WebSocket business API. Setup exposes the separately installed LM Studio reference server and bundled speech readiness without requiring internal architecture knowledge. Labs/tools and remote access remain deferred.

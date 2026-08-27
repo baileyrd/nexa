@@ -21,104 +21,25 @@ Every implementation increment must trace to:
 
 No implementation enters the queue merely because another narrow contract/ADR can be added.
 
-## R0 — Governance and architecture rebaseline
+## G0–G2 — Authority, shared client, and speech evidence
 
-Status: **PASS for R2 after the rebaseline PR is green and merged.**
+G0 is the Issue #114 reconciliation and does not change implementation maturity. It must be reviewed, green, and merged before work resumes.
 
-Completed:
+G1 is the only first separately dispatchable follow-on: prove identical shared frontend behavior in the same-machine browser and Tauri 2 Windows shell candidate over one versioned loopback HTTP/WebSocket API. Evidence covers loopback security, cancellation/reconnect, accessibility, Windows build, startup/CPU/memory/package impact, and parity. Failure removes the candidate and returns selection to owner authority.
 
-- current-state/documentation-gap assessment;
-- divergence analysis and lessons learned;
-- architecture rebaseline/program-integrity gates;
-- finite v1 product definition;
-- approved `NEXA-ARCH-002` v1 release architecture;
-- consolidated deferral review;
-- current registry/status/README/roadmap authority reconciliation;
-- R1 specification plan and implementation baseline.
+G2 separately proves the bundled CPU speech candidate, including microphone/output devices, recognition and synthesis quality, interruption/cancellation, latency/resources, packaging, licensing, privacy, and accessible text/caption fallback. Sherpa-ONNX remains a candidate; failure invokes the ADR-0069 fallback/reselection path.
 
-Exit: parent architecture and v1 release boundary are sufficiently authoritative to govern R2.
+## G3–G7 — 2D evidence and concrete vertical integration
 
-## R1 — Critical specification and technology baseline
+G3 separately proves the Rive candidate renders identical synchronized animated 2D behavior in both clients, including semantic idle/listening/thinking/speaking/error states, lip-sync, interruption, reduced-motion/static fallback, accessibility, and CPU/resource evidence. Failure removes Rive and requires owner-governed reselection.
 
-Status: **PASS for R2 after the rebaseline PR is green and merged.**
+G4 integrates shared clients, the local Rust runtime, authoritative SQLite state/migrations, governed TCP content, atomic learning commits, and restart/resume. G5 integrates the narrow LM Studio adapter and admitted tutor output. G6 integrates required bundled speech. G7 integrates required synchronized animated 2D embodiment. Each gate requires a recorded Continue, Redirect, or Tactical Pause and evidence at the claimed maturity.
 
-Approved R2-governing areas:
-
-- data/persistence;
-- security;
-- privacy;
-- observability;
-- complete session orchestration;
-- domain/events;
-- learning subsystems;
-- tutor/knowledge;
-- learner UX;
-- testing/system acceptance;
-- performance measurement;
-- packaging/deployment constraints;
-- governed first-course content.
-
-ADR-0068 resolves the R2 technology/scope decisions.
-
-R1 intentionally does not finish all post-v1 specifications. The exit criterion is enough mature authority to implement the R2 walking skeleton safely.
-
-## R2 — Thin production walking skeleton
-
-Status: **Next implementation stage.**
-
-Objective: prove one real learner lesson through one composition root and concrete dependencies.
-
-Required path:
-
-```text
-learner text
- -> apps/nexa-desktop
- -> session orchestrator
- -> SQLite durable state
- -> learning/pedagogy
- -> governed TCP course knowledge
- -> local llama.cpp model adapter
- -> admitted/quality-checked tutor response
- -> assessment/practice
- -> atomic evidence/mastery/progress commit
- -> exit/restart/resume
-```
-
-Required concrete elements:
-
-- `apps/nexa-desktop` learner application shell;
-- `eframe`/`egui` suitability proven by bounded spike;
-- active `crates/nexa-storage` SQLite/`rusqlite` adapter;
-- governed Networking Fundamentals/TCP content package;
-- concrete local llama.cpp adapter;
-- existing learning/tutor/knowledge contracts composed where applicable;
-- content-safe operational correlation.
-
-R2 exit:
-
-A learner can complete the bounded TCP lesson through the actual desktop boundary with the real local model and durable state, then restart/resume without lost or duplicated accepted progress.
-
-Scripted provider outcomes and in-memory persistence do not close R2.
-
-### R2 implementation sequence guidance
-
-Prefer small vertical increments:
-
-1. Desktop + storage architecture activation.
-2. Durable learning state and restart/resume foundation.
-3. Governed first-course/content persistence/retrieval path.
-4. Concrete local model adapter.
-5. Compose tutor/knowledge/model into desktop interaction.
-6. Compose assessment/evidence/progress commit.
-7. Close the R2 E2E acceptance scenario.
-
-The exact PR boundaries may change with evidence, but each must make the vertical path more concrete.
-
-## R3 — Robust complete session orchestration
+## G4–G7 — Robust complete session orchestration
 
 Status: Not started.
 
-Objective: turn the R2 skeleton into a resilient learner session.
+Objective: compose the G4–G7 vertical route into a resilient learner session.
 
 Required maturity:
 
@@ -134,7 +55,7 @@ Reuse ADR-0051 through ADR-0067 only where they directly support the actual sess
 
 Exit: the primary learner journey survives expected model/retrieval/storage failures, cancellation, shutdown, and restart without corrupting accepted state.
 
-## R4 — Grounding and tutor quality
+## G5/G8 — Grounding and tutor quality
 
 Status: Not started.
 
@@ -155,26 +76,26 @@ This stage also selects the release model/quantization from evidence rather than
 
 Exit: the exact release-intended model/configuration meets the approved first-course quality gate.
 
-## R5 — Speech/avatar product decision and optional integration
+## Preserved speech/avatar hardening requirements
 
-Status: Not started; not R2 blocking.
+Status: Required by G2/G3/G6/G7; not yet proven.
 
-Objective: decide from the functioning text tutor whether speech and/or animated embodiment are required for the first public v1 release or should ship later.
+Objective: prove and integrate the required bundled speech and synchronized animated 2D capabilities through the finite release route.
 
-If promoted, a capability must advance beyond existing contracts to concrete adapters and system verification:
+G2 and G3 must establish candidate suitability evidence; G6 and G7 must advance the capabilities beyond existing contracts to concrete adapters and integrated release-path evidence; G8 must provide system verification:
 
 - real microphone/STT and/or TTS/audio for speech;
 - semantic behavior synchronization;
 - actual avatar asset/runtime integration through NBP/avatar boundaries;
 - interruption/synchronization/privacy/accessibility evidence.
 
-If not promoted, retain the existing foundations for post-v1 without blocking release.
+Candidate failure triggers the ADR-0069 fallback/reselection path and an explicit authority update; it does not remove either required capability from v1.
 
-## R6 — Labs/tools if promoted
+## Deferred labs/tools
 
-Status: Post-R2 by default.
+Status: Post-v1.
 
-Only enter this stage before v1 if the accepted course/release outcome requires actual tool/lab practice.
+Labs/tools are not part of the owner-approved v1 route and cannot be promoted into v1 without new explicit owner and architecture authority.
 
 Promotion requires:
 
@@ -188,7 +109,7 @@ Promotion requires:
 
 Contract declarations/cancellation controls alone are insufficient.
 
-## R7 — Performance and operational hardening
+## G8 — Performance and operational hardening
 
 Status: Not started.
 
@@ -209,7 +130,7 @@ Optimization is selected from measured failures against accepted budgets, not as
 
 Exit: no unresolved release-blocking performance/operational finding.
 
-## R8 — Packaging, install, update, and distribution
+## G8 — Packaging, install, update, and distribution
 
 Status: Not started.
 
@@ -229,7 +150,7 @@ Required outcomes:
 
 Exit: a release candidate can be installed/upgraded/uninstalled according to the supported v1 policy.
 
-## R9 — System verification, user acceptance, release
+## G8/G9 — System verification, user acceptance, release
 
 Status: Not started.
 
@@ -258,14 +179,14 @@ Each status claim must name its scope and evidence.
 
 A whole-system architecture/program-integrity review occurs:
 
-- at R2 exit;
-- before material R3 broadening;
-- before promoting speech/avatar/labs into the release critical path;
-- before R8 release engineering;
+- after each candidate evidence gate (G1–G3) and before its production selection;
+- before G4 vertical integration and before each material G5–G7 expansion;
+- before G8 system verification and release engineering;
+- before any proposal to change required speech/avatar scope or promote deferred labs/tools;
 - whenever material drift signals appear.
 
 The outcome is explicitly Continue, Redirect, or Tactical Pause.
 
 ## Current next action
 
-After the rebaseline PR is green on the exact final head and merged, begin R2. Do not resume the superseded horizontal Phase 5 sequence.
+Complete, review, and merge G0. Do not begin or dispatch G1 from this documentation change. After merge, only a separately dispatched G1 may receive Continue; all other work remains under Tactical Pause.

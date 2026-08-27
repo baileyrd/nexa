@@ -4,14 +4,14 @@ Status: R1 proposal; non-authoritative until registered and approved
 
 ## 1. Purpose
 
-Define the minimum security architecture required for the Nexa v1 learner journey. This draft focuses on the actual v1 trust boundaries: a local desktop application, durable local data, governed content, and a configured model provider that may be local or remote.
+Define the minimum security architecture required for the Nexa v1 learner journey. The actual v1 trust boundaries include identical Windows desktop and same-machine browser clients, one local Rust runtime and loopback API, durable local data, governed content, and separately installed same-machine LM Studio. Remote inference is post-v1.
 
 ## 2. Security objectives
 
 Nexa v1 must:
 
 - preserve learner-state integrity;
-- protect provider credentials/secrets;
+- protect local configuration and any future provider credentials/secrets;
 - prevent unapproved remote disclosure;
 - enforce least privilege for local files/process/network access;
 - keep untrusted model/content bytes from gaining structural authority;
@@ -22,7 +22,7 @@ Nexa v1 must:
 
 ## 3. Trust boundaries
 
-### 3.1 Learner to desktop application
+### 3.1 Learner to the shared clients
 
 Learner text and files are untrusted input. The application validates all structured inputs before domain use and must not interpret learner-controlled content as configuration, executable policy, or privileged control.
 
@@ -30,9 +30,9 @@ Learner text and files are untrusted input. The application validates all struct
 
 The application trusts only data that passes current schema/domain validation. Existing local files are not inherently trusted merely because they were produced by an earlier Nexa version.
 
-### 3.3 Tutor/knowledge to model-provider boundary
+### 3.3 Tutor/knowledge to LM Studio boundary
 
-Prompt/model input is a controlled disclosure boundary. Remote transmission is permitted only through an explicitly configured and authorized provider path consistent with the privacy specification.
+Prompt/model input is a controlled boundary. The v1 adapter communicates only with separately installed same-machine LM Studio; any later remote transmission requires new explicit authority and the privacy specification’s disclosure controls.
 
 Model output is untrusted content until structural admission and required quality/safety gates complete.
 
@@ -48,7 +48,7 @@ If labs/tools are included in v1, tool execution is an untrusted execution bound
 
 R1 security review must address at least:
 
-- stolen/leaked model-provider credentials;
+- unsafe LM Studio endpoint/model configuration and any future stolen/leaked provider credentials;
 - prompt/content disclosure beyond configured policy;
 - prompt injection or untrusted knowledge attempting to control host behavior;
 - malicious/corrupt persisted state;
@@ -61,9 +61,9 @@ R1 security review must address at least:
 - denial/resource exhaustion from bounded external inputs;
 - network destination misuse for remote integrations.
 
-## 5. Credential and secret handling
+## 5. Post-v1 provider credential and secret safeguards
 
-Provider/API credentials must:
+v1 requests no provider/API credentials. If a remote provider later receives new explicit owner and architecture authority, its credentials must:
 
 - never be stored in ordinary learner/domain records;
 - never be committed to repository content or baked into release artifacts;
@@ -78,15 +78,15 @@ Plaintext configuration-file secrets require an explicit accepted exception; the
 
 ## 6. Network security
 
-For remote model/provider paths:
+Remote model/provider paths are not v1 deliverables. If one later receives new explicit owner and architecture authority:
 
 - outbound destinations must derive from approved provider configuration, not model/learner content;
 - transport encryption/server authentication must use the provider SDK/platform security expected by the supported environment;
 - redirects/custom endpoints must be controlled by configuration policy;
 - timeout and response-size bounds must be enforced;
 - proxy/custom-certificate behavior, if supported, must be documented;
-- no inbound listening service is required for the default v1 learner app unless separately specified;
-- disabling remote inference must remove the remote model network path from the primary learner journey.
+- its authorization does not change the separately governed v1 loopback API requirements;
+- disabling that post-v1 remote inference path must remove it from the primary learner journey.
 
 ## 7. Structural authority separation
 
@@ -129,9 +129,9 @@ The security specification depends on the data specification for transactional c
 
 Encryption-at-rest is a separate decision based on threat model, platform, and privacy requirements; it is not implied solely by local persistence.
 
-## 10. Remote disclosure authorization
+## 10. Post-v1 remote disclosure authorization
 
-A remote model invocation may occur only when:
+Remote model invocation is not a v1 path. If explicitly authorized after v1, it may occur only when:
 
 1. the configured provider/model is permitted for remote use;
 2. the prompt/input has passed the approved privacy/disclosure policy;
@@ -212,23 +212,23 @@ If Tool/Lab Execution is promoted to v1, approval requires a separate enforcemen
 Before v1 release, verify at least:
 
 - no credentials in repository, normal logs, serialized domain records, or redacted errors;
-- remote invocation cannot occur without approved configuration/disclosure path;
+- remote invocation cannot occur in v1 and any later path cannot occur without approved configuration/disclosure authority;
 - model output cannot override host-owned authority;
 - malformed/corrupt persisted state fails safely;
 - identity/evidence reassociation attacks fail closed on critical paths;
 - learner/knowledge input size/bounds are enforced;
 - filesystem paths used by v1 are constrained to intended operations;
-- supported remote provider uses expected secure transport configuration;
+- the v1 LM Studio integration is constrained to the authorized same-machine endpoint;
 - release/package provenance mechanism is exercised;
 - dependency vulnerability review has no unresolved release-blocking finding;
 - conditional labs/tools satisfy their additional security gate if included.
 
 ## 17. Decisions required for approval
 
-- first supported desktop OS/platform security facilities;
+- Windows desktop and same-machine browser security facilities;
 - credential-store mechanism;
-- first concrete model provider/local provider posture;
-- remote endpoint/custom endpoint policy;
+- exact same-machine LM Studio endpoint restrictions;
+- post-v1 remote/custom endpoint policy if later authorized;
 - encryption-at-rest requirement based on threat/privacy model;
 - update/package signing/provenance mechanism;
 - labs/tools v1 disposition.
@@ -242,3 +242,7 @@ Before v1 release, verify at least:
 - fleet key management;
 - generalized sandbox infrastructure if labs are not v1;
 - cloud sync threat model.
+
+## 2026-08-26 ADR-0069 reconciliation
+
+The v1 trust surface includes a normal same-machine browser and a candidate desktop shell against one loopback-only versioned HTTP/WebSocket API. Binding, origin/authorization, protocol validation, WebSocket lifecycle, and prevention of a second shell-specific business API require evidence. React/TypeScript/Vite and Tauri 2 remain G1 candidates; LM Studio is separately installed/local; hosted, remote/LAN, labs/tools, and cloud sync are deferred. Bundled speech and the 2D renderer require dependency/package/device safety review while their concrete technologies remain G2/G3-gated.

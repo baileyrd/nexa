@@ -24,13 +24,14 @@ Code does not silently amend a higher authority. A discovered conflict is record
 
 ## Current v1 governing set
 
-For v1/R2 work, begin with:
+For current v1 work, begin with:
 
 - [`PROJECT-STATUS.md`](PROJECT-STATUS.md)
 - [`SPECIFICATION-REGISTRY.md`](SPECIFICATION-REGISTRY.md)
 - [`architecture/NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md`](architecture/NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md)
 - [`architecture/NEXA-R1-IMPLEMENTATION-BASELINE.md`](architecture/NEXA-R1-IMPLEMENTATION-BASELINE.md)
-- [`adr/0068-v1-r2-walking-skeleton-baseline.md`](adr/0068-v1-r2-walking-skeleton-baseline.md)
+- [`adr/0069-owner-approved-v1-delivery-baseline.md`](adr/0069-owner-approved-v1-delivery-baseline.md)
+- [`adr/0068-v1-r2-walking-skeleton-baseline.md`](adr/0068-v1-r2-walking-skeleton-baseline.md) (historical/non-conflicting scope only)
 - [`architecture/NEXA-COMPLETION-ROADMAP.md`](architecture/NEXA-COMPLETION-ROADMAP.md)
 - the applicable subsystem specification and accepted ADRs for the selected increment.
 
@@ -39,13 +40,13 @@ For v1/R2 work, begin with:
 ## Immediate invariants
 
 - Nexa is an adaptive tutor platform, not merely an avatar or chatbot.
-- The first v1 path is text-first and local-first.
+- The v1 path is local-first and includes accessible text, bundled speech, and synchronized animated 2D embodiment in both identical clients.
 - Tutor/model output never directly controls animation primitives or host authority.
 - Core domain identifiers/events remain shared canonical contracts rather than being redefined by adapters.
 - Student mastery changes only from governed evidence and replayable policy.
 - The orchestrator coordinates subsystem work but does not absorb subsystem reasoning.
 - Storage, model provider, renderer, speech, and lab backends remain adapter concerns behind owned boundaries.
-- Provider/renderer neutrality is an architectural property; R2 still prioritizes one concrete real path.
+- Provider/renderer neutrality is architectural; LM Studio is the sole v1 reference model server, while the bundled speech and 2D candidates remain evidence-gated.
 - Local correctness evidence and system/product maturity are separate.
 
 ## Preservation policy
@@ -67,3 +68,5 @@ Do not use an unqualified `Complete` where it would hide the maturity level actu
 At major roadmap boundaries, and whenever parent documentation, deferrals, horizontal depth, or release convergence materially diverge, the Chief Systems Architect performs an independent whole-system review and records Continue, Redirect, or Tactical Pause.
 
 A lower-level implementation gate cannot close a higher-level architecture maturity gap.
+
+---

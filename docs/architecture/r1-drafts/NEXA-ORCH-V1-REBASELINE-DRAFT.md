@@ -87,7 +87,7 @@ For tutor generation the orchestrator must enforce this conceptual ordering:
 3. retrieve governed material;
 4. assemble context/citations or required evidence;
 5. construct trusted tutor planning/prompt authority;
-6. apply privacy/disclosure policy appropriate to configured provider;
+6. apply the local privacy policy for the same-machine LM Studio path;
 7. perform model/token-capacity preflight;
 8. invoke exactly the selected/configured provider according to v1 policy;
 9. apply structural admission;
@@ -109,13 +109,12 @@ v1 release-critical dependencies include at least:
 - observability sink/context;
 - learner-facing application output boundary.
 
-Conditional dependencies:
+Required v1 dependencies:
 
-- speech input/output;
-- avatar/behavior;
-- labs/tools.
+- bundled speech input/output through the owned speech boundary;
+- synchronized semantic 2D behavior through the NBP/avatar boundary.
 
-The specification must state which dependencies may be absent and what capability degradation results.
+Labs/tools are conditional in the general architecture and omitted from v1. The specification must state the accessible text, caption, reduced-motion/static, and failure degradation available when a required speech or embodiment dependency is temporarily unavailable; degradation does not make that dependency optional for release acceptance.
 
 ## 9. Timeout policy
 
@@ -128,7 +127,7 @@ R1 approval must define timeout categories for at least:
 - durable storage operations;
 - retrieval if asynchronous/external;
 - model invocation;
-- optional speech/tool dependencies if included.
+- required speech dependencies and their cancellation ownership; tool dependencies remain absent.
 
 Timeout diagnostics must be content-safe.
 
@@ -141,7 +140,7 @@ The specification must classify operations by retry safety:
 - **Pure/local deterministic** — may be recomputed freely when inputs are unchanged.
 - **Idempotent durable read** — retry allowed according to bounded policy.
 - **Idempotent/identity-keyed durable write** — retry only when the owning data contract proves duplicate safety.
-- **Remote model invocation** — no automatic retry unless the v1 policy explicitly defines identity, duplicate cost/side effect, and response-selection semantics.
+- **LM Studio model invocation** — no automatic retry unless the v1 policy explicitly defines identity, duplicate cost/side effect, and response-selection semantics. The same safeguard applies to any remote invocation separately authorized after v1.
 - **Assessment/evidence commit** — retry only through existing operation/evidence idempotency/concurrency contracts.
 
 Every retry has a bounded attempt count and reason classification. Infinite/background retry is prohibited.
@@ -151,7 +150,7 @@ Every retry has a bounded attempt count and reason classification. Infinite/back
 Recovery distinguishes:
 
 1. failure before any irreversible external action;
-2. remote provider action completed but no local authoritative state change occurred;
+2. LM Studio action completed but no local authoritative state change occurred (and, after v1 only, the equivalent for any separately authorized remote provider);
 3. learner-visible response was presented but subsequent learning commit failed;
 4. local commit succeeded but presentation/telemetry failed;
 5. application/process terminated during active workflow.
@@ -164,7 +163,7 @@ General principles:
 - never duplicate accepted learning evidence under a new identity to hide uncertainty;
 - preserve enough correlation to diagnose uncertain outcomes;
 - derived/replayable state may be recomputed;
-- remote model generation may be discarded and regenerated only under explicit policy;
+- LM Studio model generation may be discarded and regenerated only under explicit policy; the same safeguard applies to any remote generation separately authorized after v1;
 - startup recovery must prefer known durable commit boundaries over transient runtime state.
 
 ## 12. Cancellation and interruption
@@ -219,7 +218,7 @@ The orchestrator/application boundary must expose a bounded error model sufficie
 - configuration required/invalid;
 - local data unavailable/corrupt/migration required;
 - course/lesson unavailable/invalid;
-- model provider unavailable/authentication/configuration failure;
+- LM Studio endpoint/model configuration or availability failure;
 - retrieval/content unavailable;
 - tutor response rejected/quality gate failed;
 - timeout;
@@ -251,15 +250,11 @@ At startup:
 - reconstruct session capability from durable learner/course/lesson state rather than prior runtime task state;
 - offer/resume the exact supported learner activity according to the UX/lesson rules.
 
-## 18. Conditional speech/avatar/lab composition
+## 18. Required speech/avatar composition and deferred labs
 
-If omitted from v1, their absence must not prevent the text-first primary journey.
+Labs/tools remain omitted from v1. Speech and synchronized semantic 2D behavior are required parts of the primary journey, while accessible text and graceful degradation remain available.
 
-If included:
-
-- they attach through their existing semantic/control boundaries;
-- the orchestrator owns interaction sequencing/cancellation but not provider/renderer/tool semantics;
-- each requires concrete adapter and system-level acceptance, not only control-contract tests.
+Required speech and animated 2D behavior attach through their existing semantic/control boundaries. The orchestrator owns interaction sequencing/cancellation but not provider or renderer semantics. Each requires concrete-adapter and system-level acceptance, not only control-contract tests. Labs/tools remain absent.
 
 ## 19. Verification requirements
 
@@ -267,14 +262,14 @@ The complete v1 orchestrator path must be proven by system/integration tests cov
 
 - happy-path learner interaction with real production-equivalent storage and model adapters;
 - assessment/progress commit and exact restart/resume;
-- state-load corruption/version failure before remote invocation;
+- state-load corruption/version failure before LM Studio invocation;
 - retrieval failure;
-- model provider authentication/unavailable/timeout/error;
+- LM Studio endpoint/model configuration, unavailable, timeout, or error;
 - structural admission rejection;
 - quality/grounding rejection;
 - storage commit failure with no false learner progress;
 - concurrency conflict and safe retry behavior;
-- user cancellation before/during remote work;
+- user cancellation before/during LM Studio work;
 - process/task failure normalization;
 - clean shutdown and unclean restart recovery;
 - content-safe correlated diagnostics.
@@ -302,3 +297,7 @@ Before the orchestrator parent can be approved for v1, R1 must decide:
 - authoritative event/outbox scope;
 - speech/avatar/lab v1 disposition;
 - system-level test/acceptance contract.
+
+## 2026-08-26 ADR-0069 reconciliation
+
+The v1 workflow composes required speech and semantic 2D behavior, not optional branches, while preserving text accessibility and graceful degradation. It serves both identical clients through one versioned loopback API, owns cancellation/reconnect coordination, persists atomic learning state, and invokes the narrow LM Studio adapter. Labs/tools remain absent.

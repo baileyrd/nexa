@@ -1,6 +1,6 @@
 # Nexa v1 Observability Specification — Draft
 
-Status: R1 proposal; non-authoritative until registered and approved
+Status: Approved R1 supplement through NEXA-R1; reconciled by ADR-0069
 
 ## Purpose
 
@@ -19,17 +19,21 @@ Define the minimum operational evidence required to diagnose and recover the Nex
 
 At minimum correlate:
 
-- application startup/shutdown;
+- local runtime and both identical client startup/readiness/shutdown;
+- client kind and shared-interface/release version, without learner content;
+- versioned loopback HTTP request and WebSocket connection/reconnection lifecycle;
 - configuration validation;
 - session lifecycle;
 - interaction workflow lifecycle;
 - durable state load/commit/migration/recovery;
 - knowledge retrieval/context assembly;
-- model invocation;
+- LM Studio configuration, health, compatibility, and model invocation;
 - output admission and tutor-quality gate;
 - assessment/learning commit;
 - timeout/retry/cancellation/recovery;
-- user-visible error classification.
+- user-visible error classification;
+- bundled speech recognition/synthesis/device lifecycle and interruption;
+- admitted semantic 2D state, speech/animation synchronization, and accessible fallback;
 
 ## Required safe fields
 
@@ -58,7 +62,7 @@ Normal logs/telemetry must not contain raw:
 - source documents;
 - prompts/model input;
 - raw model output;
-- speech audio/transcript if enabled;
+- speech audio/transcript;
 - tool stdout/stderr if tools are enabled;
 - credentials/tokens/secrets.
 
@@ -80,14 +84,17 @@ Do not encode raw dependency error strings as the only machine-readable evidence
 
 v1 should make measurable at minimum:
 
-- startup duration;
+- local runtime and browser/desktop client startup/readiness duration;
+- loopback HTTP/WebSocket request, event, reconnect, cancellation, and failure timing/counts;
 - storage load/commit duration and failure count;
 - retrieval duration/result count;
-- model invocation duration/outcome;
+- LM Studio health/invocation duration, compatibility, and outcome classification;
 - admission/quality rejection count;
 - end-to-end learner interaction latency;
 - timeout/retry/cancellation count;
-- restart/recovery outcomes.
+- restart/recovery outcomes;
+- speech recognition/synthesis latency, interruption outcome, and CPU/memory use;
+- semantic-state-to-animation and speech/lip-sync timing, fallback outcome, and 2D CPU use;
 
 Exact metric backend/export is an implementation decision. A local structured log may satisfy part of v1 if it meets diagnostics and performance-verification needs.
 
@@ -97,8 +104,10 @@ The application must be able to classify the availability/configuration state of
 
 - durable data ready / migration required / failed;
 - course/content ready / invalid;
-- model provider configured / unavailable / auth/config failure;
-- optional capability available/unavailable.
+- LM Studio configured / incompatible / unavailable / configuration failure;
+- bundled speech model/runtime/device ready / degraded / unavailable;
+- synchronized 2D runtime ready / degraded to accessible text / unavailable;
+- loopback business API and WebSocket ready / reconnecting / incompatible / failed.
 
 Do not infer external health beyond the evidence available from the concrete adapter.
 
@@ -129,13 +138,15 @@ Unlimited log growth is not acceptable.
 
 Release tests must prove:
 
-- primary learner journey can be traced by correlation IDs;
+- the primary learner journey from either identical client can be traced across the loopback HTTP/WebSocket boundary by correlation IDs;
 - storage/retrieval/model/admission failures are distinguishable;
 - retry/timeout/cancellation evidence is coherent;
 - restart/recovery is diagnosable;
 - prohibited raw content/secrets do not appear in normal diagnostics;
 - logging/telemetry failure does not cause a false successful learning commit or corrupt state;
-- retention/rotation behavior matches policy.
+- retention/rotation behavior matches policy;
+- LM Studio, bundled speech, and synchronized 2D health/failure paths are distinguishable without content capture;
+- resource and timing evidence covers both clients, loopback transport, model, speech, and 2D behavior on the Windows reference environment.
 
 ## Explicit deferrals
 

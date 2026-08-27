@@ -9,7 +9,8 @@ The current delivery authority is:
 - [`NEXA-COMPLETION-ROADMAP.md`](NEXA-COMPLETION-ROADMAP.md)
 - [`NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md`](NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md)
 - [`NEXA-R1-IMPLEMENTATION-BASELINE.md`](NEXA-R1-IMPLEMENTATION-BASELINE.md)
-- [`../adr/0068-v1-r2-walking-skeleton-baseline.md`](../adr/0068-v1-r2-walking-skeleton-baseline.md)
+- [`../adr/0069-owner-approved-v1-delivery-baseline.md`](../adr/0069-owner-approved-v1-delivery-baseline.md)
+- [`../adr/0068-v1-r2-walking-skeleton-baseline.md`](../adr/0068-v1-r2-walking-skeleton-baseline.md) (historical/non-conflicting scope)
 
 ## Why the roadmap changed
 
@@ -17,83 +18,24 @@ The tactical-pause assessment found that qualified deterministic/headless contra
 
 Historical Phase 1–5 work remains valid evidence and reusable implementation. It is not discarded; it is reclassified according to what it actually proves.
 
-## Current stage summary
+## Finite dependency-ordered route
 
-| Stage | Purpose | Status |
+| Gate | Outcome | Current disposition |
 |---|---|---|
-| R0 | Rebaseline governance and architecture | PASS for R2, pending PR #110 merge |
-| R1 | Critical specification/technology baseline | PASS for R2, pending PR #110 merge |
-| R2 | Thin real production walking skeleton | Next implementation stage |
-| R3 | Robust complete session orchestration | Not started |
-| R4 | Grounding/tutor quality gate | Not started |
-| R5 | Speech/avatar integration decision and optional capability hardening | Not started |
-| R6 | Labs/tools only if promoted by release scope | Not started |
-| R7 | Measured performance/operational hardening | Not started |
-| R8 | Packaging/install/update/release engineering | Not started |
-| R9 | System verification, user acceptance, release | Not started |
+| G0 | Reconcile Issue #114 authority without changing implementation maturity | In progress; must merge before product work |
+| G1 | Prove shared React/TypeScript/Vite + Tauri 2 candidate and versioned loopback HTTP/WebSocket suitability | First separately dispatchable follow-on only |
+| G2 | Prove bundled CPU speech candidate, including cancellation, devices, packaging, latency, and licensing | Evidence-gated after G1 |
+| G3 | Prove synchronized Rive 2D candidate in both clients, including lip-sync, semantic states, interruption, accessibility, and CPU use | Evidence-gated after G2 |
+| G4 | Integrate the shared clients, local Rust runtime, SQLite, governed TCP lesson, and atomic restart/resume | Pending prior gates |
+| G5 | Integrate the narrow LM Studio adapter and admitted tutor response | Pending G4 |
+| G6 | Integrate required bundled speech | Pending G2 and G5 |
+| G7 | Integrate required synchronized animated 2D tutor | Pending G3 and G6 |
+| G8 | System verification and Windows packaging/recovery/security/privacy/accessibility/performance evidence | Pending integrated route |
+| G9 | Owner user acceptance and release decision | Pending G8 |
 
-## R2 objective
+Candidate spike success does not silently select production architecture; failure removes that candidate and requires owner-governed reselection plus an authority update. General product implementation remains paused outside the next eligible, separately dispatched gate.
 
-Create the first real end-to-end Nexa learner path using concrete dependencies:
-
-```text
-learner text
- -> apps/nexa-desktop
- -> orchestrator
- -> SQLite durable state
- -> learning/pedagogy
- -> governed knowledge
- -> local llama.cpp model adapter
- -> admitted tutor response
- -> assessment/practice
- -> atomic evidence/mastery/progress commit
- -> restart/resume
-```
-
-R2 uses the bounded TCP Connection Establishment course as its first acceptance package.
-
-## R2 exit gate
-
-A learner can complete one primitive real lesson through one composition root using:
-
-- actual learner desktop UI boundary;
-- actual SQLite persistence;
-- actual governed course/knowledge data;
-- actual local model server adapter;
-- existing domain/tutor/knowledge contracts where appropriate;
-- atomic durable progress;
-- restart/resume;
-- content-safe correlated diagnostics.
-
-Scripted provider outcomes, in-memory persistence, or headless contract tests alone do not close R2.
-
-## Work-selection rule
-
-Every implementation increment must identify:
-
-1. the R2/R3 release blocker it addresses;
-2. its governing parent architecture/specification/ADR;
-3. the E2E step it makes more concrete;
-4. the capability maturity transition it demonstrates;
-5. the evidence required for that maturity transition.
-
-Do not select work merely because another narrow ADR-sized contract can be added.
-
-## Deferred from the R2 critical path
-
-Unless a concrete R2 blocker proves otherwise:
-
-- speech input/output;
-- animated avatar embodiment;
-- labs/tool execution;
-- dynamic multi-provider routing/fallback;
-- remote-provider privacy/credential support;
-- dedicated vector database;
-- durable event broker/outbox;
-- final installer/signing/update mechanism;
-- plugins/public API/analytics/authoring/server deployment.
-
-These capabilities remain part of Nexa’s broader architecture where applicable, but are owned by later roadmap gates.
+Every increment states its finite-route blocker, governing authority, concrete E2E step, maturity before/after, and required evidence. Deferred scope is LAN/remote access, hosted deployment, cloud sync, accounts/multi-user administration, labs/tools, broad providers, dynamic routing/fallback, dedicated vector infrastructure unless proven necessary, durable event brokerage, and 3D release integration.
 
 ## Cross-stage quality gates
 
@@ -109,6 +51,8 @@ Every increment still requires proportionate:
 
 ## Architecture rebaseline checkpoints
 
-At R2 exit, before R3 broadening, and at each later major stage boundary, the Chief Systems Architect must independently evaluate the whole program and record Continue, Redirect, or Tactical Pause.
+After each candidate evidence gate (G1–G3), before G4 integration, before each material G5–G7 expansion, and before G8/G9, the Chief Systems Architect must independently evaluate the whole program and record Continue, Redirect, or Tactical Pause.
 
 See [`../governance/ARCHITECTURE-REBASELINE-GATES.md`](../governance/ARCHITECTURE-REBASELINE-GATES.md).
+
+---

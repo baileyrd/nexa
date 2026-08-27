@@ -10,7 +10,7 @@ Define measurable performance budgets for the first release so architecture and 
 
 - Budgets apply to the primary learner journey first.
 - Measure before optimizing.
-- Separate Nexa-controlled latency from remote-provider latency.
+- Separate Nexa-controlled latency from LM Studio latency; retain remote-provider separation as a post-v1 safeguard.
 - Use representative release hardware, corpus, data size, and configuration.
 - Report warm/cold behavior separately where meaningful.
 - Performance must not compromise correctness, security, privacy, durability, or accessibility.
@@ -38,7 +38,7 @@ Before R2 implementation is considered release-oriented, approve numerical budge
 
 ## 4. Provider-dependent latency
 
-Remote/local model generation latency is dependency/configuration dependent.
+Same-machine LM Studio generation latency is dependency/configuration dependent. Any remote-provider latency branch is a post-v1 safeguard requiring new owner and architecture authority.
 
 Report at least:
 
@@ -69,10 +69,10 @@ Measure:
 - process resident memory;
 - CPU during idle and active interaction;
 - storage footprint/growth;
-- optional GPU usage only if v1 embodiment/UI requires it;
-- network bytes per representative remote tutor interaction where measurable and useful for privacy/cost awareness.
+- observed GPU usage, if any, for the required UI/embodiment path and its CPU fallback;
+- loopback network bytes per representative LM Studio tutor interaction where measurable; if remote inference is separately authorized after v1, measure its network use for privacy/cost awareness.
 
-Do not set GPU budgets for a text-first v1 unless GPU use is actually part of the required release path.
+Record CPU and any observed GPU use for both identical clients, required bundled speech, and required animated 2D rendering. The reference path must remain usable on the CPU-only Windows reference PC; candidate evidence, not a blanket no-GPU rule, governs acceleration and fallback decisions.
 
 ## 7. Persistence performance
 
@@ -136,7 +136,7 @@ Every release performance result records:
 
 Once v1 budgets are established, release CI/validation must detect material regressions for deterministic/local measurements where feasible.
 
-Remote-provider latency should be monitored/reported but not used as an unstable hard CI gate unless a controlled test service exists.
+LM Studio latency must be monitored/reported with controlled release evidence. If remote inference is explicitly authorized after v1, its latency must not become an unstable hard CI gate unless a controlled test service exists.
 
 ## 12. Verification
 
@@ -156,3 +156,7 @@ R7 passes only when:
 - concrete numeric latency/resource budgets;
 - acceptable provider-latency reporting target versus hard requirement;
 - UI responsiveness thresholds after framework selection.
+
+## 2026-08-26 ADR-0069 reconciliation
+
+Budgets must cover both identical clients, the loopback HTTP/WebSocket boundary, LM Studio, bundled speech, and animated 2D rendering on the CPU-only Windows reference PC. The UI, Sherpa-ONNX, and Rive spikes record startup, CPU, memory, latency/timing, and package impact as applicable. The earlier text-only/no-GPU framing does not remove required speech/avatar measurements.

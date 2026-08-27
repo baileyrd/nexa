@@ -232,3 +232,7 @@ Unless the first released course needs them, defer:
 - learner evidence deletion/retention policy integration;
 - completion criteria for the first released course;
 - whether any authoring compiler is required for release maintainability.
+
+## 2026-08-26 ADR-0069 reconciliation
+
+One local learner completes the same governed learning workflow from either identical client. Accepted evidence/progress remains atomic and restartable in SQLite. Speech and avatar presentation cannot independently alter mastery; labs/tools and cloud sync remain deferred.

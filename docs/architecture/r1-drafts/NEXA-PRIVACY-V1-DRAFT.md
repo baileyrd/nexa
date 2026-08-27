@@ -10,9 +10,9 @@ This draft complements the data and security specifications. Structural redactio
 
 ## 2. Principles
 
-1. Local-first means learner-critical data remains local by default unless a release capability explicitly requires and authorizes remote disclosure.
+1. v1 learner data and inference stay on the local machine; any later remote disclosure requires new explicit authority.
 2. Collect and persist only data required for the accepted learner experience, recovery, security, or governed product operation.
-3. Remote provider disclosure is explicit, bounded, and purpose-specific.
+3. Remote-provider disclosure rules are retained as post-v1 safeguards, not as a v1 flow.
 4. Learner data and Nexa knowledge/content remain separate ownership domains.
 5. Diagnostics are content-safe by default.
 6. Retention and deletion behavior must be implementable and testable, not aspirational.
@@ -40,7 +40,7 @@ Examples:
 - mastery projections;
 - pedagogy decisions/references.
 
-Default posture: Local. Only the minimum subset necessary for a remote tutor interaction may enter an approved remote prompt.
+Default v1 posture: Local. Any later remote tutor interaction requires separately approved disclosure rules.
 
 ### 3.3 Learner-provided interaction content
 
@@ -48,10 +48,10 @@ Examples:
 
 - typed questions;
 - assessment answers;
-- speech transcripts if speech is enabled;
+- required speech transcripts;
 - learner-supplied files if a future feature permits them.
 
-Default posture: Sensitive learner content. Remote disclosure only when required for the configured tutor capability and allowed by policy.
+Default v1 posture: Sensitive local learner content. Remote disclosure is outside v1 and requires later explicit authority and policy.
 
 ### 3.4 Governed instructional/knowledge content
 
@@ -94,9 +94,9 @@ Credentials, API keys, authentication tokens, and secret configuration are secur
 
 All v1 data classes may be processed locally by the owning component when required for the learner journey and allowed by their governance policy.
 
-### 4.2 Remote model provider
+### 4.2 Post-v1 remote model provider safeguard
 
-A remote provider may receive only the exact model input produced after:
+If remote inference is authorized after v1, a remote provider may receive only the exact model input produced after:
 
 - trusted prompt-layer construction;
 - assessment/governance restrictions;
@@ -114,13 +114,9 @@ Normal logs/telemetry may receive operational metadata but not raw learner, prom
 
 Learner-data export, if included in v1, should provide understandable learner-associated state without including secrets or unrelated governed knowledge content. The exact format is a UX/data decision.
 
-## 5. Remote disclosure policy
+## 5. Post-v1 remote disclosure policy
 
-The v1 architecture must declare whether the default configured tutor path is:
-
-- local-only;
-- remote-capable with explicit configuration;
-- remote-first with explicit user disclosure/consent expectations.
+The v1 tutor path is local-only through separately installed same-machine LM Studio. Remote-capable and remote-first configurations are not v1 deliverables and require new explicit owner and architecture authority.
 
 No code path may infer permission solely from provider availability.
 
@@ -201,14 +197,14 @@ Requirements:
 - retained answer content must be minimized according to assessment replay/review requirements;
 - mastery evidence should remain privacy-minimal where possible.
 
-## 11. Speech privacy — conditional v1
+## 11. Required v1 speech privacy
 
-If speech is promoted to v1:
+Required bundled v1 speech must satisfy all of the following:
 
 - microphone capture state must be visible to the learner;
 - raw audio retention defaults to off unless explicitly required;
 - transcript classification is learner interaction content;
-- remote STT/TTS disclosure requires the same configured-provider transparency as remote model use;
+- any later remote STT/TTS disclosure requires new authority and the same transparency as any later remote model use;
 - voice/provider identifiers and any generated audio retention must be specified;
 - cancellation must stop Nexa-owned capture/playback and define what cannot be revoked after remote transmission.
 
@@ -240,12 +236,12 @@ Disallowed by default:
 - knowledge/source text;
 - assessment answers;
 - raw model output;
-- raw audio/transcripts if speech is enabled;
+- raw audio/transcripts from required speech;
 - secrets/credentials.
 
 ## 14. Provider transparency
 
-For every supported remote provider configuration, the product must make clear enough for the learner/operator to understand:
+For any remote provider configuration explicitly authorized after v1, the product must make clear enough for the learner/operator to understand:
 
 - that data may leave the local machine;
 - which capability causes the disclosure;
@@ -267,17 +263,17 @@ Before release verify:
 - reset/deletion removes the classes promised by v1;
 - restart does not unexpectedly persist transient conversation/model data;
 - exported learner data excludes secrets and unrelated knowledge content;
-- conditional speech/lab paths satisfy their additional privacy tests if included.
+- required speech satisfies its audio/transcript privacy tests; labs remain excluded from v1.
 
 ## 16. Decisions required for approval
 
-- v1 model provider local/remote default posture;
+- post-v1 remote-provider disclosure safeguards if that capability is later authorized;
 - whether free-form conversation history is persisted;
 - exact retention periods or retention triggers for each data class;
 - learner reset/export UX requirements;
 - handling of immutable evidence under deletion;
 - whether diagnostic content-capture mode exists in v1;
-- speech/labs v1 disposition.
+- exact bundled-speech privacy behavior; labs remain post-v1.
 
 ## 17. Explicit post-v1 scope unless promoted
 
@@ -288,3 +284,7 @@ Before release verify:
 - federated/enterprise privacy administration;
 - plugin data-sharing policy;
 - server-side multi-tenant retention controls.
+
+## 2026-08-26 ADR-0069 reconciliation
+
+Speech is required and locally bundled/managed, so audio/transcript disclosure, retention, deletion, diagnostics, and consent/indicator behavior must be specified and tested rather than treated as conditional. The v1 client/API is loopback-only and LM Studio is local; remote-provider and cloud-sync provisions remain future safeguards, not v1 flows.

@@ -160,7 +160,7 @@ A knowledge ingestion/promotion operation must not expose a partially validated 
 
 Do not create distributed/global transactions simply for conceptual neatness. Cross-domain atomicity is required only where the v1 correctness model proves partial commit would create an invalid externally observable state.
 
-Where work crosses a remote model provider, the remote invocation cannot be rolled back. The orchestrator must treat provider use as an external side effect and commit local state only according to explicit workflow semantics.
+The v1 LM Studio invocation cannot be rolled back. The orchestrator must treat provider use as an external side effect and commit local state only according to explicit workflow semantics. The same rule applies to any remote provider separately authorized after v1.
 
 ## 6. Concurrency and isolation
 
@@ -310,3 +310,7 @@ Unless promoted by v1 evidence:
 - data warehouse/analytics pipeline;
 - plugin persistence API;
 - external vector database.
+
+## 2026-08-26 ADR-0069 reconciliation
+
+SQLite behind `crates/nexa-storage` is the selected v1 store. One local learner, canonical IDs, migrations, atomic progress/evidence, backup/recovery, and restart/resume remain mandatory. No login, accounts, multi-user administration, or cloud sync is in v1. Both identical clients reach the same authoritative store only through the local runtime API.

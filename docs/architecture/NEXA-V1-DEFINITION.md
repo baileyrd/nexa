@@ -117,31 +117,20 @@ Before Release Ready:
 - third-party license/runtime/model/asset disposition;
 - release acceptance evidence.
 
-## R2 concrete first path
+## Owner-approved concrete v1 path
 
-ADR-0068 establishes the first walking-skeleton implementation baseline:
+The concrete release path is:
 
-- `apps/nexa-desktop`;
-- `eframe`/`egui` after a bounded suitability spike;
-- SQLite/`rusqlite` behind `nexa-storage`;
-- local `llama.cpp` server adapter;
-- Windows x86_64 acceptance environment;
-- Networking Fundamentals / TCP Connection Establishment course;
-- text-first learner interaction.
+- one shared React/TypeScript/Vite frontend candidate used identically by the same-machine browser and a Tauri 2 Windows desktop shell candidate;
+- one local Rust runtime exposing one versioned loopback HTTP/WebSocket business API; Tauri commands do not form a second business API;
+- SQLite through `nexa-storage` as authoritative state;
+- the separately installed graphical LM Studio server as the sole v1 reference model server, with no bundled LLM weights or inference runtime;
+- bundled CPU-capable speech and synchronized animated 2D embodiment as release requirements; Sherpa-ONNX and Rive remain evidence-gated candidates;
+- Networking Fundamentals / TCP Connection Establishment as the governed first content package.
 
-## Not R2 exit criteria
+## Explicitly deferred from v1
 
-The following do not block the R2 walking skeleton:
-
-- speech input/output;
-- animated avatar/behavior integration;
-- labs/tool execution;
-- dynamic multi-provider routing/fallback;
-- remote-provider credentials/disclosure;
-- dedicated vector database;
-- final signed installer/update mechanism.
-
-They are reconsidered at their owning later roadmap gates.
+LAN/remote access, hosted deployment, cloud sync, accounts and multi-user administration, labs/tools, broad model-server support, dynamic routing/fallback, dedicated vector infrastructure unless evidence proves it necessary, durable event brokerage, and 3D release integration do not block v1. Text remains an accessibility and recovery path, but does not replace required speech or animated 2D behavior.
 
 ## System verification requirements
 
@@ -171,3 +160,5 @@ Those are evidence inputs at specific maturity levels, not product acceptance.
 ## v1 acceptance statement
 
 Nexa v1 is Release Ready only when a new user can use the supported build to complete the primary learner journey with real configured dependencies, exit, restart, resume correct durable state, and pass the release acceptance suite with no unresolved critical architecture, security, privacy, data-integrity, or system-quality finding.
+
+---

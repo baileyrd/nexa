@@ -195,3 +195,7 @@ Unless a v1 consumer proves the need:
 - outbox/durable event-store requirement;
 - formal schema scope for release-critical persisted/wire contracts;
 - event retention policy integration.
+
+## 2026-08-26 ADR-0069 reconciliation
+
+Canonical identities/events span both clients and the versioned loopback boundary without adapter-specific redefinition. Speech and semantic 2D behavior events are required v1 integration surfaces; renderer primitives and provider protocol details remain outside domain authority. Hosted/cloud brokerage remains deferred.

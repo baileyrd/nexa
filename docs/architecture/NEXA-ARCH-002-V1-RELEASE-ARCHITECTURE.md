@@ -1,6 +1,6 @@
 # NEXA-ARCH-002 — Nexa v1 Release Architecture
 
-Status: Approved for R2 planning and implementation
+Status: Approved v1 architecture; reconciled by ADR-0069
 Date: 2026-08-26
 Supersedes for v1 implementation: `NEXA-ARCH-001` reconstructed architecture narrative
 Preserves: the long-term Nexa tutor mission, accepted ADRs unless explicitly superseded, and the renderer-neutral semantic behavior rule
@@ -41,38 +41,24 @@ The following remain mandatory:
 ## 4. v1 composition
 
 ```text
-Learner
-  |
-  v
-apps/nexa-desktop
-  |
-  v
-Session Orchestrator
-  |-------------------------|-------------------------|
-  v                         v                         v
-Learning Core          Tutor / Knowledge        Observability
-  |                         |                         |
-  |                         v                         |
-  |                   Concrete Model Adapter          |
-  |                         |                         |
-  |                         v                         |
-  |                 local llama.cpp server            |
-  |                                                   |
-  +---------------------> Durable Data <--------------+
-                           SQLite
+identical shared frontend
+  |-- same-machine browser
+  `-- Tauri 2 Windows shell candidate
+              |
+      versioned loopback HTTP/WebSocket API
+              |
+        one local Rust runtime
+   +----------+-----------+-------------+
+   |          |           |             |
+ SQLite   governed TCP  LM Studio   bundled speech
+ state      content      adapter     + synchronized 2D
 ```
 
-Conditional later adapters attach downstream of semantic outputs:
-
-- speech;
-- avatar/behavior embodiment;
-- labs/tools.
-
-They are not R2 exit criteria.
+React/TypeScript/Vite, Tauri 2, Sherpa-ONNX, and Rive are evidence-gated candidates, not selected production architecture until their independent gates pass. The runtime is authoritative for business behavior and state. Tauri commands never form a second business API. Nexa bundles no LLM weights or inference runtime.
 
 ## 5. Application boundary
 
-`apps/nexa-desktop` is the first learner-facing composition root.
+The identical shared frontend is the learner-facing boundary in both the same-machine browser and the evidence-gated Tauri 2 Windows shell. Its production composition location is selected only after G1 evidence and an authority update.
 
 It owns:
 
@@ -135,7 +121,7 @@ One accepted learning operation MUST NOT expose partially committed assessment, 
 
 Existing `nexa-tutor` provider-neutral contracts remain reusable.
 
-R2 uses one explicit concrete model adapter and one configured model. The adapter owns:
+The v1 route uses one explicit concrete model adapter and one configured model. The adapter owns:
 
 - local HTTP transport;
 - endpoint/process configuration;
@@ -146,13 +132,13 @@ R2 uses one explicit concrete model adapter and one configured model. The adapte
 
 The model never becomes the authority for host IDs, authorization, limits, policy versions, capabilities, tools, or renderer operations.
 
-Dynamic multi-provider routing and fallback are post-R2.
+Dynamic multi-provider routing and fallback are post-v1.
 
 ## 9. Knowledge architecture
 
 Existing deterministic ingestion, lexical/vector/hybrid retrieval, context assembly, and citation contracts are retained as reusable foundation.
 
-R2 requires only the smallest retrieval configuration that meets the governed first-course quality and performance requirements.
+The v1 route requires only the smallest retrieval configuration that meets the governed first-course quality and performance requirements.
 
 The concrete data path must persist:
 
@@ -160,9 +146,9 @@ The concrete data path must persist:
 - artifact identity/version/hash;
 - chunk identity/provenance;
 - visibility/exposure state;
-- any embeddings/profile data actually required by the selected R2 retrieval configuration.
+- any embeddings/profile data actually required by the selected v1 retrieval configuration.
 
-A dedicated vector database is not required unless measured evidence shows the bounded R2 corpus cannot meet accepted requirements without one.
+A dedicated vector database is not required unless measured evidence shows the bounded v1 corpus cannot meet accepted requirements without one.
 
 ## 10. Data architecture
 
@@ -187,7 +173,7 @@ Canonical Nexa identifiers remain authoritative; database-generated row IDs are 
 
 Typed events remain domain facts and integration evidence.
 
-R2 does not require a durable event broker. Durable state correctness is established through the SQLite transaction boundary.
+The v1 route does not require a durable event broker. Durable state correctness is established through the SQLite transaction boundary.
 
 A durable outbox/event store becomes required only when a concrete asynchronous durable consumer is part of the accepted release path and loss of its fact would violate correctness.
 
@@ -195,7 +181,7 @@ Operational telemetry is not automatically authoritative domain state.
 
 ## 12. Security and privacy architecture
 
-R2 is local-model-first.
+The v1 route is local-model-first.
 
 Minimum controls:
 
@@ -225,69 +211,25 @@ Normal diagnostics may record:
 
 Normal diagnostics MUST NOT contain raw learner text, knowledge content, compiled prompts, raw model output, assessment responses, or secrets.
 
-## 14. R2 technology baseline
+## 14. Owner-approved v1 technology route
 
-ADR-0068 controls the R2 concrete baseline:
+ADR-0069 controls direct conflicts with ADR-0068. The v1 route requires both identical clients, one loopback API/WebSocket boundary, SQLite, LM Studio, bundled speech, synchronized animated 2D embodiment, Windows x86_64 validation, and the governed TCP lesson. Candidate frameworks/adapters remain evidence-gated as described above.
 
-- learner UI: `eframe`/`egui` after a bounded suitability spike;
-- durable state: SQLite via `rusqlite` in `nexa-storage`;
-- first model path: local `llama.cpp` server through a narrow HTTP adapter;
-- first acceptance platform: Windows x86_64;
-- first acceptance course: Networking Fundamentals / TCP Connection Establishment;
-- text-first interaction;
-- no R2 requirement for speech, avatar, labs, dynamic provider routing, or durable event broker.
+## 15. Primary v1 sequence
 
-## 15. Primary R2 sequence
+The primary sequence launches either client, resumes authoritative SQLite state, runs the governed lesson through the shared runtime and LM Studio adapter, admits the untrusted model output, commits assessment/evidence/mastery atomically, produces bundled speech and synchronized semantic 2D behavior, and survives interruption/restart without duplication or loss.
 
-```text
-Learner text
-  -> Desktop
-  -> Orchestrator
-  -> SQLite: load state
-  -> Learning Core: current learning context
-  -> Knowledge: governed retrieval/context
-  -> Tutor: compile request
-  -> llama.cpp adapter: generate
-  -> Tutor: admit/quality check
-  -> Desktop: present response
-  -> Learner assessment/practice
-  -> Learning Core: score/evidence/mastery/route
-  -> SQLite: atomic commit
-  -> Desktop: present progress
-```
+## 16. v1 exit evidence
 
-Every release-critical arrow must be exercised through the actual composition or concrete adapter before System Verified maturity.
+The route closes only through concrete-adapter integration followed by system verification on both clients, accessibility/privacy/security/performance evidence, Windows packaging/recovery evidence, and owner user acceptance. Contract tests, headless integration, research, or spike code cannot establish those maturities.
 
-## 16. R2 exit evidence
+## 17. Deferred capabilities
 
-R2 closes only when a production-style system test demonstrates:
-
-- actual desktop boundary;
-- actual SQLite store;
-- actual governed first-course package;
-- actual local model server adapter;
-- admitted tutor response;
-- actual learning-core assessment/evidence/progress commit;
-- restart/resume;
-- no duplicate/lost accepted state;
-- content-safe correlated diagnostics.
-
-Green unit/contract/headless tests remain necessary but are insufficient.
-
-## 17. Capabilities retained but not R2-critical
-
-The following are retained and may continue to compile/test, but they do not select R2 implementation work unless a blocking dependency is discovered:
-
-- speech input/output;
-- animated avatar/behavior integration;
-- labs/tool execution;
-- remote-provider routing/filtering;
-- advanced vector infrastructure;
-- plugin/public API/authoring/analytics capabilities.
+LAN/remote access, hosted deployment, cloud sync, accounts/multi-user administration, labs/tools, broad model-server support, dynamic routing/fallback, dedicated vector infrastructure unless proven necessary, durable event brokerage, and 3D release integration are deferred. Provider-neutral, renderer-neutral, speech, avatar, 3D, and labs foundations remain preserved at their factual maturity.
 
 ## 18. Architecture rebaseline rule
 
-Before R3 and at every later major release gate, the Chief Systems Architect must perform an independent whole-system review covering:
+After G1–G3 candidate evidence and at every later major release gate, the Chief Systems Architect must perform an independent whole-system review covering:
 
 - parent specification maturity;
 - vertical capability progress;
@@ -302,9 +244,11 @@ The outcome is explicitly Continue, Redirect, or Tactical Pause.
 ## 19. Relationship to existing authority
 
 - `NEXA-ARCH-001` is preserved as reconstructed design provenance and long-term context but is superseded by this document for v1 implementation selection.
-- Accepted ADR-0001 through ADR-0067 remain in force unless a direct conflict exists; in a v1 priority conflict, this architecture and later accepted ADRs control the R2 path while earlier capabilities remain retained/post-R2.
+- Accepted ADR-0001 through ADR-0067 remain in force unless a direct conflict exists; ADR-0069 controls conflicts with ADR-0068, while earlier capabilities remain retained at their factual maturity or deferred as recorded.
 - Baseline subsystem specifications remain applicable within their owned domains, supplemented by the approved R1 v1 baseline described in `NEXA-R1-IMPLEMENTATION-BASELINE.md`.
 
 ## 20. Approval basis
 
-This architecture was approved under the owner's explicit direction to continue the tactical-pause review and convergence work without waiting for further interaction and to complete all items required or blocking R2.
+Issue #114 supplied explicit owner review of the v1 delivery decisions recorded in ADR-0069. That review authorizes this reconciled architecture only; it does not delegate open-ended implementation or waive the finite evidence gates.
+
+---

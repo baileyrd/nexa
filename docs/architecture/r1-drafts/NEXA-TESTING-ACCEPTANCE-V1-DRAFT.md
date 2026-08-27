@@ -103,7 +103,7 @@ A test may support more than one layer, but reports must identify what it actual
 A release candidate must prove at minimum:
 
 1. Install Nexa on a clean supported environment.
-2. Configure the supported v1 model path without placing credentials in ordinary config/log/domain storage.
+2. Configure the supported same-machine LM Studio endpoint/model without requesting or placing provider credentials in ordinary config/log/domain storage.
 3. Launch successfully with an empty/new durable store.
 4. Select/start the released course and lesson.
 5. Submit learner text through the actual learner application.
@@ -132,7 +132,7 @@ At minimum exercise:
 - optimistic concurrency conflict;
 - invalid/missing governed course content;
 - retrieval failure/empty governed result where relevant;
-- model configuration/authentication failure;
+- LM Studio endpoint/model configuration failure;
 - model unavailable/dependency error;
 - model timeout;
 - malformed/structurally invalid model output;
@@ -194,7 +194,7 @@ Verify at system level:
 
 - secret storage/config path;
 - no secret leakage in logs/domain files/errors;
-- remote disclosure cannot bypass configured/privacy policy;
+- v1 exposes no remote-inference or provider-credential path; any remote path separately authorized after v1 cannot bypass its approved disclosure policy;
 - protected assessment material cannot leak through retrieval/prompt path;
 - sensitive raw content absent from ordinary diagnostics;
 - deletion/reset behavior matches privacy claims;
@@ -222,7 +222,7 @@ Performance claims without reproducible measurement do not pass the gate.
 
 The released learner UI must be reviewed against the UX/accessibility requirements selected for the supported platform, including at minimum keyboard navigation where applicable, readable focus/status/error states, text scaling/layout resilience where practical, and alternatives for information not conveyed solely by animation/audio.
 
-Conditional speech/avatar features must not make core instructional content inaccessible to text-only users unless the v1 product definition explicitly says otherwise and provides equivalent access.
+Required speech and animated 2D behavior must preserve equivalent access to core instructional content through text, captions/transcripts, reduced-motion/static presentation, and keyboard controls.
 
 ## 11. User acceptance
 
@@ -256,7 +256,7 @@ Examples:
 
 - `Contract Implemented — deterministic headless adapter`
 - `Runtime Integrated — scripted model provider`
-- `Concrete Adapter Implemented — remote provider X`
+- `Concrete Adapter Implemented — remote provider X` (post-v1 example requiring separate authority)
 - `System Verified — primary v1 text journey`
 
 Avoid unqualified `Complete` where multiple maturity meanings are possible.
@@ -275,3 +275,7 @@ A release is blocked when:
 ## 15. Post-v1 testing scope
 
 Testing for optional/post-v1 capabilities should be added when those capabilities are promoted. Their foundation tests may remain green without making them part of the v1 release acceptance surface.
+
+## 2026-08-26 ADR-0069 reconciliation
+
+The release E2E must run through both identical clients on the same Windows PC, LM Studio, SQLite restart/resume, bundled speech, and synchronized semantic 2D behavior. It distinguishes browser-on-loopback evidence from hosted/remote evidence. Speech/avatar accessibility, interruption, timing, package/resource, and graceful-failure checks are required. Candidate spike evidence is suitability evidence only and cannot establish Concrete Adapter Implemented, System Verified, User Accepted, or Release Ready.
