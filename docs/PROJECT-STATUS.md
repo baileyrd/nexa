@@ -39,3 +39,7 @@ Use `Concept -> Architecture Defined -> Specification Approved -> Contract Imple
 Existing shared domain/event/NBP contracts, deterministic learning/tutor policies, orchestrator runtime/cancellation work, speech cancellation foundations, avatar semantics, 3D foundations, labs/tool contracts, and headless integration evidence retain only their demonstrated maturity. Scripted providers and in-memory persistence remain test tools. No shared release UI, versioned loopback production boundary, SQLite production path, LM Studio adapter, bundled speech adapter, synchronized 2D release renderer, complete system, user acceptance, or release package has been proven.
 
 ADR-0069 and this reconciliation establish selected architecture/specification only. Every later increment identifies its blocker, governing authority, E2E step, maturity transition, and required evidence.
+
+## G1 evidence dispatch (2026-08-27)
+
+Issue #116 dispatched the authorized disposable shared UI/loopback suitability spike. Its evidence record is [`../spikes/g1-shared-ui/evidence/G1-EVIDENCE.md`](../spikes/g1-shared-ui/evidence/G1-EVIDENCE.md). Because representative Windows run, accessibility, parity, and resource evidence was unavailable during implementation, G1 is recorded as **blocked** rather than passed. Candidate maturity and authority are unchanged, Tactical Pause remains in force, and G2 and later gates remain undispatched pending a separately reviewed authority decision.

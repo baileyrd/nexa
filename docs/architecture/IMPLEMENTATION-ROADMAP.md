@@ -56,3 +56,7 @@ After each candidate evidence gate (G1–G3), before G4 integration, before each
 See [`../governance/ARCHITECTURE-REBASELINE-GATES.md`](../governance/ARCHITECTURE-REBASELINE-GATES.md).
 
 ---
+
+## G1 evidence status (2026-08-27)
+
+Issue #116 produced a bounded disposable fixture and [criterion-level evidence](../../spikes/g1-shared-ui/evidence/G1-EVIDENCE.md). G1 is **blocked**, not passed: exact-head representative Windows run, two-client accessibility/parity, and Windows resource/timing measurements remain unavailable. No production selection is made, G2 remains undispatched, and Tactical Pause continues until separately reviewed authority records a disposition.

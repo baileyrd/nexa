@@ -1,0 +1,35 @@
+
+> nexa-g1-tauri-spike@0.0.0 tauri
+> tauri info
+
+
+[✘] Environment
+    - OS: Ubuntu 24.4.0 x86_64 (X64) (Unknown DE on Unknown Session)
+    ✘ webkit2gtk-4.1: not installed
+      Visit https://v2.tauri.app/start/prerequisites/ to learn more about tauri prerequisites
+    ✘ rsvg2: not installed
+      Visit https://v2.tauri.app/start/prerequisites/ to learn more about tauri prerequisites
+    ✔ rustc: 1.95.0 (59807616e 2026-04-14)
+    ✔ cargo: 1.95.0 (f2d3ce0bd 2026-03-21)
+    ✔ rustup: 1.29.0 (28d1352db 2026-03-05)
+    ✔ Rust toolchain: 1.95.0-x86_64-unknown-linux-gnu (default)
+    - node: 24.15.0
+    - pnpm: 10.28.1
+    - yarn: 4.14.1
+    - npm: 11.4.2
+    - bun: 1.2.14
+
+[-] Packages
+    - tauri 🦀: 2.11.5
+    - tauri-build 🦀: 2.6.3
+    - wry 🦀: 0.55.1, (outdated, latest: 0.56.1)
+    - tao 🦀: 0.35.3, (outdated, latest: 0.37.0)
+    - @tauri-apps/api  ⱼₛ: not installed!
+    - @tauri-apps/cli  ⱼₛ: 2.11.4
+
+[-] Plugins
+
+[-] App
+    - build-type: bundle
+    - CSP: default-src 'self'; connect-src http://127.0.0.1:43116 ws://127.0.0.1:43116; style-src 'self' 'unsafe-inline'
+    - frontendDist: ../../frontend/dist

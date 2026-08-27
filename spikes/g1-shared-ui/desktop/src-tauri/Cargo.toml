@@ -1,0 +1,11 @@
+[package]
+name="nexa-g1-tauri-spike"
+version="0.0.0"
+edition="2021"
+publish=false
+[build-dependencies]
+tauri-build={version="2",features=[]}
+[dependencies]
+tauri={version="2",features=[]}
+
+[workspace]

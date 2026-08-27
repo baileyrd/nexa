@@ -1,0 +1,17 @@
+[package]
+name="nexa-g1-loopback-spike"
+version="0.0.0"
+edition="2021"
+publish=false
+[dependencies]
+axum={version="0.8",features=["ws"]}
+futures-util="0.3"
+serde={version="1",features=["derive"]}
+serde_json="1"
+tokio={version="1",features=["macros","rt-multi-thread","net","signal","time"]}
+tower-http={version="0.6",features=["cors"]}
+[dev-dependencies]
+tokio-tungstenite="0.26"
+tower={version="0.5",features=["util"]}
+
+[workspace]

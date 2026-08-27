@@ -172,3 +172,7 @@ The Chief Systems Architect reviews the whole system independently of PR cadence
 Local correctness never substitutes for system-level progress.
 
 ---
+
+## G1 evidence (Issue #116)
+
+The disposable [G1 shared UI/loopback evidence record](../spikes/g1-shared-ui/evidence/G1-EVIDENCE.md) is assessment evidence only. Its current result is **blocked** on representative Windows run, two-client accessibility/parity, and Windows resource measurements. It does not select React/TypeScript/Vite, Tauri 2, or the fixture API as production architecture; all candidate maturity and the Tactical Pause remain unchanged pending a separate authority update.
