@@ -87,7 +87,7 @@ For tutor generation the orchestrator must enforce this conceptual ordering:
 3. retrieve governed material;
 4. assemble context/citations or required evidence;
 5. construct trusted tutor planning/prompt authority;
-6. apply privacy/disclosure policy appropriate to configured provider;
+6. apply the local privacy policy for the same-machine LM Studio path;
 7. perform model/token-capacity preflight;
 8. invoke exactly the selected/configured provider according to v1 policy;
 9. apply structural admission;
@@ -140,7 +140,7 @@ The specification must classify operations by retry safety:
 - **Pure/local deterministic** — may be recomputed freely when inputs are unchanged.
 - **Idempotent durable read** — retry allowed according to bounded policy.
 - **Idempotent/identity-keyed durable write** — retry only when the owning data contract proves duplicate safety.
-- **Remote model invocation** — no automatic retry unless the v1 policy explicitly defines identity, duplicate cost/side effect, and response-selection semantics.
+- **LM Studio model invocation** — no automatic retry unless the v1 policy explicitly defines identity, duplicate cost/side effect, and response-selection semantics. The same safeguard applies to any remote invocation separately authorized after v1.
 - **Assessment/evidence commit** — retry only through existing operation/evidence idempotency/concurrency contracts.
 
 Every retry has a bounded attempt count and reason classification. Infinite/background retry is prohibited.
@@ -163,7 +163,7 @@ General principles:
 - never duplicate accepted learning evidence under a new identity to hide uncertainty;
 - preserve enough correlation to diagnose uncertain outcomes;
 - derived/replayable state may be recomputed;
-- remote model generation may be discarded and regenerated only under explicit policy;
+- LM Studio model generation may be discarded and regenerated only under explicit policy; the same safeguard applies to any remote generation separately authorized after v1;
 - startup recovery must prefer known durable commit boundaries over transient runtime state.
 
 ## 12. Cancellation and interruption
@@ -218,7 +218,7 @@ The orchestrator/application boundary must expose a bounded error model sufficie
 - configuration required/invalid;
 - local data unavailable/corrupt/migration required;
 - course/lesson unavailable/invalid;
-- model provider unavailable/authentication/configuration failure;
+- LM Studio endpoint/model configuration or availability failure;
 - retrieval/content unavailable;
 - tutor response rejected/quality gate failed;
 - timeout;
@@ -262,14 +262,14 @@ The complete v1 orchestrator path must be proven by system/integration tests cov
 
 - happy-path learner interaction with real production-equivalent storage and model adapters;
 - assessment/progress commit and exact restart/resume;
-- state-load corruption/version failure before remote invocation;
+- state-load corruption/version failure before LM Studio invocation;
 - retrieval failure;
-- model provider authentication/unavailable/timeout/error;
+- LM Studio endpoint/model configuration, unavailable, timeout, or error;
 - structural admission rejection;
 - quality/grounding rejection;
 - storage commit failure with no false learner progress;
 - concurrency conflict and safe retry behavior;
-- user cancellation before/during remote work;
+- user cancellation before/during LM Studio work;
 - process/task failure normalization;
 - clean shutdown and unclean restart recovery;
 - content-safe correlated diagnostics.

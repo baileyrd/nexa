@@ -61,9 +61,9 @@ R1 security review must address at least:
 - denial/resource exhaustion from bounded external inputs;
 - network destination misuse for remote integrations.
 
-## 5. Credential and secret handling
+## 5. Post-v1 provider credential and secret safeguards
 
-Provider/API credentials must:
+v1 requests no provider/API credentials. If a remote provider later receives new explicit owner and architecture authority, its credentials must:
 
 - never be stored in ordinary learner/domain records;
 - never be committed to repository content or baked into release artifacts;
@@ -78,15 +78,15 @@ Plaintext configuration-file secrets require an explicit accepted exception; the
 
 ## 6. Network security
 
-For remote model/provider paths:
+Remote model/provider paths are not v1 deliverables. If one later receives new explicit owner and architecture authority:
 
 - outbound destinations must derive from approved provider configuration, not model/learner content;
 - transport encryption/server authentication must use the provider SDK/platform security expected by the supported environment;
 - redirects/custom endpoints must be controlled by configuration policy;
 - timeout and response-size bounds must be enforced;
 - proxy/custom-certificate behavior, if supported, must be documented;
-- no inbound listening service is required for the default v1 learner app unless separately specified;
-- disabling remote inference must remove the remote model network path from the primary learner journey.
+- its authorization does not change the separately governed v1 loopback API requirements;
+- disabling that post-v1 remote inference path must remove it from the primary learner journey.
 
 ## 7. Structural authority separation
 

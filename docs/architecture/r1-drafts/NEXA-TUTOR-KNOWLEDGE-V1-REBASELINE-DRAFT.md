@@ -33,7 +33,7 @@ The following remain useful foundation evidence where consistent with the approv
 - deterministic prompt compilation;
 - strict raw-output admission;
 - model registry/selection abstractions;
-- remote authorization/disclosure-filter evidence;
+- remote authorization/disclosure-filter evidence retained for any post-v1 provider path that receives new owner and architecture authority;
 - tokenizer/capacity evidence;
 - usage reconciliation.
 
@@ -41,17 +41,17 @@ The rebaseline must avoid forcing every optional composition variant into the v1
 
 ## 4. v1 provider policy
 
-v1 requires one explicitly supported concrete provider/model path.
+v1 requires one explicitly supported concrete provider/model path: the separately installed same-machine LM Studio server through one narrow provider-neutral adapter. This selection does not promise compatibility with other local or remote providers.
 
 Requirements:
 
 - provider/model configuration is explicit and inspectable;
 - provider-neutral domain contracts remain independent of vendor SDKs;
-- concrete adapter owns SDK/API/transport/credential behavior;
+- concrete adapter owns LM Studio client lifecycle, API transport, and provider-specific translation; v1 has no provider-credential behavior;
 - exact provider/model/tokenizer compatibility is validated before invocation;
 - request/response size/time bounds are enforced;
 - provider failures normalize into content-safe bounded errors;
-- remote disclosure policy is checked before any remote call;
+- no remote inference or remote-provider credential flow is permitted in v1;
 - no hidden fallback to a second provider/model;
 - provider/model/version used for evaluation/release evidence is recorded.
 
@@ -65,7 +65,7 @@ It owns:
 
 - provider client lifecycle;
 - endpoint/transport configuration;
-- credential access;
+- LM Studio endpoint and model configuration, without provider credentials;
 - provider-specific request translation;
 - tokenizer/model capacity integration where required;
 - provider timeout/cancellation support;
@@ -139,7 +139,7 @@ The v1 prompt context must combine only the approved information required for th
 - required assessment constraints;
 - output schema/instruction requirements.
 
-Every layer has an authority/privacy classification. Remote-capable compilation applies the approved privacy policy before provider invocation.
+Every layer has an authority/privacy classification. The v1 compilation path supplies only approved context to the separately installed same-machine LM Studio server. Any future remote-capable compilation requires new owner and architecture authority and must apply the approved post-v1 disclosure safeguards before invocation.
 
 Do not persist complete compiled prompts by default merely for convenience.
 
@@ -196,23 +196,23 @@ Tutor/knowledge integration must preserve the existing distinction between instr
 Requirements:
 
 - retrieval excludes protected answer content according to governed exposure rules before learner-facing generation;
-- remote prompt construction cannot reintroduce excluded answers through another layer;
+- prompt construction cannot reintroduce excluded answers through another layer; any post-v1 remote path must preserve this rule;
 - evaluator/scoring workflows that need protected data use a separate governed authority path rather than learner-facing generation context;
 - tutor quality tests include common answer-leak attempts.
 
 ## 14. Privacy integration
 
-For remote inference:
+The v1 inference path is local to the same machine through the separately installed LM Studio server. It requires no remote-disclosure authorization or provider credentials, while local endpoint, model/runtime, filesystem, process, and loopback transport security remain governed by the security and privacy specifications.
 
-- data-class disclosure is governed by the v1 privacy specification;
+Remote inference is not a v1 branch. If it later receives new explicit owner and architecture authority, the following post-v1 safeguards become mandatory before that path is implemented:
+
+- data-class disclosure is governed by the then-applicable privacy specification;
 - only approved prompt layers/content cross the boundary;
 - learner-history inclusion is minimized to current instructional need;
 - logs/evidence remain content-safe;
 - provider-side retention/handling assumptions are not treated as Nexa-controlled facts.
 
-For local inference:
-
-- remote disclosure authorization is unnecessary, but local model/runtime filesystem/process security remains governed by the security specification.
+That later authority must also approve credential storage/access, endpoint and transport authentication, disclosure UX, provider retention assumptions, and the exact supported provider boundary. These safeguards do not imply a broad-provider promise or an operative remote path in v1.
 
 ## 15. Failure behavior
 
@@ -221,7 +221,7 @@ The tutor/knowledge stack must normalize at least:
 - content/course/knowledge unavailable or invalid;
 - retrieval failure/insufficient grounding;
 - prompt/context over capacity;
-- provider configuration/authentication failure;
+- LM Studio endpoint/model configuration failure;
 - provider timeout/unavailable/error;
 - invalid/unsupported provider response;
 - structural admission rejection;
@@ -248,9 +248,9 @@ Do not convert every prompt/response into permanent memory by default.
 Before System Verified maturity, prove:
 
 - concrete provider adapter happy path;
-- provider config/auth/unavailable/timeout errors;
+- LM Studio endpoint/model configuration, unavailable, and timeout errors;
 - exact provider/model/tokenizer association;
-- privacy authorization/disclosure failure before remote invocation;
+- proof that v1 exposes no remote invocation or provider-credential path; if a remote boundary is later authorized, its disclosure denial requires separate post-v1 verification;
 - concrete durable knowledge restart/reopen;
 - retrieval quality on released corpus;
 - citation provenance after restart;
@@ -280,7 +280,7 @@ Unless explicitly promoted, v1 does not require:
 ## 19. Approval decisions
 
 - exact LM Studio endpoint/model compatibility and setup flow;
-- provider/tokenizer adapter choice;
+- exact LM Studio API/endpoint/model/tokenizer compatibility and narrow adapter design, established by G5 evidence and a recorded authority update;
 - released corpus/content formats;
 - concrete retrieval mode from measured evidence;
 - grounding/citation acceptance method and threshold;

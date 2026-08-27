@@ -112,7 +112,8 @@ Errors must map from bounded application/orchestrator classifications into usefu
 At minimum distinguish:
 
 - provider not configured;
-- provider authentication/configuration failure;
+- LM Studio endpoint/model configuration or availability failure;
+- post-v1 remote-provider authentication failure only if a remote path later receives new explicit owner and architecture authority;
 - provider temporarily unavailable/timeout;
 - course/content unavailable or invalid;
 - local data migration/recovery required;

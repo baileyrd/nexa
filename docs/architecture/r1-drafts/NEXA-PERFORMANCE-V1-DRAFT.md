@@ -38,7 +38,7 @@ Before R2 implementation is considered release-oriented, approve numerical budge
 
 ## 4. Provider-dependent latency
 
-Remote/local model generation latency is dependency/configuration dependent.
+Same-machine LM Studio generation latency is dependency/configuration dependent. Any remote-provider latency branch is a post-v1 safeguard requiring new owner and architecture authority.
 
 Report at least:
 
@@ -70,7 +70,7 @@ Measure:
 - CPU during idle and active interaction;
 - storage footprint/growth;
 - observed GPU usage, if any, for the required UI/embodiment path and its CPU fallback;
-- network bytes per representative remote tutor interaction where measurable and useful for privacy/cost awareness.
+- loopback network bytes per representative LM Studio tutor interaction where measurable; if remote inference is separately authorized after v1, measure its network use for privacy/cost awareness.
 
 Record CPU and any observed GPU use for both identical clients, required bundled speech, and required animated 2D rendering. The reference path must remain usable on the CPU-only Windows reference PC; candidate evidence, not a blanket no-GPU rule, governs acceleration and fallback decisions.
 

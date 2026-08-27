@@ -76,7 +76,7 @@ The following tactical-pause documents remain in the `architecture/r1-drafts/` d
 | Security | [Security Architecture v1](architecture/r1-drafts/NEXA-SECURITY-V1-DRAFT.md) | Local trust boundaries, authority separation, secrets/network rules |
 | Privacy | [Privacy and Data Handling v1](architecture/r1-drafts/NEXA-PRIVACY-V1-DRAFT.md) | Learner/content disclosure, retention/deletion, diagnostics |
 | Observability | [Observability v1](architecture/r1-drafts/NEXA-OBSERVABILITY-V1-DRAFT.md) | Content-safe correlation and operational evidence |
-| Learner UX | [Learner UX v1](architecture/r1-drafts/NEXA-UX-V1-DRAFT.md) | Desktop learner flow and accessibility baseline |
+| Learner UX | [Learner UX v1](architecture/r1-drafts/NEXA-UX-V1-DRAFT.md) | Identical Windows desktop and same-machine browser shared-interface flow and accessibility baseline |
 | Testing / Acceptance | [Testing and System Acceptance v1](architecture/r1-drafts/NEXA-TESTING-ACCEPTANCE-V1-DRAFT.md) | Maturity evidence and primary E2E acceptance scenario |
 | Performance | [Performance v1](architecture/r1-drafts/NEXA-PERFORMANCE-V1-DRAFT.md) | Measurement-first release budgets/evidence |
 | Packaging / Deployment | [Packaging and Deployment v1](architecture/r1-drafts/NEXA-PACKAGING-DEPLOYMENT-V1-DRAFT.md) | Windows release/install/update constraints; final mechanism later |
