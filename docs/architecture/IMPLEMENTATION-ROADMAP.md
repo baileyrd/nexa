@@ -51,7 +51,7 @@ Every increment still requires proportionate:
 
 ## Architecture rebaseline checkpoints
 
-At R2 exit, before R3 broadening, and at each later major stage boundary, the Chief Systems Architect must independently evaluate the whole program and record Continue, Redirect, or Tactical Pause.
+After each candidate evidence gate (G1–G3), before G4 integration, before each material G5–G7 expansion, and before G8/G9, the Chief Systems Architect must independently evaluate the whole program and record Continue, Redirect, or Tactical Pause.
 
 See [`../governance/ARCHITECTURE-REBASELINE-GATES.md`](../governance/ARCHITECTURE-REBASELINE-GATES.md).
 

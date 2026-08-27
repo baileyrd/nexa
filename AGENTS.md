@@ -69,7 +69,7 @@ cargo test --workspace
 git diff --check
 ```
 
-As R2 activates Windows/UI/storage/model adapters, add focused concrete-adapter and Windows validation required by the owning R1 specifications. Passing the existing Linux/headless suite does not prove higher maturity.
+As G4–G8 activate Windows/UI/storage/model, speech, and embodiment adapters, add focused concrete-adapter and Windows validation required by the owning R1 specifications. Passing the existing Linux/headless suite does not prove higher maturity.
 
 ## Change and review rules
 

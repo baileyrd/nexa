@@ -121,7 +121,7 @@ One accepted learning operation MUST NOT expose partially committed assessment, 
 
 Existing `nexa-tutor` provider-neutral contracts remain reusable.
 
-R2 uses one explicit concrete model adapter and one configured model. The adapter owns:
+The v1 route uses one explicit concrete model adapter and one configured model. The adapter owns:
 
 - local HTTP transport;
 - endpoint/process configuration;
@@ -132,13 +132,13 @@ R2 uses one explicit concrete model adapter and one configured model. The adapte
 
 The model never becomes the authority for host IDs, authorization, limits, policy versions, capabilities, tools, or renderer operations.
 
-Dynamic multi-provider routing and fallback are post-R2.
+Dynamic multi-provider routing and fallback are post-v1.
 
 ## 9. Knowledge architecture
 
 Existing deterministic ingestion, lexical/vector/hybrid retrieval, context assembly, and citation contracts are retained as reusable foundation.
 
-R2 requires only the smallest retrieval configuration that meets the governed first-course quality and performance requirements.
+The v1 route requires only the smallest retrieval configuration that meets the governed first-course quality and performance requirements.
 
 The concrete data path must persist:
 
@@ -146,9 +146,9 @@ The concrete data path must persist:
 - artifact identity/version/hash;
 - chunk identity/provenance;
 - visibility/exposure state;
-- any embeddings/profile data actually required by the selected R2 retrieval configuration.
+- any embeddings/profile data actually required by the selected v1 retrieval configuration.
 
-A dedicated vector database is not required unless measured evidence shows the bounded R2 corpus cannot meet accepted requirements without one.
+A dedicated vector database is not required unless measured evidence shows the bounded v1 corpus cannot meet accepted requirements without one.
 
 ## 10. Data architecture
 
@@ -173,7 +173,7 @@ Canonical Nexa identifiers remain authoritative; database-generated row IDs are 
 
 Typed events remain domain facts and integration evidence.
 
-R2 does not require a durable event broker. Durable state correctness is established through the SQLite transaction boundary.
+The v1 route does not require a durable event broker. Durable state correctness is established through the SQLite transaction boundary.
 
 A durable outbox/event store becomes required only when a concrete asynchronous durable consumer is part of the accepted release path and loss of its fact would violate correctness.
 
@@ -181,7 +181,7 @@ Operational telemetry is not automatically authoritative domain state.
 
 ## 12. Security and privacy architecture
 
-R2 is local-model-first.
+The v1 route is local-model-first.
 
 Minimum controls:
 
@@ -229,7 +229,7 @@ LAN/remote access, hosted deployment, cloud sync, accounts/multi-user administra
 
 ## 18. Architecture rebaseline rule
 
-Before R3 and at every later major release gate, the Chief Systems Architect must perform an independent whole-system review covering:
+After G1–G3 candidate evidence and at every later major release gate, the Chief Systems Architect must perform an independent whole-system review covering:
 
 - parent specification maturity;
 - vertical capability progress;

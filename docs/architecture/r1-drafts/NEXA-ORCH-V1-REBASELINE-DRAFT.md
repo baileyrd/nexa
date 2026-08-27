@@ -109,13 +109,12 @@ v1 release-critical dependencies include at least:
 - observability sink/context;
 - learner-facing application output boundary.
 
-Conditional dependencies:
+Required v1 dependencies:
 
-- speech input/output;
-- avatar/behavior;
-- labs/tools.
+- bundled speech input/output through the owned speech boundary;
+- synchronized semantic 2D behavior through the NBP/avatar boundary.
 
-The specification must state which dependencies may be absent and what capability degradation results.
+Labs/tools are conditional in the general architecture and omitted from v1. The specification must state the accessible text, caption, reduced-motion/static, and failure degradation available when a required speech or embodiment dependency is temporarily unavailable; degradation does not make that dependency optional for release acceptance.
 
 ## 9. Timeout policy
 

@@ -35,11 +35,11 @@ G3 separately proves the Rive candidate renders identical synchronized animated 
 
 G4 integrates shared clients, the local Rust runtime, authoritative SQLite state/migrations, governed TCP content, atomic learning commits, and restart/resume. G5 integrates the narrow LM Studio adapter and admitted tutor output. G6 integrates required bundled speech. G7 integrates required synchronized animated 2D embodiment. Each gate requires a recorded Continue, Redirect, or Tactical Pause and evidence at the claimed maturity.
 
-## R3 — Robust complete session orchestration
+## G4–G7 — Robust complete session orchestration
 
 Status: Not started.
 
-Objective: turn the R2 skeleton into a resilient learner session.
+Objective: compose the G4–G7 vertical route into a resilient learner session.
 
 Required maturity:
 
@@ -55,7 +55,7 @@ Reuse ADR-0051 through ADR-0067 only where they directly support the actual sess
 
 Exit: the primary learner journey survives expected model/retrieval/storage failures, cancellation, shutdown, and restart without corrupting accepted state.
 
-## R4 — Grounding and tutor quality
+## G5/G8 — Grounding and tutor quality
 
 Status: Not started.
 
@@ -80,22 +80,22 @@ Exit: the exact release-intended model/configuration meets the approved first-co
 
 Status: Required by G2/G3/G6/G7; not yet proven.
 
-Objective: decide from the functioning text tutor whether speech and/or animated embodiment are required for the first public v1 release or should ship later.
+Objective: prove and integrate the required bundled speech and synchronized animated 2D capabilities through the finite release route.
 
-If promoted, a capability must advance beyond existing contracts to concrete adapters and system verification:
+G2 and G3 must establish candidate suitability evidence; G6 and G7 must advance the capabilities beyond existing contracts to concrete adapters and integrated release-path evidence; G8 must provide system verification:
 
 - real microphone/STT and/or TTS/audio for speech;
 - semantic behavior synchronization;
 - actual avatar asset/runtime integration through NBP/avatar boundaries;
 - interruption/synchronization/privacy/accessibility evidence.
 
-If not promoted, retain the existing foundations for post-v1 without blocking release.
+Candidate failure triggers the ADR-0069 fallback/reselection path and an explicit authority update; it does not remove either required capability from v1.
 
-## R6 — Labs/tools if promoted
+## Deferred labs/tools
 
-Status: Post-R2 by default.
+Status: Post-v1.
 
-Only enter this stage before v1 if the accepted course/release outcome requires actual tool/lab practice.
+Labs/tools are not part of the owner-approved v1 route and cannot be promoted into v1 without new explicit owner and architecture authority.
 
 Promotion requires:
 
@@ -109,7 +109,7 @@ Promotion requires:
 
 Contract declarations/cancellation controls alone are insufficient.
 
-## R7 — Performance and operational hardening
+## G8 — Performance and operational hardening
 
 Status: Not started.
 
@@ -130,7 +130,7 @@ Optimization is selected from measured failures against accepted budgets, not as
 
 Exit: no unresolved release-blocking performance/operational finding.
 
-## R8 — Packaging, install, update, and distribution
+## G8 — Packaging, install, update, and distribution
 
 Status: Not started.
 
@@ -150,7 +150,7 @@ Required outcomes:
 
 Exit: a release candidate can be installed/upgraded/uninstalled according to the supported v1 policy.
 
-## R9 — System verification, user acceptance, release
+## G8/G9 — System verification, user acceptance, release
 
 Status: Not started.
 
@@ -179,10 +179,10 @@ Each status claim must name its scope and evidence.
 
 A whole-system architecture/program-integrity review occurs:
 
-- at R2 exit;
-- before material R3 broadening;
-- before promoting speech/avatar/labs into the release critical path;
-- before R8 release engineering;
+- after each candidate evidence gate (G1–G3) and before its production selection;
+- before G4 vertical integration and before each material G5–G7 expansion;
+- before G8 system verification and release engineering;
+- before any proposal to change required speech/avatar scope or promote deferred labs/tools;
 - whenever material drift signals appear.
 
 The outcome is explicitly Continue, Redirect, or Tactical Pause.
