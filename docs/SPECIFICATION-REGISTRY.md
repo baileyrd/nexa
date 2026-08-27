@@ -48,7 +48,7 @@ Conflicts are reported and resolved explicitly; code does not silently redefine 
 | NEXA-R1 | [Nexa R1 Implementation Baseline](architecture/NEXA-R1-IMPLEMENTATION-BASELINE.md) | Approved | Cross-cutting v1 requirements |
 | ADR-0069 | [Owner-approved v1 delivery baseline](adr/0069-owner-approved-v1-delivery-baseline.md) | Accepted | Current owner-approved clients, runtime, providers, embodiment, deferrals, and finite route |
 | ADR-0068 | [Historical R2 walking-skeleton baseline](adr/0068-v1-r2-walking-skeleton-baseline.md) | Superseded only for conflicts | Preserved historical and non-conflicting decisions |
-| R0-R9 roadmap | [Nexa Completion Roadmap](architecture/NEXA-COMPLETION-ROADMAP.md) | Approved for delivery control | Dependency-driven route from rebaseline to release |
+| G0–G9 roadmap | [Nexa Completion Roadmap](architecture/NEXA-COMPLETION-ROADMAP.md) | Approved for delivery control | Dependency-driven route from rebaseline to release |
 | Rebaseline gates | [Architecture Rebaseline and Program-Integrity Gates](governance/ARCHITECTURE-REBASELINE-GATES.md) | Approved project governance | Periodic whole-system review and stop/redirect/continue control |
 | Deferral register | [Architectural Deferral Register](governance/DEFERRAL-REGISTER.md) | Active Control | Cross-stage inherited deferrals and review/disposition routing |
 | Project status | [PROJECT-STATUS.md](PROJECT-STATUS.md) | Active Control | Current factual status and resume route |
@@ -105,12 +105,12 @@ If one of these supplements is insufficient during the v1 route, implementation 
 | 11 | NEXA-3D-REF-001 | Canonical 3D reference | Baseline Draft visual authority | assets |
 | 11 | NEXA-3D-RUNTIME-001 | 3D validation runtime | Runtime Integrated in viewer/validator slice | `nexa-3d`, viewer, validator |
 | 12 | NEXA-ORCH-001 | Session orchestration | Lifecycle/cancellation contract/runtime foundations + approved R1 complete-workflow supplement | `nexa-orchestrator`, `nexa-orchestrator-runtime`, apps |
-| 13 | NEXA-UX-001 (R1 supplement) | Learner UX | Specification Approved for v1 via R1 baseline | `apps/nexa-desktop` |
+| 13 | NEXA-UX-001 (R1 supplement) | Learner UX | Specification Approved for v1 via R1 baseline | Shared frontend/desktop-shell locations selected only after G1 evidence and authority update |
 | 15 | NEXA-DATA-001 (R1 supplement) | Data/persistence | Specification Approved for v1 via R1 baseline + ADR-0069 | `nexa-storage` |
 | 16 | NEXA-SEC-001 (R1 supplement) | Security | Specification Approved for v1 via R1 baseline | cross-cutting/adapters/app |
 | 17 | NEXA-PRIV-001 (R1 supplement) | Privacy | Specification Approved for v1 via R1 baseline | cross-cutting/adapters/app |
 | 18 | NEXA-OBS-001 (R1 supplement) | Observability | Specification Approved for v1 via R1 baseline | runtime/app |
-| 22/23 | NEXA-PKG/DEPLOY-001 (R1 supplement) | Packaging/deployment | Specification Approved to constrain v1; final R8 decisions deferred | release/app |
+| 22/23 | NEXA-PKG/DEPLOY-001 (R1 supplement) | Packaging/deployment | Specification Approved to constrain v1; final G8 decisions deferred | release/app |
 | 24 | NEXA-PERF-001 (R1 supplement) | Performance | Measurement specification approved; final release budgets measured later | system |
 | 25 | NEXA-TEST-001 (R1 supplement) | Testing/acceptance | Specification Approved; maturity model and v1 E2E gate authoritative | system/CI |
 

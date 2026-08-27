@@ -10,7 +10,7 @@ Define measurable performance budgets for the first release so architecture and 
 
 - Budgets apply to the primary learner journey first.
 - Measure before optimizing.
-- Separate Nexa-controlled latency from remote-provider latency.
+- Separate Nexa-controlled latency from LM Studio latency; retain remote-provider separation as a post-v1 safeguard.
 - Use representative release hardware, corpus, data size, and configuration.
 - Report warm/cold behavior separately where meaningful.
 - Performance must not compromise correctness, security, privacy, durability, or accessibility.
@@ -136,7 +136,7 @@ Every release performance result records:
 
 Once v1 budgets are established, release CI/validation must detect material regressions for deterministic/local measurements where feasible.
 
-Remote-provider latency should be monitored/reported but not used as an unstable hard CI gate unless a controlled test service exists.
+LM Studio latency must be monitored/reported with controlled release evidence. If remote inference is explicitly authorized after v1, its latency must not become an unstable hard CI gate unless a controlled test service exists.
 
 ## 12. Verification
 

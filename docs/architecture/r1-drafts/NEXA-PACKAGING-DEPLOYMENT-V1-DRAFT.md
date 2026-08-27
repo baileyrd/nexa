@@ -4,11 +4,11 @@ Status: R1 proposal; non-authoritative until registered and approved
 
 ## 1. Purpose
 
-Define how the first Nexa release is built, installed, configured, upgraded, diagnosed, and removed on its first supported desktop target.
+Define how the first Nexa release and its identical Windows desktop and same-machine browser clients are built, installed, configured, upgraded, diagnosed, and removed on the first supported target.
 
 ## 2. v1 deployment model
 
-Nexa v1 is a local desktop application deployment. Server/fleet/multi-tenant deployment is post-v1 unless explicitly promoted.
+Nexa v1 deploys identical Windows desktop and same-machine browser clients over one local Rust runtime and one versioned loopback HTTP/WebSocket business API. Hosted, remote/LAN client, server/fleet, and multi-tenant deployment are post-v1 unless new owner and architecture authority changes scope.
 
 The release must declare one primary supported OS/architecture combination before packaging technology is selected.
 
@@ -49,7 +49,7 @@ The installer/package must define:
 - logs/diagnostics location;
 - cache/temp location;
 - governed course/content location or import mechanism;
-- model/provider local asset location if applicable;
+- separately installed LM Studio endpoint/model configuration location;
 - required OS/runtime prerequisites;
 - whether installation requires elevated privilege and why.
 
@@ -61,10 +61,10 @@ The application must detect and guide configuration for:
 
 - durable data initialization;
 - released course/content availability;
-- v1 model provider/model;
-- credential/secret reference when remote inference is used;
-- optional local model path/runtime if selected;
-- privacy-relevant remote/local posture.
+- separately installed graphical LM Studio endpoint and configured model;
+- local runtime/API readiness for both identical clients;
+- bundled speech readiness and device configuration;
+- synchronized animated 2D dependency readiness.
 
 Configuration validation must occur before the learner begins an interaction that cannot succeed.
 
@@ -72,15 +72,13 @@ Configuration validation must occur before the learner begins an interaction tha
 
 Packaging must not couple provider-neutral domain crates to one vendor SDK.
 
-The application/adapters may include one release-supported provider path. Configuration must identify:
+The application/adapters include one release-supported provider path: separately installed graphical LM Studio on the same machine. Configuration must identify:
 
-- provider/model;
-- local/remote mode;
-- endpoint only if custom endpoint support is intentionally included;
-- credential reference, never the secret in ordinary diagnostics;
+- LM Studio endpoint and model;
+- loopback/local availability without a remote-provider credential flow;
 - model/tokenizer compatibility data required by the concrete adapter.
 
-Dynamic multi-provider routing is not required for v1.
+Remote inference, custom remote endpoints, credentials, and dynamic multi-provider routing are not v1 deliverables.
 
 ## 8. Persistent data location and lifecycle
 
@@ -125,10 +123,10 @@ The product must distinguish:
 - uninstalling application binaries;
 - deleting caches/logs;
 - deleting learner data;
-- deleting provider configuration/credentials;
+- deleting LM Studio endpoint/model configuration;
 - removing downloaded model/content assets.
 
-Destructive learner-data deletion must be explicit. Uninstall must not make misleading promises about data held by a remote provider.
+Destructive learner-data deletion must be explicit. Uninstall must distinguish Nexa-owned state from data retained by the separately installed LM Studio application.
 
 ## 12. Updates
 
@@ -150,7 +148,7 @@ The release documentation must accurately state:
 
 - whether installation itself requires network access;
 - whether course/content is bundled or downloaded;
-- whether the v1 tutor provider requires network access;
+- that v1 model inference requires the separately installed same-machine LM Studio server but no remote provider;
 - which learner capabilities remain usable offline;
 - whether local model assets are optional/supported.
 
@@ -200,9 +198,9 @@ Before approval, define at minimum:
 - CPU architecture;
 - memory/storage minimum/recommended values based on performance evidence;
 - GPU requirement only if the required v1 path actually needs one;
-- network requirement for selected provider mode;
+- loopback networking requirements for both clients and LM Studio;
 - accessibility/platform assumptions;
-- secure credential-store mechanism.
+- local configuration protection appropriate to the selected shell/runtime.
 
 Unsupported platforms may still compile, but are not release-supported without acceptance evidence.
 
@@ -226,8 +224,7 @@ On a clean supported machine, a tester must be able to:
 - first supported OS/version/architecture;
 - concrete installer/package technology;
 - release signing/provenance mechanism;
-- first provider local/remote configuration posture;
-- secret-store integration;
+- exact LM Studio endpoint/model configuration and compatibility validation;
 - bundled vs separately installed course/content;
 - manual vs automatic update for v1;
 - application/data/log/config locations;
@@ -246,4 +243,4 @@ On a clean supported machine, a tester must be able to:
 
 ## 2026-08-26 ADR-0069 reconciliation
 
-The v1 package supplies the Windows Tauri shell, identical compiled shared frontend, local Rust runtime, governed content, migrations, and selected bundled speech runtime/models. It excludes LLM weights and inference runtime and integrates with separately installed graphical LM Studio. A same-machine browser uses the same assets/API; hosted deployment and remote/LAN access remain post-v1.
+The v1 release supplies identical Windows desktop and same-machine browser clients over one local Rust runtime and versioned loopback HTTP/WebSocket API, plus governed content, migrations, and required bundled-speech assets selected after G2. It excludes LLM weights and inference runtime and integrates with separately installed graphical LM Studio. React/TypeScript/Vite and Tauri 2 remain G1 candidates until evidence and a later authority update select production technologies; the concrete bundled-speech technology remains G2-gated. Hosted deployment, remote inference, and remote/LAN client access remain post-v1.

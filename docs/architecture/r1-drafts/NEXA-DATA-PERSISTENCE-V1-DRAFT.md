@@ -160,7 +160,7 @@ A knowledge ingestion/promotion operation must not expose a partially validated 
 
 Do not create distributed/global transactions simply for conceptual neatness. Cross-domain atomicity is required only where the v1 correctness model proves partial commit would create an invalid externally observable state.
 
-Where work crosses a remote model provider, the remote invocation cannot be rolled back. The orchestrator must treat provider use as an external side effect and commit local state only according to explicit workflow semantics.
+The v1 LM Studio invocation cannot be rolled back. The orchestrator must treat provider use as an external side effect and commit local state only according to explicit workflow semantics. The same rule applies to any remote provider separately authorized after v1.
 
 ## 6. Concurrency and isolation
 

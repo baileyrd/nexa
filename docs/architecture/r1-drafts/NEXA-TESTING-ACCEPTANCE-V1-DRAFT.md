@@ -256,7 +256,7 @@ Examples:
 
 - `Contract Implemented — deterministic headless adapter`
 - `Runtime Integrated — scripted model provider`
-- `Concrete Adapter Implemented — remote provider X`
+- `Concrete Adapter Implemented — remote provider X` (post-v1 example requiring separate authority)
 - `System Verified — primary v1 text journey`
 
 Avoid unqualified `Complete` where multiple maturity meanings are possible.

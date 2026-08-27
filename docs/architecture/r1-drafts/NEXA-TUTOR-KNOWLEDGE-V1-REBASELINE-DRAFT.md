@@ -279,7 +279,7 @@ Unless explicitly promoted, v1 does not require:
 
 ## 19. Approval decisions
 
-- first concrete provider/model and local/remote posture;
+- exact LM Studio endpoint/model compatibility and setup flow;
 - provider/tokenizer adapter choice;
 - released corpus/content formats;
 - concrete retrieval mode from measured evidence;

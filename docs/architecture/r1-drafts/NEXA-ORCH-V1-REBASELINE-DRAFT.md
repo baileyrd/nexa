@@ -150,7 +150,7 @@ Every retry has a bounded attempt count and reason classification. Infinite/back
 Recovery distinguishes:
 
 1. failure before any irreversible external action;
-2. remote provider action completed but no local authoritative state change occurred;
+2. LM Studio action completed but no local authoritative state change occurred (and, after v1 only, the equivalent for any separately authorized remote provider);
 3. learner-visible response was presented but subsequent learning commit failed;
 4. local commit succeeded but presentation/telemetry failed;
 5. application/process terminated during active workflow.
