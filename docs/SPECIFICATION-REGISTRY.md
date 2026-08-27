@@ -172,3 +172,7 @@ The Chief Systems Architect reviews the whole system independently of PR cadence
 Local correctness never substitutes for system-level progress.
 
 ---
+
+## G1 evidence (Issue #116)
+
+The disposable [G1 shared UI/loopback evidence record](../spikes/g1-shared-ui/evidence/G1-EVIDENCE.md) is assessment evidence only. Linux/headless automation covers frontend checks, lifecycle tests/build, and end-to-end loopback security/cancellation tests. The repository-local Windows validation harness covers clean checks, Tauri 2 packaging, package-size capture, and machine-readable output, but is not Windows success evidence until executed. G1 remains **blocked** on representative Windows browser/WebView parity, accessibility, startup/CPU/memory/package, reconnect, and cancellation evidence. It does not select React/TypeScript/Vite, Tauri 2, or the fixture API as production architecture; candidate maturity and Tactical Pause remain unchanged pending a separate authority update.

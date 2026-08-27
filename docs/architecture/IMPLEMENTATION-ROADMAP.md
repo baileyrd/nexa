@@ -56,3 +56,7 @@ After each candidate evidence gate (G1–G3), before G4 integration, before each
 See [`../governance/ARCHITECTURE-REBASELINE-GATES.md`](../governance/ARCHITECTURE-REBASELINE-GATES.md).
 
 ---
+
+## G1 evidence status (2026-08-27)
+
+Issue #116 produced a bounded disposable fixture and [criterion-level evidence](../../spikes/g1-shared-ui/evidence/G1-EVIDENCE.md). Linux/headless automation covers the shared frontend checks/lifecycle tests/build and end-to-end loopback security/cancellation tests. A repository-local Windows script reproducibly covers clean validation, Tauri 2 packaging, package-size capture, and machine-readable pass/fail output, but has not been executed and is not Windows success evidence. G1 is **blocked**, not passed, until representative Windows browser/WebView parity, accessibility, startup/CPU/memory/package, reconnect, and cancellation evidence is executed and reviewed. No production selection is made, G2 remains undispatched, and Tactical Pause continues until separate authority records a disposition.
