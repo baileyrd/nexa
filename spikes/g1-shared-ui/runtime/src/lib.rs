@@ -13,7 +13,9 @@ use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 pub const VERSION: &str = "1";
 pub const DEFAULT_TOKEN: &str = "g1-local-fixture";
-const ORIGINS: [&str; 2] = ["http://127.0.0.1:4173", "tauri://localhost"];
+// Tauri 2 uses this HTTP origin for packaged Windows WebView assets. The
+// loopback preview origin is retained for the same-machine browser fixture.
+const ORIGINS: [&str; 2] = ["http://127.0.0.1:4173", "http://tauri.localhost"];
 #[derive(Clone)]
 pub struct AppState {
     token: Arc<str>,
