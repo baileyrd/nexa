@@ -29,11 +29,11 @@ Originating specifications/ADRs remain authoritative for detailed technical deci
 | Durable event broker/store | Phase 1 | **Post-v1** — not required without a durable asynchronous correctness consumer | G4–G7 review |
 | Durable outbox | Phase 3 | **Post-v1** under same rule; promote only with authoritative async consumer | G4–G7 review |
 | Async event backpressure | Phase 1 | Required only for event path actually adopted | G4–G7/G8 |
-| NBP arbitration/race/canvas richness | Phase 1–2 | Conditional v1 | R5 |
+| NBP arbitration/race/canvas richness | Phase 1–2 | Conditional v1 | G7/G8 |
 | Async avatar transport/synchronization | Phase 2 | **v1 required** for synchronized 2D behavior; exact transport evidence-gated | G3/G7 |
 | Rich curriculum branching/freeform routing | Phase 3 | Post-v1 unless first course proves need | G5/G8/course review |
 | Advanced assessment weighting/timing/selection | Phase 3 | Post-v1 unless first course proves need | G5/G8 |
-| Assessment protection/security | Phase 3 | Later v1 required for released scope | G5/G8/R9 |
+| Assessment protection/security | Phase 3 | Later v1 required for released scope | G5/G8/G9 |
 | Durable knowledge store/provenance | Phase 4 | **v1 required** — SQLite-backed concrete path | G4 |
 | Concrete model provider/inference | Phase 4 | **v1 required** — narrow LM Studio adapter required | G4 |
 | Concrete tokenizer/capacity behavior | Phase 4 | v1 required only to extent selected adapter/model contract needs it | G4 |
@@ -41,20 +41,20 @@ Originating specifications/ADRs remain authoritative for detailed technical deci
 | Automatic local-first fallback chains | Phase 4 | Post-v1; local path is explicit in G4 | after G5/G8 |
 | Provider health/latency/cost routing | Phase 4 | Post-v1 by default | post-v1 |
 | Automatic model retry/regeneration | Phase 4 | **Resolved/Narrowed** — no automatic post-consumption retry in G4 | G4–G7/G5–G8 |
-| Remote-provider privacy/credentials | Phase 4 | Post-v1; v1 has no remote disclosure | R5/G8 if promoted |
+| Remote-provider privacy/credentials | Phase 4 | Post-v1; v1 has no remote disclosure | New explicit owner/architecture authority if promoted |
 | Semantic citation fidelity/grounding quality | Phase 4 | Later v1 required | G5/G8 |
 | Semantic safety/instructional quality | Phase 4 | Later v1 required | G5/G8 |
-| Prompt-injection/hostile-source quality testing | Phase 4 | Later v1 required for released corpus | G5/G8/R9 |
+| Prompt-injection/hostile-source quality testing | Phase 4 | Later v1 required for released corpus | G5/G8/G9 |
 | Dedicated vector database | Phase 4 | Conditional on measured corpus/performance evidence | G5/G8/G8 |
 | Async/streaming model generation | Phase 4 | Post-v1 by default | G8 may promote |
 | Complete session cancellation/recovery | Phase 5 | Later v1 required; compose real learner workflow | G4–G7 |
 | Concrete provider cancellation | Phase 5 | Required only to extent selected provider can/should support it | G4–G7 |
 | Concrete retrieval dependency cancellation | Phase 5 | Required only for actual G4–G7 dependency behavior | G4–G7 |
-| Speech microphone/STT | ADR-0067 | v1 required; adapter evidence-gated | R5 |
-| Speech output/TTS/audio | Phase 5 roadmap | v1 required; adapter evidence-gated | R5 |
-| Speech/provider/device cancellation | Phase 5 | v1 required | R5 |
-| Avatar/behavior synchronization | Phase 5 | v1 required | R5 |
-| Tool/lab execution and sandbox enforcement | Phase 5 | Post-v1; conditional first-release promotion only | R6 |
+| Speech microphone/STT | ADR-0067 | v1 required; adapter evidence-gated | G2/G6/G8 |
+| Speech output/TTS/audio | Phase 5 roadmap | v1 required; adapter evidence-gated | G2/G6/G8 |
+| Speech/provider/device cancellation | Phase 5 | v1 required | G2/G6/G8 |
+| Avatar/behavior synchronization | Phase 5 | v1 required | G3/G7/G8 |
+| Tool/lab execution and sandbox enforcement | Phase 5 | Post-v1; conditional first-release promotion only | New explicit owner/architecture authority |
 | Interruption/timeout/recovery policy | Phase 5 | Later v1 required; R1 baseline supplies governing rules | G4–G7 |
 | Clock ownership | Phase 5 | **Resolved/Narrowed** — app/orchestrator supplies canonical operation timestamps; DB defaults are not domain authority | G4–G7 |
 | Learner UX implementation | reserved namespace | **v1 required** — identical shared browser/desktop UI over one loopback API; framework candidates evidence-gated | G4 |
@@ -64,8 +64,8 @@ Originating specifications/ADRs remain authoritative for detailed technical deci
 | Final installer/signing/update | Phase 6/reserved | Later v1 required | G8 |
 | Local model runtime/model distribution | rebaseline | LM Studio is separately installed/configured; Nexa does not distribute its runtime or LLM weights | G8 |
 | LLM weights/model selection | G5 | User-configured LM Studio model; Nexa bundles no weights | G5/G8 |
-| User acceptance | reserved | Later v1 required | R9 |
-| Repository/model/runtime/license/asset provenance | release | Later v1 required | G8/R9 |
+| User acceptance | reserved | Later v1 required | G9 |
+| Repository/model/runtime/license/asset provenance | release | Later v1 required | G8/G9 |
 | Plugins/public API/analytics/authoring/server/fleet | reserved | Post-v1 by default | post-v1 |
 
 ## Finite v1 blocking set
@@ -76,7 +76,7 @@ React/TypeScript/Vite, Tauri 2, Sherpa-ONNX, and Rive remain candidates until th
 
 ## Review rule
 
-At each R0–R9 stage boundary:
+At each G0–G9 gate boundary:
 
 1. review every deferral whose mandatory stage has arrived;
 2. implement it, narrow/supersede the requirement explicitly, classify it later, or stop the stage;
