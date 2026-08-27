@@ -77,12 +77,35 @@ async fn websocket_request(origin: &str, token: &str, version: &str) -> (StatusC
 #[tokio::test]
 async fn enforces_http_authorization_and_version() {
     let app = nexa_g1_loopback_spike::app("test");
-    for (authorization, version, expected) in [
-        (None, None, StatusCode::UNAUTHORIZED),
-        (Some("Bearer test"), Some("2"), StatusCode::UPGRADE_REQUIRED),
-        (Some("Bearer test"), Some("1"), StatusCode::OK),
+    for (origin, authorization, version, expected) in [
+        (
+            "http://tauri.localhost",
+            None,
+            None,
+            StatusCode::UNAUTHORIZED,
+        ),
+        (
+            "http://tauri.localhost",
+            Some("Bearer test"),
+            Some("2"),
+            StatusCode::UPGRADE_REQUIRED,
+        ),
+        (
+            "https://attacker.example",
+            Some("Bearer test"),
+            Some("1"),
+            StatusCode::FORBIDDEN,
+        ),
+        (
+            "http://tauri.localhost",
+            Some("Bearer test"),
+            Some("1"),
+            StatusCode::OK,
+        ),
     ] {
-        let mut request = Request::builder().uri("/v1/fixture");
+        let mut request = Request::builder()
+            .uri("/v1/fixture")
+            .header("origin", origin);
         if let Some(value) = authorization {
             request = request.header("authorization", value);
         }

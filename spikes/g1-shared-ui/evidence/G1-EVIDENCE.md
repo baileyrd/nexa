@@ -6,7 +6,7 @@ Date: 2026-08-27. Issue: #116. GitHub base: `0b29eca746090334825bdfae4e71b5eb3e0
 
 The available executor was Ubuntu 24.04 x86_64, not Windows. Exact tool versions are in `environment.txt`. Linux frontend wall time was captured with the available shell clock and maximum RSS is explicitly unavailable in `linux-build-time.txt`; sizes are in `linux-artifact-sizes.txt`. These observations are diagnostic only. Automated local evidence covers frontend lint/typecheck, six lifecycle/component tests and production build plus runtime format/check and three end-to-end HTTP/WebSocket tests.
 
-The repository-local `scripts/validate-windows.ps1` harness performs clean locked installs, the same frontend/runtime checks, a Tauri 2 Windows NSIS build, and package-size capture with machine-readable pass/fail JSON. It has not been executed on a representative Windows machine, so it is a reproduction mechanism and not Windows success evidence.
+The repository-local `scripts/validate-windows.ps1` harness performs clean locked installs, the same frontend/runtime checks, a Tauri 2 Windows NSIS build, and package-size capture with machine-readable pass/fail JSON that records the exact repository head and tool versions. It has not been executed on a representative Windows machine, so it is a reproduction mechanism and not Windows success evidence.
 
 ## Criteria
 
@@ -15,7 +15,7 @@ The repository-local `scripts/validate-windows.ps1` harness performs clean locke
 | 1 | One build in same-PC browser and Tauri 2 Windows shell | **Blocked** | One Vite output is configured for browser and `frontendDist`; Windows harness is unexecuted and no two-client run exists. |
 | 2 | Equivalent loading/success/cancel/reconnect/error behavior | **Blocked** | Automated component tests cover all transitions, including guarded cancellation while connecting; representative browser/WebView parity is unexecuted. |
 | 3 | One versioned HTTP endpoint and WebSocket path | **Pass (fixture scope)** | `/v1/fixture` and `/v1/events`; both clients share the component and boundary. |
-| 4 | Loopback/security/version/lifecycle/untrusted input | **Pass (automated fixture scope)** | End-to-end tests prove the Windows Tauri origin handshake, HTTP and WebSocket authorization/version rejection, origin rejection, cancellation acknowledgement, and normalized malformed/oversized input. The token is deliberately non-secret fixture material. |
+| 4 | Loopback/security/version/lifecycle/untrusted input | **Pass (automated fixture scope)** | End-to-end tests prove accepted Windows-origin HTTP and WebSocket requests, HTTP and WebSocket authorization/version rejection, HTTP and WebSocket origin rejection, cancellation acknowledgement, and normalized malformed/oversized input. The token is deliberately non-secret fixture material. |
 | 5 | No second Tauri business API | **Pass (static fixture scope)** | Empty permissions and a command-free `Builder`. |
 | 6 | Accessibility in both clients | **Blocked** | Semantic live status/alert, keyboard-native controls, focus, contrast, scaling, reduced motion and static text exist; representative browser/WebView accessibility validation is unexecuted. |
 | 7 | Reproducible Windows build/run | **Blocked** | A clean-checkout harness covers build/package and emits JSON, but no representative Windows result has been executed or reviewed. |

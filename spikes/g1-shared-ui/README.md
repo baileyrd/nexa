@@ -28,7 +28,7 @@ On a representative CPU-only Windows PC with supported Node.js, Rust, Microsoft 
 powershell -NoProfile -ExecutionPolicy Bypass -File spikes/g1-shared-ui/scripts/validate-windows.ps1
 ```
 
-The script uses both committed npm lockfiles and Cargo lockfile. It performs frontend `npm ci`, lint/typecheck, component tests and production build; runtime format/check/tests; desktop `npm ci`; a Tauri 2 Windows build/NSIS package; and package-size capture. It writes deterministic machine-readable pass/fail JSON to `evidence/windows-validation.json` (or `-OutputPath <path>`) and exits nonzero when any step fails.
+The script uses both committed npm lockfiles and Cargo lockfile. It performs frontend `npm ci`, lint/typecheck, component tests and production build; runtime format/check/tests; desktop `npm ci`; a Tauri 2 Windows build/NSIS package; and package-size capture. It writes the exact repository head, tool versions, step outcomes and durations, package sizes, and overall pass/fail status as machine-readable JSON to `evidence/windows-validation.json` (or `-OutputPath <path>`) and exits nonzero when any step fails.
 
 The harness is reproducible infrastructure, **not an executed Windows result**. It does not prove interactive same-machine browser/WebView parity, accessibility, startup, idle/active CPU or memory, reconnect timing, or cancellation timing. G1 stays blocked until those representative Windows observations and the script output are captured and reviewed on an exact PR head.
 

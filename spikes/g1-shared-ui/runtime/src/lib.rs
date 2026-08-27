@@ -52,6 +52,19 @@ pub fn app(token: &str) -> Router {
         .layer(cors)
 }
 fn authorized(headers: &HeaderMap, state: &AppState) -> Result<(), Response> {
+    let origin_ok = headers
+        .get(header::ORIGIN)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| ORIGINS.contains(&v));
+    if !origin_ok {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ErrorBody {
+                error: "origin rejected",
+            }),
+        )
+            .into_response());
+    }
     let bearer = format!("Bearer {}", state.token);
     if headers
         .get(header::AUTHORIZATION)

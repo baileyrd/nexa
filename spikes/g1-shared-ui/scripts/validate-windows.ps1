@@ -26,7 +26,19 @@ function Invoke-ValidationStep {
 $status = "pass"
 $errorMessage = $null
 $packages = @()
+$repositoryHead = $null
+$toolVersions = [ordered]@{}
 try {
+  $repositoryHead = (& git.exe -C (Resolve-Path (Join-Path $root "../..")).Path rev-parse HEAD).Trim()
+  if ($LASTEXITCODE -ne 0) { throw "Unable to determine the exact repository head" }
+  $toolVersions["node"] = (& node.exe --version).Trim()
+  if ($LASTEXITCODE -ne 0) { throw "Unable to determine the Node.js version" }
+  $toolVersions["npm"] = (& npm.cmd --version).Trim()
+  if ($LASTEXITCODE -ne 0) { throw "Unable to determine the npm version" }
+  $toolVersions["rustc"] = (& rustc.exe --version).Trim()
+  if ($LASTEXITCODE -ne 0) { throw "Unable to determine the rustc version" }
+  $toolVersions["cargo"] = (& cargo.exe --version).Trim()
+  if ($LASTEXITCODE -ne 0) { throw "Unable to determine the Cargo version" }
   Invoke-ValidationStep "frontend_npm_ci" "$root/frontend" "npm.cmd" @("ci")
   Invoke-ValidationStep "frontend_check" "$root/frontend" "npm.cmd" @("run", "check")
   Invoke-ValidationStep "frontend_component_tests" "$root/frontend" "npm.cmd" @("test")
@@ -48,8 +60,10 @@ try {
 $result = [ordered]@{
   schema_version = 1
   gate = "G1"
+  repository_head = $repositoryHead
   platform = [System.Environment]::OSVersion.VersionString
   architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+  tool_versions = $toolVersions
   cpu_only_required = $true
   started_utc = $started.ToString("o")
   finished_utc = [DateTime]::UtcNow.ToString("o")
