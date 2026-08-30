@@ -1,7 +1,7 @@
 # Nexa Project Status
 
 Status date: 2026-08-30
-Verified base `main` checkpoint: `0c523bf5e287ac6cbbd93c2d7b979ca25614b543` (PR #123 merge head)
+Verified base `main` checkpoint: `0c523bfe44665049c90c8ff8d3aff5faa9fe42f6` (PR #123 merge head)
 Authority checkpoint: Issue #114 owner decisions recorded by ADR-0069; the G0 reconciliation is merged
 
 This document is the concise current-state authority. Git history, accepted ADRs, and traceability preserve earlier checkpoints and evidence.
