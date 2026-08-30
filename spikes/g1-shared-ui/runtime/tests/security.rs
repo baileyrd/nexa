@@ -9,6 +9,16 @@ use tokio_tungstenite::{
 };
 use tower::ServiceExt;
 
+fn fixture_request(uri: &str) -> Request<Body> {
+    Request::builder()
+        .uri(uri)
+        .header("origin", "http://tauri.localhost")
+        .header("authorization", "Bearer test")
+        .header("nexa-protocol-version", "1")
+        .body(Body::empty())
+        .unwrap()
+}
+
 async fn websocket_request(origin: &str, token: &str, version: &str) -> (StatusCode, Vec<String>) {
     let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
         .await
@@ -119,6 +129,30 @@ async fn enforces_http_authorization_and_version() {
             .unwrap();
         assert_eq!(response.status(), expected);
     }
+}
+
+#[tokio::test(start_paused = true)]
+async fn hold_mode_remains_running_for_a_bounded_interactive_window() {
+    let app = nexa_g1_loopback_spike::app("test");
+    let request =
+        tokio::spawn(async move { app.oneshot(fixture_request("/v1/fixture?mode=hold")).await });
+    tokio::task::yield_now().await;
+    assert!(
+        !request.is_finished(),
+        "hold request completed before cancellation window"
+    );
+
+    tokio::time::advance(std::time::Duration::from_secs(60)).await;
+    assert_eq!(request.await.unwrap().unwrap().status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn rejects_unknown_fixture_mode() {
+    let response = nexa_g1_loopback_spike::app("test")
+        .oneshot(fixture_request("/v1/fixture?mode=unknown"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]

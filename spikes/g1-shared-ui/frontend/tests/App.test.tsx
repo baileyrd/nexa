@@ -8,7 +8,7 @@ class MockWebSocket {
   static instances: MockWebSocket[] = [];
   readyState = 0;
   onopen = () => {};
-  onmessage = () => {};
+  onmessage: (event: {data: unknown}) => void = () => {};
   onerror = () => {};
   onclose = () => {};
   send = vi.fn();
@@ -42,6 +42,23 @@ test('reports loading and success', async () => {
   expect(screen.getByRole('status')).toHaveTextContent('loading');
   resolveFetch(new Response(JSON.stringify({message: 'Deterministic fixture complete.'}), {status: 200}));
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('success'));
+});
+
+test('hold mode stays running until cancellation is acknowledged', async () => {
+  vi.stubGlobal('fetch', vi.fn((_url, init) => new Promise((_resolve, reject) => {
+    init.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+  })));
+  render(<App />);
+  socket().readyState = MockWebSocket.OPEN;
+  fireEvent.click(screen.getByRole('checkbox', {name: 'Hold for interactive cancellation'}));
+  fireEvent.click(screen.getByRole('button', {name: 'Run fixture'}));
+  expect(fetch).toHaveBeenCalledWith(expect.stringContaining('?mode=hold'), expect.anything());
+  expect(screen.getByRole('status')).toHaveTextContent('Running held fixture. Press Cancel.');
+
+  fireEvent.click(screen.getByRole('button', {name: 'Cancel'}));
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('awaiting acknowledgement'));
+  act(() => socket().onmessage({data: 'Cancellation acknowledged.'}));
+  expect(screen.getByRole('status')).toHaveTextContent('cancelledCancellation acknowledged.');
 });
 
 test('aborts safely without sending on a connecting socket', async () => {

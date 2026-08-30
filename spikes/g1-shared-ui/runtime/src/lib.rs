@@ -34,6 +34,10 @@ struct WsQuery {
     token: String,
     version: String,
 }
+#[derive(Default, Deserialize)]
+struct FixtureQuery {
+    mode: Option<String>,
+}
 pub fn app(token: &str) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(ORIGINS.map(|v| v.parse::<HeaderValue>().unwrap()))
@@ -97,9 +101,23 @@ fn authorized(headers: &HeaderMap, state: &AppState) -> Result<(), Response> {
 async fn fixture(
     State(state): State<AppState>,
     headers: HeaderMap,
+    Query(query): Query<FixtureQuery>,
 ) -> Result<Json<Fixture<'static>>, Response> {
     authorized(&headers, &state)?;
-    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    let duration = match query.mode.as_deref() {
+        None => std::time::Duration::from_millis(150),
+        Some("hold") => std::time::Duration::from_secs(60),
+        Some(_) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorBody {
+                    error: "unsupported fixture mode",
+                }),
+            )
+                .into_response())
+        }
+    };
+    tokio::time::sleep(duration).await;
     Ok(Json(Fixture {
         message: "Deterministic fixture complete.",
         protocol_version: VERSION,
