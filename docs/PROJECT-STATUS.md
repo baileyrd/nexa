@@ -1,16 +1,16 @@
 # Nexa Project Status
 
 Status date: 2026-08-30
-Verified base `main` checkpoint: `b49b15081f5afcb397b09186036d9ab6636f4a76` (PR #112 merge head)
-Authority checkpoint: Issue #114 owner decisions recorded by ADR-0069; this reconciliation PR is not recorded as merged
+Verified base `main` checkpoint: `9173ed152d7b1d5bb9831413862097076443be59` (PR #121 merge head)
+Authority checkpoint: Issue #114 owner decisions recorded by ADR-0069; the G0 reconciliation is merged
 
 This document is the concise current-state authority. Git history, accepted ADRs, and traceability preserve earlier checkpoints and evidence.
 
 ## Current program state
 
-**Architecture outcome: Tactical Pause — bounded evidence work only after reconciliation merges.**
+**Architecture outcome: Tactical Pause — G1 evidence gathering is recommended satisfied; candidate disposition is pending.**
 
-Issue #114 supplied the explicit owner review previously missing. [ADR-0069](adr/0069-owner-approved-v1-delivery-baseline.md) records those decisions and supersedes ADR-0068 only where they conflict. General product implementation remains paused. This documentation correction neither begins G1 nor changes implementation maturity.
+Issue #114 supplied the explicit owner review previously missing. [ADR-0069](adr/0069-owner-approved-v1-delivery-baseline.md) records those decisions and supersedes ADR-0068 only where they conflict. G0 is merged, and Issue #122 records the completed G1 evidence set and recommends that evidence gathering be treated as satisfied. General product implementation remains paused: candidate disposition requires a separate Chief Systems Architect decision, no G2 work is dispatched, and implementation maturity is unchanged.
 
 ## Governing route
 
@@ -26,11 +26,9 @@ LAN/Internet-remote access, hosted deployment, cloud sync, accounts/multi-user a
 
 ## Current work-selection and resume gate
 
-G0 is this authority reconciliation. It must be reviewed, green, and merged before any product increment resumes. It does not itself dispatch a spike.
+G0 is merged. Issue #122 has completed the separately dispatched G1 shared UI/loopback evidence gathering and recommends that its evidence gate be treated as satisfied. That recommendation does not select the candidates or dispatch further work.
 
-After G0 merges, the first and only selectable follow-on is a separately dispatched G1 shared UI/loopback suitability spike. Its evidence must cover identical browser/desktop behavior, the versioned HTTP/WebSocket boundary, loopback security, cancellation/reconnect, accessibility, Windows build, and resource/package measurements. Candidate success or failure requires a recorded authority update; spike code cannot silently become production architecture. G2 speech and G3 avatar spikes follow only through the roadmap gates.
-
-The Chief Systems Architect call is **Tactical Pause** outside the next eligible gate. The superseded open-ended Phase 5 sequence must not resume.
+The current resume gate is a separate Chief Systems Architect disposition of the G1 candidates and an explicit Continue, Redirect, or Tactical Pause decision. Until that decision is recorded, React/TypeScript/Vite, Tauri 2, and the fixture API remain candidates, no G2 or later work is dispatched, and **Tactical Pause** remains in force. The superseded open-ended Phase 5 sequence must not resume.
 
 ## Capability maturity and preserved evidence
 
@@ -40,11 +38,11 @@ Existing shared domain/event/NBP contracts, deterministic learning/tutor policie
 
 ADR-0069 and this reconciliation establish selected architecture/specification only. Every later increment identifies its blocker, governing authority, E2E step, maturity transition, and required evidence.
 
-## G1 evidence dispatch (2026-08-27)
+## G1 evidence chronology
 
-Issue #116 dispatched the authorized disposable shared UI/loopback suitability spike. Its evidence record is [`../spikes/g1-shared-ui/evidence/G1-EVIDENCE.md`](../spikes/g1-shared-ui/evidence/G1-EVIDENCE.md). Linux/headless automation covers frontend lint/typecheck, lifecycle component tests, production build, and end-to-end loopback HTTP/WebSocket security and cancellation tests. The first representative Windows harness run on merged `main` at `38bb0e71cda177c7ae9dc0afb81118ba4ee744c4` passed the frontend/runtime/desktop dependency steps and failed only when Tauri packaging found its default Windows icon absent. Issue #118 supplies an evidence-only repository icon; Windows evidence remains incomplete until the owner reruns the harness after that correction merges. G1 remains **blocked** pending the successful rerun and reviewed browser/WebView parity, accessibility, startup/CPU/memory/package, reconnect, and cancellation evidence. Candidate maturity and authority are unchanged, Tactical Pause remains in force, and G2 and later gates remain undispatched pending a separate authority decision.
+On 2026-08-27, Issue #116 dispatched the authorized disposable shared UI/loopback suitability spike. Its evidence record is [`../spikes/g1-shared-ui/evidence/G1-EVIDENCE.md`](../spikes/g1-shared-ui/evidence/G1-EVIDENCE.md). Linux/headless automation covered frontend lint/typecheck, lifecycle component tests, production build, and end-to-end loopback HTTP/WebSocket security and cancellation tests. The first representative Windows harness run on merged `main` at `38bb0e71cda177c7ae9dc0afb81118ba4ee744c4` passed the frontend/runtime/desktop dependency steps and failed only when Tauri packaging found its default Windows icon absent. At that historical checkpoint, Issue #118 supplied an evidence-only repository icon, and G1 remained blocked pending a successful rerun and reviewed browser/WebView parity, accessibility, startup/CPU/memory/package, reconnect, and cancellation evidence.
 
-Issue #120 adds only an opt-in, bounded hold mode to make the remaining interactive cancellation observation practical while preserving the normal fast fixture path. Automated coverage does not replace the owner's representative Windows execution and review. G1 remains blocked, candidate maturity is unchanged, and Tactical Pause and all G2+ exclusions remain in force.
+Issue #120 then added only an opt-in, bounded hold mode to make the remaining interactive cancellation observation practical while preserving the normal fast fixture path. At that historical checkpoint, automated coverage did not replace the still-outstanding owner Windows execution and review. Candidate maturity remained unchanged, and Tactical Pause and all G2+ exclusions remained in force.
 
 Issue #122 records the now-complete evidence set from exact `main` head `9173ed152d7b1d5bb9831413862097076443be59`. The Windows harness passed frontend, runtime, desktop dependency, Tauri release-build, and NSIS-package steps and produced a 1,848,941-byte installer. Separately, owner observation covered browser/Tauri parity, normal and held/cancelled flows, runtime disconnect/reconnect, keyboard/focus basics, approximate Task Manager idle/active CPU and memory, and human-observed startup/cancellation/reconnect thresholds of <0.5 seconds. The [G1 evidence record](../spikes/g1-shared-ui/evidence/G1-EVIDENCE.md) preserves the measurement precision and limitations and recommends that the G1 evidence gate be recorded as satisfied.
 

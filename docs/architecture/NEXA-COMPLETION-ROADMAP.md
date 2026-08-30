@@ -195,4 +195,4 @@ The outcome is explicitly Continue, Redirect, or Tactical Pause.
 
 ## Current next action
 
-Complete, review, and merge G0. Do not begin or dispatch G1 from this documentation change. After merge, only a separately dispatched G1 may receive Continue; all other work remains under Tactical Pause.
+Review and merge the Issue #122 G1 evidence record, then conduct the separate G1 candidate disposition and record Continue, Redirect, or Tactical Pause. Do not dispatch G2 from this evidence PR; Tactical Pause remains in force until the separate authority decision.
