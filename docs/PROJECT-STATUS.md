@@ -1,6 +1,6 @@
 # Nexa Project Status
 
-Status date: 2026-08-26
+Status date: 2026-08-30
 Verified base `main` checkpoint: `b49b15081f5afcb397b09186036d9ab6636f4a76` (PR #112 merge head)
 Authority checkpoint: Issue #114 owner decisions recorded by ADR-0069; this reconciliation PR is not recorded as merged
 
@@ -45,3 +45,7 @@ ADR-0069 and this reconciliation establish selected architecture/specification o
 Issue #116 dispatched the authorized disposable shared UI/loopback suitability spike. Its evidence record is [`../spikes/g1-shared-ui/evidence/G1-EVIDENCE.md`](../spikes/g1-shared-ui/evidence/G1-EVIDENCE.md). Linux/headless automation covers frontend lint/typecheck, lifecycle component tests, production build, and end-to-end loopback HTTP/WebSocket security and cancellation tests. The first representative Windows harness run on merged `main` at `38bb0e71cda177c7ae9dc0afb81118ba4ee744c4` passed the frontend/runtime/desktop dependency steps and failed only when Tauri packaging found its default Windows icon absent. Issue #118 supplies an evidence-only repository icon; Windows evidence remains incomplete until the owner reruns the harness after that correction merges. G1 remains **blocked** pending the successful rerun and reviewed browser/WebView parity, accessibility, startup/CPU/memory/package, reconnect, and cancellation evidence. Candidate maturity and authority are unchanged, Tactical Pause remains in force, and G2 and later gates remain undispatched pending a separate authority decision.
 
 Issue #120 adds only an opt-in, bounded hold mode to make the remaining interactive cancellation observation practical while preserving the normal fast fixture path. Automated coverage does not replace the owner's representative Windows execution and review. G1 remains blocked, candidate maturity is unchanged, and Tactical Pause and all G2+ exclusions remain in force.
+
+Issue #122 records the now-complete evidence set from exact `main` head `9173ed152d7b1d5bb9831413862097076443be59`. The Windows harness passed frontend, runtime, desktop dependency, Tauri release-build, and NSIS-package steps and produced a 1,848,941-byte installer. Separately, owner observation covered browser/Tauri parity, normal and held/cancelled flows, runtime disconnect/reconnect, keyboard/focus basics, approximate Task Manager idle/active CPU and memory, and human-observed startup/cancellation/reconnect thresholds of <0.5 seconds. The [G1 evidence record](../spikes/g1-shared-ui/evidence/G1-EVIDENCE.md) preserves the measurement precision and limitations and recommends that the G1 evidence gate be recorded as satisfied.
+
+This is an evidence recommendation, not an architecture disposition. React/TypeScript/Vite, Tauri 2, and the fixture API remain candidates; maturity is unchanged. The Chief Systems Architect must separately select or reject the candidates and decide Continue, Redirect, or Tactical Pause. Until then, G2 and all later gates remain undispatched and Tactical Pause remains in force outside this evidence-recording increment.

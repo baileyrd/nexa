@@ -1,6 +1,6 @@
 # Nexa Specification Registry
 
-Status date: 2026-08-26
+Status date: 2026-08-30
 
 This registry is the navigation and governance authority for Nexa specifications, architecture baselines, accepted ADRs, and active program controls.
 
@@ -178,3 +178,5 @@ Local correctness never substitutes for system-level progress.
 The disposable [G1 shared UI/loopback evidence record](../spikes/g1-shared-ui/evidence/G1-EVIDENCE.md) is assessment evidence only. Linux/headless automation covers frontend checks, lifecycle tests/build, and end-to-end loopback security/cancellation tests. The first representative Windows validation reached Tauri packaging after all preceding dependency steps passed, then failed because the default Windows icon was absent. Issue #118 adds an evidence-only repository icon, but Windows evidence remains incomplete until the owner reruns the harness after merge. G1 remains **blocked** on that rerun and representative Windows browser/WebView parity, accessibility, startup/CPU/memory/package, reconnect, and cancellation evidence. It does not select React/TypeScript/Vite, Tauri 2, or the fixture API as production architecture; candidate maturity and Tactical Pause remain unchanged pending a separate authority update.
 
 Issue #120 adds bounded, opt-in cancellation testability infrastructure to that disposable fixture. It does not change authority or maturity and does not satisfy the remaining owner-executed Windows evidence gate.
+
+Issue #122 records the successful exact-head Windows harness and the separate owner-observed browser/Tauri parity, lifecycle, accessibility-basics, resource, package-size, and timing evidence at their stated precision. The criterion-level record evaluates every G1 criterion and recommends that the evidence gate be treated as satisfied. This assessment does not select the candidates, change their maturity, or authorize production use of the fixture API. Candidate disposition and any G2 Continue decision remain a separate Chief Systems Architect authority action; Tactical Pause and all G2+ exclusions remain active meanwhile.
