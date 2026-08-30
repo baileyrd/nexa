@@ -1,7 +1,7 @@
 # Nexa Completion Roadmap
 
 Status: Approved delivery control
-Date: 2026-08-26
+Date: 2026-08-30
 
 ## Purpose
 
@@ -23,11 +23,17 @@ No implementation enters the queue merely because another narrow contract/ADR ca
 
 ## G0–G2 — Authority, shared client, and speech evidence
 
-G0 is the Issue #114 reconciliation and does not change implementation maturity. It must be reviewed, green, and merged before work resumes.
+G0 was the Issue #114 reconciliation and did not change implementation maturity. It is merged.
 
 G1 is the only first separately dispatchable follow-on: prove identical shared frontend behavior in the same-machine browser and Tauri 2 Windows shell candidate over one versioned loopback HTTP/WebSocket API. Evidence covers loopback security, cancellation/reconnect, accessibility, Windows build, startup/CPU/memory/package impact, and parity. Failure removes the candidate and returns selection to owner authority.
 
 G2 separately proves the bundled CPU speech candidate, including microphone/output devices, recognition and synthesis quality, interruption/cancellation, latency/resources, packaging, licensing, privacy, and accessible text/caption fallback. Sherpa-ONNX remains a candidate; failure invokes the ADR-0069 fallback/reselection path.
+
+### G1 evidence disposition recommendation (Issue #122)
+
+The [criterion-level G1 record](../../spikes/g1-shared-ui/evidence/G1-EVIDENCE.md) now includes the successful representative Windows harness at exact `main` head `9173ed152d7b1d5bb9831413862097076443be59` and separately identified owner-observed parity, cancellation/reconnect, accessibility-basics, resource, package-size, and timing evidence. It recommends **G1 evidence satisfied; candidate disposition pending separate authority review**.
+
+This recommendation neither selects React/TypeScript/Vite or Tauri 2 nor promotes the fixture API into production architecture. It does not dispatch G2 or change maturity. Tactical Pause remains in force outside this evidence-recording increment, and G2+ remain undispatched until the Chief Systems Architect separately records candidate disposition and Continue, Redirect, or Tactical Pause.
 
 ## G3–G7 — 2D evidence and concrete vertical integration
 
@@ -189,4 +195,4 @@ The outcome is explicitly Continue, Redirect, or Tactical Pause.
 
 ## Current next action
 
-Complete, review, and merge G0. Do not begin or dispatch G1 from this documentation change. After merge, only a separately dispatched G1 may receive Continue; all other work remains under Tactical Pause.
+Review and merge the Issue #122 G1 evidence record, then conduct the separate G1 candidate disposition and record Continue, Redirect, or Tactical Pause. Do not dispatch G2 from this evidence PR; Tactical Pause remains in force until the separate authority decision.
