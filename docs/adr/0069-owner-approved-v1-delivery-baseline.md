@@ -4,6 +4,14 @@ Status: Accepted
 Date: 2026-08-26  
 Decision owner: repository owner
 
+## G1 disposition amendment — 2026-08-30
+
+After reviewing the completed Issue #122 evidence set, the owner/Chief Systems Architect accepts the G1 evidence gate as satisfied and selects React + TypeScript + Vite as the shared v1 frontend, Tauri 2 as the Windows desktop shell, and one versioned same-machine loopback HTTP/WebSocket business boundary between the identical shared frontend and local Rust runtime. Tauri commands MUST NOT form a second business API. Same-machine browser/desktop parity, loopback-only access, and the G1 security, accessibility, and lifecycle constraints carry into production architecture.
+
+The G1 fixture remains disposable evidence and is not promoted to production implementation. This selection does not establish Runtime Integrated, Concrete Adapter Implemented, System Verified, User Accepted, or Release Ready maturity.
+
+The recorded program decision is **Continue to G2** for the bounded CPU-only speech evidence gate below. Sherpa-ONNX remains a candidate until that gate passes. Tactical Pause remains in force outside G2, and G3 and all later gates remain undispatched. This authority-recording amendment implements no G2 work.
+
 ## Context and authority
 
 The tactical pause exposed that ADR-0068 and related authorities had been merged without the explicit owner review they claimed or implied. On 2026-08-26 the owner supplied fifteen explicit decisions in Issue #114. This ADR records those decisions without treating prior CI, merge history, or technical research as owner approval.

@@ -43,7 +43,7 @@ The following remain mandatory:
 ```text
 identical shared frontend
   |-- same-machine browser
-  `-- Tauri 2 Windows shell candidate
+  `-- Tauri 2 Windows shell
               |
       versioned loopback HTTP/WebSocket API
               |
@@ -54,11 +54,11 @@ identical shared frontend
  state      content      adapter     + synchronized 2D
 ```
 
-React/TypeScript/Vite, Tauri 2, Sherpa-ONNX, and Rive are evidence-gated candidates, not selected production architecture until their independent gates pass. The runtime is authoritative for business behavior and state. Tauri commands never form a second business API. Nexa bundles no LLM weights or inference runtime.
+React/TypeScript/Vite, Tauri 2, and the single versioned same-machine loopback HTTP/WebSocket boundary are selected v1 architecture after the G1 gate. Sherpa-ONNX and Rive remain evidence-gated candidates. The runtime is authoritative for business behavior and state. Tauri commands never form a second business API. Nexa bundles no LLM weights or inference runtime.
 
 ## 5. Application boundary
 
-The identical shared frontend is the learner-facing boundary in both the same-machine browser and the evidence-gated Tauri 2 Windows shell. Its production composition location is selected only after G1 evidence and an authority update.
+The identical React/TypeScript/Vite shared frontend is the learner-facing boundary in both the same-machine browser and the selected Tauri 2 Windows shell. Both use the single versioned same-machine loopback HTTP/WebSocket business boundary; later implementation must establish the production composition rather than promote the disposable G1 fixture.
 
 It owns:
 

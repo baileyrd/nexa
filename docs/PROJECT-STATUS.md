@@ -1,16 +1,16 @@
 # Nexa Project Status
 
 Status date: 2026-08-30
-Verified base `main` checkpoint: `9173ed152d7b1d5bb9831413862097076443be59` (PR #121 merge head)
+Verified base `main` checkpoint: `0c523bf5e287ac6cbbd93c2d7b979ca25614b543` (PR #123 merge head)
 Authority checkpoint: Issue #114 owner decisions recorded by ADR-0069; the G0 reconciliation is merged
 
 This document is the concise current-state authority. Git history, accepted ADRs, and traceability preserve earlier checkpoints and evidence.
 
 ## Current program state
 
-**Architecture outcome: Tactical Pause — G1 evidence gathering is recommended satisfied; candidate disposition is pending.**
+**Architecture outcome: Continue to G2 — G1 evidence is satisfied and its v1 architecture candidates are selected.**
 
-Issue #114 supplied the explicit owner review previously missing. [ADR-0069](adr/0069-owner-approved-v1-delivery-baseline.md) records those decisions and supersedes ADR-0068 only where they conflict. G0 is merged, and Issue #122 records the completed G1 evidence set and recommends that evidence gathering be treated as satisfied. General product implementation remains paused: candidate disposition requires a separate Chief Systems Architect decision, no G2 work is dispatched, and implementation maturity is unchanged.
+Issue #114 supplied the explicit owner review previously missing. [ADR-0069](adr/0069-owner-approved-v1-delivery-baseline.md) records those decisions and supersedes ADR-0068 only where they conflict. G0 is merged, and Issue #122 records the completed G1 evidence set. On 2026-08-30 the owner/Chief Systems Architect accepted G1 as satisfied, selected React/TypeScript/Vite, Tauri 2, and the single versioned same-machine loopback HTTP/WebSocket boundary for v1, and recorded **Continue to G2**. This authority update dispatches no implementation itself; G2 may be separately dispatched, general product implementation remains paused outside G2, and G3+ remain undispatched.
 
 ## Governing route
 
@@ -20,15 +20,15 @@ Read [`../CHATGPT_WORKFLOW.md`](../CHATGPT_WORKFLOW.md), [`../AGENTS.md`](../AGE
 
 One local learner uses identical Windows desktop and same-machine browser clients against one local Rust runtime and authoritative SQLite state. The release path completes Networking Fundamentals / TCP Connection Establishment through the separately installed graphical LM Studio reference server, bundled CPU-capable speech, and a synchronized animated 2D tutor.
 
-The shared frontend candidate is React/TypeScript/Vite packaged by a Tauri 2 candidate shell over one versioned loopback HTTP/WebSocket business API. Sherpa-ONNX and Rive remain evidence-gated candidates. Nexa bundles no LLM weights or inference runtime.
+The selected shared frontend is React/TypeScript/Vite packaged by a Tauri 2 Windows shell over one versioned same-machine loopback HTTP/WebSocket business API. Sherpa-ONNX and Rive remain evidence-gated candidates. Nexa bundles no LLM weights or inference runtime.
 
 LAN/Internet-remote access, hosted deployment, cloud sync, accounts/multi-user administration, labs/tools, broad providers, dynamic routing/fallback, dedicated vector infrastructure unless demonstrated necessary, durable event brokerage, and 3D release integration remain deferred.
 
 ## Current work-selection and resume gate
 
-G0 is merged. Issue #122 has completed the separately dispatched G1 shared UI/loopback evidence gathering and recommends that its evidence gate be treated as satisfied. That recommendation does not select the candidates or dispatch further work.
+G0 is merged. Issue #122 completed the separately dispatched G1 shared UI/loopback evidence gathering, and the owner/Chief Systems Architect has accepted that gate and selected its v1 architecture. The disposable G1 fixture is preserved as evidence, not promoted to production implementation.
 
-The current resume gate is a separate Chief Systems Architect disposition of the G1 candidates and an explicit Continue, Redirect, or Tactical Pause decision. Until that decision is recorded, React/TypeScript/Vite, Tauri 2, and the fixture API remain candidates, no G2 or later work is dispatched, and **Tactical Pause** remains in force. The superseded open-ended Phase 5 sequence must not resume.
+The current decision is **Continue to G2**. Only the bounded CPU-only speech evidence gate defined by ADR-0069 and the active roadmaps may be separately dispatched. Sherpa-ONNX remains a candidate until G2 passes; failure follows ADR-0069's recognition fallback and separate TTS-selection route. **Tactical Pause** remains in force outside G2, G3+ remain undispatched, and the superseded open-ended Phase 5 sequence must not resume.
 
 ## Capability maturity and preserved evidence
 
@@ -46,4 +46,4 @@ Issue #120 then added only an opt-in, bounded hold mode to make the remaining in
 
 Issue #122 records the now-complete evidence set from exact `main` head `9173ed152d7b1d5bb9831413862097076443be59`. The Windows harness passed frontend, runtime, desktop dependency, Tauri release-build, and NSIS-package steps and produced a 1,848,941-byte installer. Separately, owner observation covered browser/Tauri parity, normal and held/cancelled flows, runtime disconnect/reconnect, keyboard/focus basics, approximate Task Manager idle/active CPU and memory, and human-observed startup/cancellation/reconnect thresholds of <0.5 seconds. The [G1 evidence record](../spikes/g1-shared-ui/evidence/G1-EVIDENCE.md) preserves the measurement precision and limitations and recommends that the G1 evidence gate be recorded as satisfied.
 
-This is an evidence recommendation, not an architecture disposition. React/TypeScript/Vite, Tauri 2, and the fixture API remain candidates; maturity is unchanged. The Chief Systems Architect must separately select or reject the candidates and decide Continue, Redirect, or Tactical Pause. Until then, G2 and all later gates remain undispatched and Tactical Pause remains in force outside this evidence-recording increment.
+That record was an evidence recommendation at the time it was merged. On 2026-08-30 the owner/Chief Systems Architect separately accepted G1, selected React/TypeScript/Vite, Tauri 2, and the single versioned same-machine loopback HTTP/WebSocket boundary, and recorded **Continue to G2**. The fixture remains disposable evidence rather than production implementation. Architecture selection does not advance Runtime Integrated, Concrete Adapter Implemented, System Verified, User Accepted, or Release Ready maturity; Tactical Pause remains outside G2 and G3+ remain undispatched.

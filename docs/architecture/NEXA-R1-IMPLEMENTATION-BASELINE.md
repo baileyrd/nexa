@@ -108,7 +108,7 @@ No infinite wait is allowed on the primary learner path.
 
 ### 3.9 Shared clients and accessibility
 
-Both release clients use one shared frontend over one versioned loopback HTTP/WebSocket business API. React/TypeScript/Vite and the Tauri 2 Windows shell remain candidates until G1 passes and authority is updated; Tauri commands never become a second business API.
+Both release clients use one React/TypeScript/Vite shared frontend over one versioned same-machine loopback HTTP/WebSocket business API, with Tauri 2 as the Windows shell. G1 selected this architecture; its disposable fixture remains evidence rather than production implementation. Tauri commands never become a second business API.
 
 Both clients must provide keyboard-only operation, visible focus, usable scaling/high contrast, semantic status/error communication, text equivalents and captions/transcripts, reduced-motion handling, interruption controls, and equivalent recovery behavior. Required speech and animated 2D embodiment supplement rather than displace the accessible text path.
 
