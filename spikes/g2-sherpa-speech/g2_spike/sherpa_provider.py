@@ -39,12 +39,14 @@ class SherpaProvider:
         return RecognitionResult(request.operation_id, stream.result.text.strip())
 
     def synthesize(self, request: SynthesisRequest, cancelled: Event) -> SynthesisResult:
+        # A prior run must never make a cancelled request appear published.
+        request.output_wav.unlink(missing_ok=True)
         if cancelled.is_set():
             raise SpeechCancelled(request.operation_id)
         audio = self._tts.generate(request.text, sid=0, speed=1.0)
         if cancelled.is_set():
+            request.output_wav.unlink(missing_ok=True)
             raise SpeechCancelled(request.operation_id)
         request.output_wav.parent.mkdir(parents=True, exist_ok=True)
         sf.write(request.output_wav, audio.samples, audio.sample_rate, subtype="PCM_16")
         return SynthesisResult(request.operation_id, request.output_wav, audio.sample_rate, len(audio.samples))
-

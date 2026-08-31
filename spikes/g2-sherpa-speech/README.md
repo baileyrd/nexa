@@ -22,7 +22,8 @@ speech call fails.
 1. Use a clean checkout at the exact PR head on the representative CPU-only PC.
 2. Select one English Sherpa transducer ASR model and one VITS TTS model. Copy
    `models.example.json`, then record exact archive/model names, canonical source
-   URLs, licenses, and SHA-256 values. Extract them under `models/`, copy
+   URLs, licenses, and one path plus SHA-256 for every archive and installed model
+   artifact. Extract them under `models/`, copy
    `config.example.json`, and adjust paths only. Do not use a substitute engine.
 3. Record the three governed recognition utterances into the WAV paths in
    `fixtures.json` (mono PCM). Place any audible WAV at
@@ -37,7 +38,12 @@ speech call fails.
    owner-only field. Repeat active/idle Task Manager observations and cancellation
    trials as documented there.
 
-The script intentionally stops on incomplete provenance. Inference selects the
+The script rejects blank, placeholder, malformed, missing, duplicate, or
+hash-mismatched manifest artifacts. It writes verified per-artifact, archive,
+extracted-model, virtual-environment/package, and combined byte counts to the
+ignored `footprint.json`. Its clean-tree preflight fails on pre-existing tracked
+or non-ignored changes; its result separately confirms that all generated local
+evidence stayed ignored. Inference selects the
 ONNX CPU provider and opens no remote inference connection. `pip` and model setup
 do require network access; microphone recordings, transcripts, device names, and
 generated voice are local potentially sensitive evidence and must not be committed.
@@ -45,9 +51,11 @@ generated voice are local potentially sensitive evidence and must not be committ
 ## Known fixture limits
 
 Sherpa's offline Python recognition and VITS calls are synchronous. Cancellation
-is checked before and after each native call, so this fixture can prove queued or
-post-call suppression but **cannot prove prompt interruption inside an active
-native inference call**. That is an explicit G2 limitation, not success evidence.
+is checked before and after each native call. `g2_spike.trial` requests cancellation
+during capture, recognition, synthesis, and playback, records request/terminal
+timing, output publication/queue state, and cleanup, and calls `sounddevice.stop()`
+for fixture-controlled capture/playback. It **cannot interrupt active native
+inference**; those reports must retain `native_call_interruptible: false` and must
+not be interpreted as success. Cancelled synthesis never publishes a WAV.
 The VITS path emits waveform timing but no phoneme/viseme alignment; usefulness
 for later lip-sync must be judged from the recorded timing evidence and limitation.
-
