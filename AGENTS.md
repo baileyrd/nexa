@@ -18,7 +18,7 @@ ADR-0068 is preserved historical authority and remains applicable only where ADR
 
 Use `Concept -> Architecture Defined -> Specification Approved -> Contract Implemented -> Runtime Integrated -> Concrete Adapter Implemented -> System Verified -> User Accepted -> Release Ready`. Existing contract/headless evidence retains its factual maturity; do not infer system, user, or release maturity.
 
-The owner-approved route is recorded in ADR-0069. General product implementation is under **Tactical Pause**. After this reconciliation is reviewed and merged, only the separately dispatched G1 shared React/TypeScript/Vite + Tauri 2 and versioned loopback HTTP/WebSocket suitability spike may receive **Continue**. These technologies, Sherpa-ONNX, and Rive remain candidates until their gates pass; spike evidence cannot silently select production architecture.
+The owner-approved route is recorded in ADR-0069. G1 evidence is satisfied, and React/TypeScript/Vite, Tauri 2, and the single versioned same-machine loopback HTTP/WebSocket boundary are selected for v1. **Continue to G2** authorizes only a separately dispatched bounded speech evidence gate; general product implementation remains under **Tactical Pause**, and G3+ remain undispatched. Sherpa-ONNX and Rive remain candidates until their gates pass; the disposable G1 fixture remains evidence and is not production implementation.
 
 Every implementation increment must state its release blocker, governing authority, concrete E2E step, maturity before/after, and required evidence. The Chief Systems Architect records Continue, Redirect, or Tactical Pause whenever authority, deferrals, maturity, or the finite release route diverges.
 
@@ -50,7 +50,7 @@ Codex implements and validates bounded tasks; it does not independently redefine
 - `crates/nexa-3d`: retained non-v1 renderer/runtime foundation.
 - `crates/nexa-labs`: retained later-capability foundation, not a v1 gate.
 - `apps/nexa-headless`: test/integration composition, not either released learner client.
-- the shared frontend, desktop shell, and local runtime composition locations are selected only after G1 evidence and an authority update.
+- the selected shared frontend, desktop shell, and local runtime production composition locations must be established by later implementation authority; the disposable G1 fixture remains evidence only.
 - `tools/`, `content/`, `assets/`, and `docs/`: validators, governed inputs, assets, and authority/evidence.
 
 A `.gitkeep`-only boundary is planned, not implemented. Domain-facing crates remain independent of UI, OS, async runtime, databases, networking, renderers, and concrete providers. Tutor/model output is untrusted until admission and never selects renderer primitives or host authority.

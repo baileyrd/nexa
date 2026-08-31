@@ -108,7 +108,7 @@ No infinite wait is allowed on the primary learner path.
 
 ### 3.9 Shared clients and accessibility
 
-Both release clients use one shared frontend over one versioned loopback HTTP/WebSocket business API. React/TypeScript/Vite and the Tauri 2 Windows shell remain candidates until G1 passes and authority is updated; Tauri commands never become a second business API.
+Both release clients use one React/TypeScript/Vite shared frontend over one versioned same-machine loopback HTTP/WebSocket business API, with Tauri 2 as the Windows shell. G1 selected this architecture; its disposable fixture remains evidence rather than production implementation. Tauri commands never become a second business API.
 
 Both clients must provide keyboard-only operation, visible focus, usable scaling/high contrast, semantic status/error communication, text equivalents and captions/transcripts, reduced-motion handling, interruption controls, and equivalent recovery behavior. Required speech and animated 2D embodiment supplement rather than displace the accessible text path.
 
@@ -215,9 +215,11 @@ R1 is approved as a governing v1 baseline. Current work selection is controlled 
 
 1. this baseline and `NEXA-ARCH-002` are registered as current v1 authorities;
 2. ADR-0069 is registered and ADR-0068 is preserved only for non-conflicting scope;
-3. project status/roadmap terminology is reconciled so older qualified phase closures are not mistaken for product maturity;
-4. blocking deferrals are dispositioned consistently with this baseline;
-5. G0 is reviewed, green, and merged on its exact final documentation head before a separately dispatched G1 may receive Continue.
+3. G0 is reviewed, green, and merged on its exact final documentation head;
+4. G1 evidence is accepted, and React/TypeScript/Vite, Tauri 2, and one versioned same-machine loopback HTTP/WebSocket business boundary are selected at Architecture Defined / Specification Approved maturity;
+5. the disposable G1 fixture remains evidence rather than production implementation and does not advance Runtime Integrated, Concrete Adapter Implemented, or system maturity;
+6. **Continue to G2** authorizes only a separately dispatched bounded CPU-only speech evidence gate; Sherpa-ONNX remains a candidate until that gate passes;
+7. **Tactical Pause** remains in force outside G2, and G3+ remain undispatched.
 
 Those are convergence/recording tasks, not new product-specification design tasks.
 

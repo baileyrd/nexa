@@ -25,15 +25,15 @@ No implementation enters the queue merely because another narrow contract/ADR ca
 
 G0 was the Issue #114 reconciliation and did not change implementation maturity. It is merged.
 
-G1 is the only first separately dispatchable follow-on: prove identical shared frontend behavior in the same-machine browser and Tauri 2 Windows shell candidate over one versioned loopback HTTP/WebSocket API. Evidence covers loopback security, cancellation/reconnect, accessibility, Windows build, startup/CPU/memory/package impact, and parity. Failure removes the candidate and returns selection to owner authority.
+G1 proved identical shared frontend behavior in the same-machine browser and Tauri 2 Windows shell candidate over one versioned loopback HTTP/WebSocket API. Its accepted evidence covers loopback security, cancellation/reconnect, accessibility, Windows build, startup/CPU/memory/package impact, and parity. React/TypeScript/Vite, Tauri 2, and the single versioned same-machine loopback HTTP/WebSocket boundary are now selected for v1; the disposable fixture remains evidence rather than production implementation.
 
 G2 separately proves the bundled CPU speech candidate, including microphone/output devices, recognition and synthesis quality, interruption/cancellation, latency/resources, packaging, licensing, privacy, and accessible text/caption fallback. Sherpa-ONNX remains a candidate; failure invokes the ADR-0069 fallback/reselection path.
 
-### G1 evidence disposition recommendation (Issue #122)
+### G1 evidence and disposition (Issues #122 and #124)
 
-The [criterion-level G1 record](../../spikes/g1-shared-ui/evidence/G1-EVIDENCE.md) now includes the successful representative Windows harness at exact `main` head `9173ed152d7b1d5bb9831413862097076443be59` and separately identified owner-observed parity, cancellation/reconnect, accessibility-basics, resource, package-size, and timing evidence. It recommends **G1 evidence satisfied; candidate disposition pending separate authority review**.
+The [criterion-level G1 record](../../spikes/g1-shared-ui/evidence/G1-EVIDENCE.md) now includes the successful representative Windows harness at exact `main` head `9173ed152d7b1d5bb9831413862097076443be59` and separately identified owner-observed parity, cancellation/reconnect, accessibility-basics, resource, package-size, and timing evidence. At its merge checkpoint, it recommended **G1 evidence satisfied; candidate disposition pending separate authority review**.
 
-This recommendation neither selects React/TypeScript/Vite or Tauri 2 nor promotes the fixture API into production architecture. It does not dispatch G2 or change maturity. Tactical Pause remains in force outside this evidence-recording increment, and G2+ remain undispatched until the Chief Systems Architect separately records candidate disposition and Continue, Redirect, or Tactical Pause.
+That recommendation was assessment evidence, not by itself architecture selection. On 2026-08-30 the owner/Chief Systems Architect accepted the gate, selected React/TypeScript/Vite, Tauri 2, and the single versioned same-machine loopback HTTP/WebSocket boundary, and recorded **Continue to G2**. The fixture remains disposable evidence, and selection does not advance Runtime Integrated, Concrete Adapter Implemented, System Verified, User Accepted, or Release Ready maturity. Tactical Pause remains outside the bounded G2 gate, and G3+ remain undispatched.
 
 ## G3–G7 — 2D evidence and concrete vertical integration
 
@@ -195,4 +195,4 @@ The outcome is explicitly Continue, Redirect, or Tactical Pause.
 
 ## Current next action
 
-Review and merge the Issue #122 G1 evidence record, then conduct the separate G1 candidate disposition and record Continue, Redirect, or Tactical Pause. Do not dispatch G2 from this evidence PR; Tactical Pause remains in force until the separate authority decision.
+After this authority update merges, separately dispatch the bounded G2 CPU-only speech evidence gate. Sherpa-ONNX remains only a candidate until G2 passes; apply ADR-0069's fallback route if it fails. Keep Tactical Pause in force outside G2 and do not dispatch G3 or later work.

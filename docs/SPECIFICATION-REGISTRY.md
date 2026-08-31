@@ -46,7 +46,7 @@ Conflicts are reported and resolved explicitly; code does not silently redefine 
 | NEXA-ARCH-002 | [Nexa v1 Release Architecture](architecture/NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md) | Approved, reconciled by ADR-0069 | Governing v1 system architecture |
 | NEXA-V1 | [Nexa v1 Product Definition and Release Boundary](architecture/NEXA-V1-DEFINITION.md) | Approved through NEXA-ARCH-002/R1 baseline | First releasable learner outcome and acceptance boundary |
 | NEXA-R1 | [Nexa R1 Implementation Baseline](architecture/NEXA-R1-IMPLEMENTATION-BASELINE.md) | Approved | Cross-cutting v1 requirements |
-| ADR-0069 | [Owner-approved v1 delivery baseline](adr/0069-owner-approved-v1-delivery-baseline.md) | Accepted | Current owner-approved clients, runtime, providers, embodiment, deferrals, and finite route |
+| ADR-0069 | [Owner-approved v1 delivery baseline](adr/0069-owner-approved-v1-delivery-baseline.md) | Accepted; G1 disposition amended 2026-08-30 | Current owner-approved clients, runtime, providers, embodiment, deferrals, and finite route |
 | ADR-0068 | [Historical R2 walking-skeleton baseline](adr/0068-v1-r2-walking-skeleton-baseline.md) | Superseded only for conflicts | Preserved historical and non-conflicting decisions |
 | G0–G9 roadmap | [Nexa Completion Roadmap](architecture/NEXA-COMPLETION-ROADMAP.md) | Approved for delivery control | Dependency-driven route from rebaseline to release |
 | Rebaseline gates | [Architecture Rebaseline and Program-Integrity Gates](governance/ARCHITECTURE-REBASELINE-GATES.md) | Approved project governance | Periodic whole-system review and stop/redirect/continue control |
@@ -105,7 +105,7 @@ If one of these supplements is insufficient during the v1 route, implementation 
 | 11 | NEXA-3D-REF-001 | Canonical 3D reference | Baseline Draft visual authority | assets |
 | 11 | NEXA-3D-RUNTIME-001 | 3D validation runtime | Runtime Integrated in viewer/validator slice | `nexa-3d`, viewer, validator |
 | 12 | NEXA-ORCH-001 | Session orchestration | Lifecycle/cancellation contract/runtime foundations + approved R1 complete-workflow supplement | `nexa-orchestrator`, `nexa-orchestrator-runtime`, apps |
-| 13 | NEXA-UX-001 (R1 supplement) | Learner UX | Specification Approved for v1 via R1 baseline | Shared frontend/desktop-shell locations selected only after G1 evidence and authority update |
+| 13 | NEXA-UX-001 (R1 supplement) | Learner UX | Specification Approved for v1 via R1 baseline; G1 architecture selected | React/TypeScript/Vite shared frontend, Tauri 2 desktop shell, and one versioned same-machine loopback HTTP/WebSocket boundary |
 | 15 | NEXA-DATA-001 (R1 supplement) | Data/persistence | Specification Approved for v1 via R1 baseline + ADR-0069 | `nexa-storage` |
 | 16 | NEXA-SEC-001 (R1 supplement) | Security | Specification Approved for v1 via R1 baseline | cross-cutting/adapters/app |
 | 17 | NEXA-PRIV-001 (R1 supplement) | Privacy | Specification Approved for v1 via R1 baseline | cross-cutting/adapters/app |
@@ -157,7 +157,7 @@ Reusable lessons are also preserved in the Atlas Engineering Standards Library; 
 
 ## Active delivery control
 
-The current delivery path is [`architecture/NEXA-COMPLETION-ROADMAP.md`](architecture/NEXA-COMPLETION-ROADMAP.md). General implementation is under Tactical Pause. G0 is merged, and Issue #122 recommends the completed G1 evidence gathering be treated as satisfied. Candidate disposition and any Continue, Redirect, or Tactical Pause decision remain a separate Chief Systems Architect authority action; no G2 or later work is dispatched meanwhile.
+The current delivery path is [`architecture/NEXA-COMPLETION-ROADMAP.md`](architecture/NEXA-COMPLETION-ROADMAP.md). G1 evidence is accepted, and React/TypeScript/Vite, Tauri 2, and the single versioned same-machine loopback HTTP/WebSocket boundary are selected v1 architecture. The owner/Chief Systems Architect records **Continue to G2** for a separately dispatched bounded CPU-only speech evidence gate. General implementation remains under Tactical Pause outside G2, and G3+ remain undispatched.
 
 Every increment must trace to a finite-route blocker, cite governing authority, identify its concrete E2E step and maturity transition, and produce evidence appropriate to that transition. Existing contract/headless evidence is not system, user, or release evidence.
 
@@ -179,4 +179,4 @@ The disposable [G1 shared UI/loopback evidence record](../spikes/g1-shared-ui/ev
 
 Issue #120 then added bounded, opt-in cancellation testability infrastructure to that disposable fixture. It did not change authority or maturity and, at that historical checkpoint, did not satisfy the remaining owner-executed Windows evidence gate.
 
-Issue #122 records the successful exact-head Windows harness and the separate owner-observed browser/Tauri parity, lifecycle, accessibility-basics, resource, package-size, and timing evidence at their stated precision. The criterion-level record evaluates every G1 criterion and recommends that the evidence gate be treated as satisfied. This assessment does not select the candidates, change their maturity, or authorize production use of the fixture API. Candidate disposition and any G2 Continue decision remain a separate Chief Systems Architect authority action; Tactical Pause and all G2+ exclusions remain active meanwhile.
+Issue #122 records the successful exact-head Windows harness and the separate owner-observed browser/Tauri parity, lifecycle, accessibility-basics, resource, package-size, and timing evidence at their stated precision. The criterion-level record evaluates every G1 criterion and recommended that the evidence gate be treated as satisfied. On 2026-08-30 the owner/Chief Systems Architect separately accepted G1, selected React/TypeScript/Vite, Tauri 2, and the single versioned same-machine loopback HTTP/WebSocket boundary, and recorded **Continue to G2**. The fixture remains evidence rather than production implementation, selection does not advance implementation or system maturity, Tactical Pause remains outside G2, and G3+ remain undispatched.
