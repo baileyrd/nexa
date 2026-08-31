@@ -90,11 +90,19 @@ def footprint(root: Path, manifest: dict[str, object], verified: list[dict[str, 
     if not isinstance(archives, list):
         raise ValueError("archives must be an array")
     archive_rows = []
+    seen_archives: set[Path] = set()
     for index, item in enumerate(archives):
         if not isinstance(item, dict):
             raise ValueError(f"archives[{index}] must be an object")
         relative = _required(item.get("path"), f"archives[{index}].path")
         path = (root / relative).resolve()
+        try:
+            path.relative_to(root.resolve())
+        except ValueError as error:
+            raise ValueError(f"archives[{index}].path escapes the spike root") from error
+        if path in seen_archives:
+            raise ValueError(f"duplicate archive path: {relative}")
+        seen_archives.add(path)
         if not path.is_file():
             raise ValueError(f"archive is not a file: {relative}")
         expected = _required(item.get("sha256"), f"archives[{index}].sha256").lower()

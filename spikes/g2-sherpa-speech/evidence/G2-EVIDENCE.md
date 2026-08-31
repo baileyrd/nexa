@@ -22,8 +22,8 @@ automated inference.
 | Startup/latency/timing | startup and operation milliseconds, waveform duration | Repeat cold/warm runs; judge responsiveness and later lip-sync usefulness | Missing |
 | Idle/active CPU and memory | process RSS before/after calls | Record Task Manager idle/ASR/TTS CPU and working set with method/precision | Missing |
 | Package/model footprint | `footprint.json` records verified artifacts, archives, extracted-model, venv/package, and combined bytes | Assess packaging viability | Missing representative run |
-| Input cancellation | trial mode records request/terminal timing and stops controlled capture | Observe before/during recognition and device release | Missing; trial honestly records in-call native cancellation unsupported |
-| Output interruption | trial mode suppresses cancelled synthesis output and actually stops controlled playback | Observe before/during synthesis/playback and queued behavior | Missing; trial honestly records native generation interruption unsupported |
+| Input cancellation | bounded trial mode records stage/outcome, request/deadline/terminal timing, errors, and controlled capture stop/cleanup | Observe before/during recognition and device release | Missing; a recognition worker still active at deadline is recorded as non-interruptible, not success |
+| Output interruption | bounded trial mode suppresses cancelled synthesis output and records controlled playback stop/cleanup separately from native inference | Observe before/during synthesis/playback and queued behavior | Missing; a synthesis worker still active at deadline is recorded as non-interruptible, not success |
 | Lip-sync timing | output sample rate/count gives utterance duration | Judge available timing; no phoneme/viseme alignment is produced | Missing/known limitation |
 | Accessible fallback | fixture text exists independently of speech output | Confirm text/transcript remains readable when devices/provider fail | Missing |
 

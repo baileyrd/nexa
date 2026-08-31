@@ -11,15 +11,16 @@ from .cancellation import trial
 from .sherpa_provider import SherpaProvider
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--stage", required=True, choices=("capture", "recognition", "synthesis", "playback"))
     parser.add_argument("--input", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--cancel-after", type=float, default=0.1)
+    parser.add_argument("--terminal-timeout", type=float, default=5.0)
     parser.add_argument("--report", required=True, type=Path)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     config = json.loads(args.config.read_text(encoding="utf-8"))
     stop = None
     output = args.output
@@ -51,7 +52,8 @@ def main() -> int:
             if output is None:
                 parser.error("synthesis requires --output")
             call = lambda cancelled: provider.synthesize(SynthesisRequest("trial-synthesis", "Cancellation trial.", output), cancelled)
-    result = trial(call, args.cancel_after, stop=stop, output=output)
+    result = trial(call, args.cancel_after, stage=args.stage,
+                   terminal_timeout=args.terminal_timeout, stop=stop, output=output)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(args.report)

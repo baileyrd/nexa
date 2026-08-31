@@ -53,9 +53,13 @@ generated voice are local potentially sensitive evidence and must not be committ
 Sherpa's offline Python recognition and VITS calls are synchronous. Cancellation
 is checked before and after each native call. `g2_spike.trial` requests cancellation
 during capture, recognition, synthesis, and playback, records request/terminal
-timing, output publication/queue state, and cleanup, and calls `sounddevice.stop()`
-for fixture-controlled capture/playback. It **cannot interrupt active native
-inference**; those reports must retain `native_call_interruptible: false` and must
-not be interpreted as success. Cancelled synthesis never publishes a WAV.
+timing against a finite deadline, stage-specific outcome, output
+publication/queue state, and cleanup, and calls `sounddevice.stop()` for
+fixture-controlled capture/playback. Device trials distinguish completion before
+the request, a controlled stop after it, deadline failure, and unexpected errors.
+Recognition and synthesis additionally report whether the worker remained in the
+synchronous native call at the deadline. The fixture **cannot interrupt active
+native inference**; `non-interruptible-at-deadline` is a limitation, not success.
+Cancelled synthesis never publishes a WAV.
 The VITS path emits waveform timing but no phoneme/viseme alignment; usefulness
 for later lip-sync must be judged from the recorded timing evidence and limitation.

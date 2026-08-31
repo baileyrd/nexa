@@ -114,12 +114,15 @@ class EvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory); artifact = root / "models/a.bin"; artifact.parent.mkdir(); artifact.write_bytes(b"abc")
             venv = root / ".venv"; venv.mkdir(); (venv / "package").write_bytes(b"12345")
+            other = root / "models/b.bin"; other.write_bytes(b"def")
             digest = hashlib.sha256(b"abc").hexdigest(); document = self.manifest(digest)
-            verified = validate_manifest(document, root)
-            result = footprint(root, document, verified, venv)
-            self.assertEqual(result["combined_bytes"], 8)
-            self.assertEqual(result["artifacts"][0]["sha256"], digest)
-            self.assertEqual(json.dumps(result, sort_keys=True), json.dumps(result, sort_keys=True))
+            document["models"][0]["artifacts"].append({"path":"models/b.bin", "sha256":hashlib.sha256(b"def").hexdigest()})
+            reordered = json.loads(json.dumps(document)); reordered["models"][0]["artifacts"].reverse()
+            first = footprint(root, document, validate_manifest(document, root), venv)
+            second = footprint(root, reordered, validate_manifest(reordered, root), venv)
+            self.assertEqual(first["combined_bytes"], 11)
+            self.assertEqual(first["artifacts"][0]["sha256"], digest)
+            self.assertEqual(json.dumps(first, sort_keys=True), json.dumps(second, sort_keys=True))
 
     def test_rejects_incomplete_malformed_and_mismatch(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -130,18 +133,48 @@ class EvidenceTests(unittest.TestCase):
             incomplete = self.manifest(hashlib.sha256(b"abc").hexdigest()); incomplete["models"][0]["license"] = ""
             with self.assertRaises(ValueError): validate_manifest(incomplete, root)
 
+    def test_rejects_archive_escape_and_canonical_duplicate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "root"; root.mkdir(); venv = root / ".venv"; venv.mkdir()
+            outside = Path(directory) / "outside.zip"; outside.write_bytes(b"zip")
+            digest = hashlib.sha256(b"zip").hexdigest()
+            document = {"archives": [{"path": "../outside.zip", "sha256": digest}]}
+            with self.assertRaisesRegex(ValueError, "escapes"):
+                footprint(root, document, [], venv)
+            archive = root / "model.zip"; archive.write_bytes(b"zip")
+            document["archives"] = [{"path":"model.zip", "sha256":digest},
+                                    {"path":"sub/../model.zip", "sha256":digest}]
+            with self.assertRaisesRegex(ValueError, "duplicate"):
+                footprint(root, document, [], venv)
+
 
 class CancellationTests(unittest.TestCase):
-    def test_during_call_reports_limitation_and_cleanup(self):
+    def test_device_stop_is_stage_accurate(self):
         stopped = Event()
         def call(cancelled):
             cancelled.wait(1)
             raise SpeechCancelled("x")
-        report = trial(call, 0.001, stop=stopped.set)
-        self.assertEqual(report["outcome"], "cancelled")
+        report = trial(call, 0.001, stage="capture", stop=stopped.set)
+        self.assertEqual(report["outcome"], "stopped-after-request")
         self.assertTrue(report["device_stop_requested"])
-        self.assertFalse(report["native_call_interruptible"])
+        self.assertNotIn("native_call_interruptible", report)
+        self.assertEqual(report["device_cleanup"], "stop-completed")
         self.assertFalse(report["output_published"])
+
+    def test_native_call_has_finite_deadline(self):
+        blocker = Event()
+        report = trial(lambda _cancelled: blocker.wait(10), 0, stage="recognition", terminal_timeout=0.01)
+        blocker.set()
+        self.assertEqual(report["outcome"], "non-interruptible-at-deadline")
+        self.assertEqual(report["terminal_deadline_ms"], 10.0)
+        self.assertIsNone(report["terminal_ms"])
+        self.assertFalse(report["native_call_interruptible"])
+
+    def test_completed_before_request_and_unexpected_error(self):
+        complete = trial(lambda _cancelled: None, 0.1, stage="synthesis")
+        self.assertEqual(complete["outcome"], "completed-before-request")
+        error = trial(lambda _cancelled: (_ for _ in ()).throw(RuntimeError()), 0.1, stage="playback")
+        self.assertEqual((error["outcome"], error["error_type"]), ("error", "RuntimeError"))
 
 
 if __name__ == "__main__": unittest.main()

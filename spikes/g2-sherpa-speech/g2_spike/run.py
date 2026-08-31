@@ -18,12 +18,12 @@ def timed(call):
                    "rss_after": process.memory_info().rss}
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run disposable local G2 speech evidence")
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--fixtures", default=Path("fixtures.json"), type=Path)
     parser.add_argument("--output", required=True, type=Path)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     config = json.loads(args.config.read_text(encoding="utf-8"))
     fixtures = json.loads(args.fixtures.read_text(encoding="utf-8"))
     root = args.fixtures.parent
@@ -48,11 +48,10 @@ def main() -> int:
               "startup": startup, "recognition": recognition, "synthesis": synthesis,
               "locality": "offline provider=cpu; the fixture opens no network connection during inference"}
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(args.output)
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
