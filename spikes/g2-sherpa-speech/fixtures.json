@@ -1,0 +1,12 @@
+{
+  "recognition": [
+    {"id": "tcp-01", "expected": "A TCP connection begins with SYN SYN ACK and ACK", "wav": "fixtures/tcp-01.wav"},
+    {"id": "tcp-02", "expected": "The client chooses an initial sequence number", "wav": "fixtures/tcp-02.wav"},
+    {"id": "tcp-03", "expected": "The server acknowledges the client sequence number", "wav": "fixtures/tcp-03.wav"}
+  ],
+  "synthesis": [
+    {"id": "tcp-tts-01", "text": "A TCP connection begins with a three way handshake."},
+    {"id": "tcp-tts-02", "text": "First, the client sends SYN. Then, the server replies with SYN ACK."},
+    {"id": "tcp-tts-03", "text": "Speech is optional. The same lesson remains available as text and captions."}
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "asr": {
+    "tokens": "models/asr/tokens.txt",
+    "encoder": "models/asr/encoder.onnx",
+    "decoder": "models/asr/decoder.onnx",
+    "joiner": "models/asr/joiner.onnx",
+    "num_threads": 2
+  },
+  "tts": {
+    "model": "models/tts/model.onnx",
+    "tokens": "models/tts/tokens.txt",
+    "lexicon": "models/tts/lexicon.txt",
+    "data_dir": "models/tts/espeak-ng-data",
+    "num_threads": 2
+  }
+}

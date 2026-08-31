@@ -1,6 +1,6 @@
 # Nexa Implementation Roadmap
 
-Status date: 2026-08-30
+Status date: 2026-08-31
 
 The pre-tactical-pause Phase 0–6 roadmap is preserved in Git history and phase traceability, but it no longer selects new implementation work.
 
@@ -62,3 +62,13 @@ See [`../governance/ARCHITECTURE-REBASELINE-GATES.md`](../governance/ARCHITECTUR
 Issue #116 produced a bounded disposable fixture and [criterion-level evidence](../../spikes/g1-shared-ui/evidence/G1-EVIDENCE.md). Linux/headless automation covers the shared frontend checks/lifecycle tests/build and end-to-end loopback security/cancellation tests. The first representative Windows run later exposed the missing packaging icon corrected through Issue #118; Issue #120 added bounded cancellation-observation support. Those earlier results remain historical evidence rather than a successful G1 disposition.
 
 Issue #122 records the harness **PASS** from exact `main` head `9173ed152d7b1d5bb9831413862097076443be59`, including the 1,848,941-byte NSIS installer, and separately records owner-observed two-client parity, cancellation/reconnect, keyboard/focus basics, approximate Task Manager CPU/memory, and <0.5-second human-observed startup/cancellation/reconnect thresholds. All criteria have bounded spike evidence. On 2026-08-30 the owner/Chief Systems Architect accepted **G1 evidence satisfied**, selected React/TypeScript/Vite, Tauri 2, and the single versioned same-machine loopback HTTP/WebSocket boundary, and recorded **Continue to G2**. The disposable fixture remains evidence, candidate selection does not advance implementation maturity, Tactical Pause remains outside the separately dispatched G2 gate, and G3+ remain undispatched.
+
+## G2 evidence status (2026-08-31)
+
+Issue #126 adds the smallest disposable Sherpa-ONNX ASR/TTS adapter fixture,
+focused neutral-boundary tests, a repository-local Windows procedure, and a
+criterion-level evidence record. The record intentionally remains incomplete:
+no representative Windows device/resource/quality run or owner review is
+available at this head. Therefore G2 is not passed, Sherpa-ONNX remains a
+candidate, maturity does not advance, Tactical Pause remains outside G2, and
+G3+ remain undispatched.

@@ -1,6 +1,6 @@
 # Nexa Specification Registry
 
-Status date: 2026-08-30
+Status date: 2026-08-31
 
 This registry is the navigation and governance authority for Nexa specifications, architecture baselines, accepted ADRs, and active program controls.
 
@@ -160,6 +160,11 @@ Reusable lessons are also preserved in the Atlas Engineering Standards Library; 
 The current delivery path is [`architecture/NEXA-COMPLETION-ROADMAP.md`](architecture/NEXA-COMPLETION-ROADMAP.md). G1 evidence is accepted, and React/TypeScript/Vite, Tauri 2, and the single versioned same-machine loopback HTTP/WebSocket boundary are selected v1 architecture. The owner/Chief Systems Architect records **Continue to G2** for a separately dispatched bounded CPU-only speech evidence gate. General implementation remains under Tactical Pause outside G2, and G3+ remain undispatched.
 
 Every increment must trace to a finite-route blocker, cite governing authority, identify its concrete E2E step and maturity transition, and produce evidence appropriate to that transition. Existing contract/headless evidence is not system, user, or release evidence.
+
+Issue #126 provides a disposable G2 Sherpa-ONNX evidence harness and an
+explicitly incomplete criterion record. Until the representative CPU-only
+Windows run and owner review fill every criterion, Sherpa-ONNX remains only a
+candidate, G2 remains open, and the ADR-0069 failure consequence is unchanged.
 
 ## Known later-release decisions and deferrals
 
