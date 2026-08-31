@@ -1,7 +1,7 @@
 # Nexa Project Status
 
-Status date: 2026-08-30
-Verified base `main` checkpoint: `0c523bfe44665049c90c8ff8d3aff5faa9fe42f6` (PR #123 merge head)
+Status date: 2026-08-31
+Verified base `main` checkpoint: `c622bccd8e5b0eaae35a8ab05eb011326a4909ce` (PR #125 merge head)
 Authority checkpoint: Issue #114 owner decisions recorded by ADR-0069; the G0 reconciliation is merged
 
 This document is the concise current-state authority. Git history, accepted ADRs, and traceability preserve earlier checkpoints and evidence.
@@ -29,6 +29,12 @@ LAN/Internet-remote access, hosted deployment, cloud sync, accounts/multi-user a
 G0 is merged. Issue #122 completed the separately dispatched G1 shared UI/loopback evidence gathering, and the owner/Chief Systems Architect has accepted that gate and selected its v1 architecture. The disposable G1 fixture is preserved as evidence, not promoted to production implementation.
 
 The current decision is **Continue to G2**. Only the bounded CPU-only speech evidence gate defined by ADR-0069 and the active roadmaps may be separately dispatched. Sherpa-ONNX remains a candidate until G2 passes; failure follows ADR-0069's recognition fallback and separate TTS-selection route. **Tactical Pause** remains in force outside G2, G3+ remain undispatched, and the superseded open-ended Phase 5 sequence must not resume.
+
+Issue #126 adds the disposable repository-local G2 Sherpa-ONNX fixture and a
+criterion-level evidence record. Automated boundary/cancellation checks do not
+replace the still-missing representative Windows device, quality, timing,
+resource, footprint, provenance, privacy, and accessibility observations. G2 is
+not passed, candidate maturity is unchanged, and no later gate is dispatched.
 
 ## Capability maturity and preserved evidence
 

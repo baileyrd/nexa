@@ -1,0 +1,8 @@
+.venv/
+models/
+fixtures/*.wav
+config.windows.json
+models.windows.json
+evidence/windows/
+audio/
+__pycache__/

@@ -1,0 +1,6 @@
+sherpa-onnx==1.13.6
+numpy==2.3.2
+sounddevice==0.5.2
+soundfile==0.13.1
+psutil==7.0.0
+

@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "runtime": {"name": "sherpa-onnx", "version": "1.13.6", "license": "Apache-2.0", "source": "https://github.com/k2-fsa/sherpa-onnx/tree/v1.13.6"},
+  "models": [
+    {"name": "REPLACE_WITH_EXACT_ASR_MODEL", "source": "REQUIRED", "license": "REQUIRED", "artifacts": [{"path": "models/asr/REPLACE", "sha256": "REQUIRED"}]},
+    {"name": "REPLACE_WITH_EXACT_TTS_MODEL", "source": "REQUIRED", "license": "REQUIRED", "artifacts": [{"path": "models/tts/REPLACE", "sha256": "REQUIRED"}]}
+  ],
+  "archives": [{"path": "models/downloads/REPLACE", "sha256": "REQUIRED"}]
+}
