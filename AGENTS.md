@@ -1,87 +1,95 @@
-# Nexa agent guide
+# AGENTS.md — Rusty Data OS Working Agreement
 
-## Authority and preservation
+This file defines how human contributors and AI coding agents must work in this repository.
 
-Always begin with [`docs/PROJECT-STATUS.md`](docs/PROJECT-STATUS.md), then follow [`docs/BASELINE.md`](docs/BASELINE.md) and [`docs/SPECIFICATION-REGISTRY.md`](docs/SPECIFICATION-REGISTRY.md).
+## 1. Authority order
 
-The current v1 parents are:
+Before proposing or implementing work, read these files in order:
 
-- [`docs/architecture/NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md`](docs/architecture/NEXA-ARCH-002-V1-RELEASE-ARCHITECTURE.md)
-- [`docs/architecture/NEXA-R1-IMPLEMENTATION-BASELINE.md`](docs/architecture/NEXA-R1-IMPLEMENTATION-BASELINE.md)
-- [`docs/adr/0069-owner-approved-v1-delivery-baseline.md`](docs/adr/0069-owner-approved-v1-delivery-baseline.md)
-- [`docs/architecture/IMPLEMENTATION-ROADMAP.md`](docs/architecture/IMPLEMENTATION-ROADMAP.md)
-- the applicable subsystem specifications and accepted ADRs.
+1. `/AGENTS.md`
+2. `/CHATGPT_WORKFLOW.md`
+3. `/docs/PROJECT-STATUS.md`
+4. `/docs/VISION.md`
+5. `/docs/PRINCIPLES.md`
+6. `/docs/ARCHITECTURE.md`
+7. `/docs/RESEARCH-ROADMAP.md`
+8. Applicable hypotheses, experiment definitions, benchmark methodology, ADRs, and specifications.
 
-ADR-0068 is preserved historical authority and remains applicable only where ADR-0069 does not conflict. `NEXA-ARCH-001` and reconstructed documents are provenance/long-range context, not v1 selection authority. Report conflicts; never silently reconcile them.
+Repository state on `main` is authoritative over chat history or unstaged ideas.
 
-## Program integrity and current gate
+## 2. Research before architecture
 
-Use `Concept -> Architecture Defined -> Specification Approved -> Contract Implemented -> Runtime Integrated -> Concrete Adapter Implemented -> System Verified -> User Accepted -> Release Ready`. Existing contract/headless evidence retains its factual maturity; do not infer system, user, or release maturity.
+Do not promote an architectural idea because it sounds elegant or familiar.
 
-The owner-approved route is recorded in ADR-0069. G1 evidence is satisfied, and React/TypeScript/Vite, Tauri 2, and the single versioned same-machine loopback HTTP/WebSocket boundary are selected for v1. **Continue to G2** authorizes only a separately dispatched bounded speech evidence gate; general product implementation remains under **Tactical Pause**, and G3+ remain undispatched. Sherpa-ONNX and Rive remain candidates until their gates pass; the disposable G1 fixture remains evidence and is not production implementation.
-
-Every implementation increment must state its release blocker, governing authority, concrete E2E step, maturity before/after, and required evidence. The Chief Systems Architect records Continue, Redirect, or Tactical Pause whenever authority, deferrals, maturity, or the finite release route diverges.
-
-## Owner-approved v1 route
-
-One local learner uses identical Windows desktop and same-machine browser clients, backed by one local Rust runtime and authoritative SQLite state, to complete Networking Fundamentals / TCP Connection Establishment through LM Studio, bundled speech, and a synchronized animated 2D tutor. Both clients use one shared frontend and one versioned loopback HTTP/WebSocket business API; Tauri commands never form a second API.
-
-Nexa bundles no LLM weights or inference runtime. LAN/remote access, hosted deployment, cloud sync, accounts/multi-user administration, labs/tools, broad model-server support, dynamic routing/fallback, dedicated vector infrastructure unless proven necessary, durable event brokerage, and 3D release integration are deferred.
-
-## ChatGPT–Codex coordination
-
-When development uses the human-coordinated or automated ChatGPT/Codex workflow, follow [`CHATGPT_WORKFLOW.md`](CHATGPT_WORKFLOW.md).
-
-ChatGPT/Chief Systems Architect selects work from current repository authority and the release path, reviews exact PR heads, requests corrections on the existing PR branch, and merges only the exact reviewed green head.
-
-Codex implements and validates bounded tasks; it does not independently redefine architecture, product scope, or authority status.
-
-## Repository map and boundaries
-
-- `crates/nexa-domain`, `nexa-events`, `nexa-nbp`: dependency-light shared contract kernel.
-- `crates/nexa-student`, `nexa-pedagogy`, `nexa-lessons`, `nexa-assessment`: owned learning policies.
-- `crates/nexa-learning-core`: atomic learning composition; it does not absorb owned reasoning.
-- `crates/nexa-knowledge` and `nexa-knowledge-runtime`: governed knowledge contracts and async runtime boundary.
-- `crates/nexa-tutor`: provider-neutral prompt/model/admission contracts; concrete LM Studio integration remains a narrow adapter.
-- `crates/nexa-orchestrator` and `nexa-orchestrator-runtime`: workflow contracts and runtime task/cancellation ownership.
-- `crates/nexa-storage`: the SQLite adapter boundary; database dependencies do not enter domain crates.
-- `crates/nexa-speech`: provider-neutral speech foundations; the required bundled v1 adapter remains evidence-gated.
-- `crates/nexa-avatar`: renderer-neutral semantic embodiment ports; required 2D integration remains evidence-gated.
-- `crates/nexa-3d`: retained non-v1 renderer/runtime foundation.
-- `crates/nexa-labs`: retained later-capability foundation, not a v1 gate.
-- `apps/nexa-headless`: test/integration composition, not either released learner client.
-- the selected shared frontend, desktop shell, and local runtime production composition locations must be established by later implementation authority; the disposable G1 fixture remains evidence only.
-- `tools/`, `content/`, `assets/`, and `docs/`: validators, governed inputs, assets, and authority/evidence.
-
-A `.gitkeep`-only boundary is planned, not implemented. Domain-facing crates remain independent of UI, OS, async runtime, databases, networking, renderers, and concrete providers. Tutor/model output is untrusted until admission and never selects renderer primitives or host authority.
-
-## Required validation
-
-Run from the repository root for ordinary Rust implementation PRs:
+Every significant technical claim should move through:
 
 ```text
-cargo fmt --all --check
-cargo check --workspace --all-targets
-cargo check -p nexa-3d --no-default-features
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
-./scripts/check-contract-boundaries.sh
-git diff --check
+idea -> hypothesis -> experiment -> evidence -> decision
 ```
 
-As G4–G8 activate Windows/UI/storage/model, speech, and embodiment adapters, add focused concrete-adapter and Windows validation required by the owning R1 specifications. Passing the existing Linux/headless suite does not prove higher maturity.
+A hypothesis must be falsifiable. An experiment must state its measurement method before implementation. A decision must cite the evidence that justifies it.
 
-## Change and review rules
+## 3. No premature production code
 
-- Make bounded, independently reviewable changes; do not bundle unrelated cleanup or speculative architecture.
-- Prefer a vertical maturity advance over another horizontal abstraction when both are possible.
-- Contract/architecture changes require explicit authority/impact notes; consequential cross-cutting decisions require an ADR; authority/status changes require a registry update.
-- Review wire changes for stable names, validation, compatibility, replay, and deterministic fixtures.
-- Review dependency changes against the inward DAG and renderer/provider/storage boundaries.
-- Review evidence/state changes for ownership, immutability/idempotency, policy versions, concurrency, and atomic failure behavior.
-- A PR is done only when implementation, tests, governing docs, status/registry/traceability, and applicable ADRs agree; all required checks pass on the exact reviewed head; the diff is focused; and deferrals/conflicts are explicit.
-- User-facing work requires proportionate accessibility checks.
-- Security/privacy review must match the actual changed trust/data boundary.
-- Do not claim `System Verified`, `User Accepted`, or `Release Ready` from unit/contract/headless evidence.
+Experimental implementations belong under `/experiments/`.
 
----
+Reusable production-oriented code belongs under `/crates/` only after the relevant experiment has produced evidence and an ADR or specification has authorized graduation.
+
+Do not add server/networking layers, SQL interfaces, generalized plugin systems, distributed coordination, or unrelated abstractions unless the research roadmap and current experiment require them.
+
+## 4. Benchmark integrity
+
+Performance claims must follow `/docs/benchmarks/METHODOLOGY.md`.
+
+At minimum:
+
+- capture hardware, OS, filesystem, compiler, toolchain, and build configuration;
+- distinguish warm-up from measured samples;
+- report distributions, not only averages;
+- separate throughput from latency;
+- identify durability semantics for every write benchmark;
+- preserve raw benchmark results when practical;
+- compare against explicit baselines;
+- avoid changing multiple independent variables in the same experiment unless the design requires it.
+
+## 5. Correctness precedes speed
+
+A faster implementation that violates declared durability, ordering, replay, or recovery semantics is not a successful optimization.
+
+Each experiment must define correctness invariants and tests independently of performance targets.
+
+## 6. Failed experiments are valuable
+
+Do not delete or obscure negative results. Mark the experiment conclusion clearly and preserve enough evidence to explain why an approach was rejected, deferred, or constrained.
+
+## 7. Documentation synchronization
+
+When an experiment changes project knowledge, update all relevant artifacts in the same change:
+
+- experiment result/conclusion;
+- associated hypothesis status;
+- ADR if a decision is made;
+- `PROJECT-STATUS.md`;
+- architecture/specification only if the evidence warrants promotion.
+
+## 8. Smallest useful increment
+
+Prefer bounded experiments that isolate one research question. Avoid "build the database" tasks. The smallest experiment that can falsify a hypothesis is preferred.
+
+## 9. Rust implementation expectations
+
+When Rust code begins:
+
+- favor explicit ownership and concurrency semantics;
+- make unsafe code exceptional and justified;
+- benchmark release builds;
+- keep experimental dependencies isolated;
+- document platform-specific behavior;
+- prefer deterministic replay and testability over hidden background behavior;
+- expose durability boundaries explicitly in APIs rather than implying them.
+
+## 10. Current constraint
+
+The project remains planning/readiness-first; no engine architecture is final. Slice A/A1 and Slice
+B/B0 are closed only as bounded implementation/correctness-validation evidence. Slice A2 is closed only as bounded conformance/correctness evidence after its corrective gate; R17 implements the frozen R12/R14/R16 contracts only in the external-dependency-free conformance subset, which contains reviewed workspace path dependencies. R19 closes the R18-authorized Slice C/B1 raw D1 append and deterministic reopen/replay implementation only as bounded correctness evidence. The locally decidable R20 semantic-operation-to-physical-record mapping subset is implemented as a pure correctness component in `exp1-raw-append-replay`, with direct path dependencies on the existing record-format and workload-conformance crates and no append integration; this is bounded implementation/correctness-validation evidence only. R21 freezes the locally decidable immutable-catalog/accepted-prefix design, R22 selects strictly segment-local references, and R23 freezes a canonical closed-scope descriptor whose exact manifest-bound membership and domain-separated digest prove the complete stream set for one authorized cell. R23 closes the closed-scope governance blocker. R25 records that closed, unmerged PR #91 falsified R24’s assumption that the unchanged v1 authorities can produce a valid bootstrap-to-reference causal stream; R25 supersedes R24 for implementation authorization only, preserves every R12/R14/R16 v1 vector and byte, and freezes prospective v2 governance without authorizing code. R26 freezes the complete v2 conformance contract; PR #95 reviewed head `35f9a0f245ac488828df4f639263edb3fb50be86`, merged as `f4ed0c310fa46c6de209ea0f776c4749e31cdd34` with exact-head successful CI, implements it side by side with v1 as bounded conformance/correctness evidence. R27 closes that tranche, freezes the minimum v2 extension of R23 closed-scope proof while preserving v1 and prohibiting mixed membership, and authorizes exactly one pure v2 reference-context mapper implementation in the existing `exp1-raw-append-replay` crate. R28 closes that implementation at PR #98 reviewed head `67715b3efc4732542152ea9d935d92ebdb2ca0d6`, merged as `f5cde575cbd82bb788b9519c4efc56e4d1186131` with both exact-head workflows successful, as bounded correctness evidence. The full R20 reference-context correctness gate is closed. R29 closes the R28-authorized test-only literal SOP2-to-physical-reopen D1 correctness path at PR #101 reviewed head `b88908cb9cbba39774437e582308bab25a88482b`, merged as `2168839a70baebdea1773fc56e7b8aa0dc9a89e4` after successful exact-head Documentation validation and EXP-0001 Slice A workflows, only as bounded deterministic integration/correctness evidence. The R19 semantic-to-physical mapping blocker is closed. R29 freezes the remaining live Linux capture implementation decision and authorizes exactly one next PR to create the external-dependency-free fourth experiment member `exp1-descriptive-d1-harness` for only an isolated Linux/x86_64 capture/preflight boundary and deterministic tests; capture and all execution remain unauthorized. Generated workloads, workload or benchmark execution, D2/D3, `fsync` durability, faults, adapters, production crates, and later increments remain unauthorized. Run the unchanged R9 validation
+sequence and `git diff --check` from the repository root.
